@@ -1,11 +1,11 @@
 [package]
 name = "nexus"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 authors = ["Swastik Patel"]
 description = "A beautiful modern TUI WiFi manager for Arch Linux"
 license = "MIT"
-repository = "https://github.com/cptdawn/Nexus"
+repository = "https://github.com/CPT-Dawn/Nexus"
 keywords = ["wifi", "tui", "networkmanager", "arch-linux"]
 categories = ["command-line-utilities", "network-programming"]
 
