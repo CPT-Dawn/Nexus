@@ -1,8 +1,8 @@
+pub mod connections;
 pub mod dashboard;
+pub mod diagnostics;
 pub mod interfaces;
 pub mod wifi;
-pub mod connections;
-pub mod diagnostics;
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::Frame;
@@ -12,10 +12,15 @@ use crate::ui::components;
 
 /// Render the full screen: tabs + active page + status bar
 pub fn render(f: &mut Frame, app: &mut App, area: Rect) {
+    // Set base background from theme
+    let bg_block =
+        ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(app.theme.bg));
+    f.render_widget(bg_block, area);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2),  // Tab bar
+            Constraint::Length(2), // Tab bar
             Constraint::Min(0),    // Page content
             Constraint::Length(1), // Status bar
         ])
@@ -67,7 +72,10 @@ fn render_toast(f: &mut Frame, message: &str, is_error: bool, theme: &crate::ui:
         .border_style(Style::default().fg(color));
 
     let text = Paragraph::new(Line::from(vec![
-        Span::styled(icon, Style::default().fg(color).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            icon,
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
         Span::styled(message, Style::default().fg(theme.fg)),
     ]))
     .block(block);

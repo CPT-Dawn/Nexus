@@ -40,23 +40,12 @@ impl DiagnosticTool {
 }
 
 /// State for the diagnostics page
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DiagnosticsState {
     pub selected_tool: usize,
     pub output: VecDeque<String>,
     pub running: bool,
     pub target: String,
-}
-
-impl Default for DiagnosticsState {
-    fn default() -> Self {
-        Self {
-            selected_tool: 0,
-            output: VecDeque::new(),
-            running: false,
-            target: String::new(),
-        }
-    }
 }
 
 pub fn render(f: &mut Frame, app: &mut App, area: Rect) {

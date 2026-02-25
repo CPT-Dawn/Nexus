@@ -481,6 +481,56 @@ pub struct RouteEntry {
     pub interface: String,
 }
 
+impl RouteEntry {
+    /// Parse a route line from `ip route show` output
+    pub fn parse_route_line(line: &str) -> Option<Self> {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.is_empty() {
+            return None;
+        }
+
+        let destination = parts[0].to_string();
+        let gateway = parts
+            .iter()
+            .position(|&p| p == "via")
+            .and_then(|i| parts.get(i + 1))
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "*".to_string());
+        let metric = parts
+            .iter()
+            .position(|&p| p == "metric")
+            .and_then(|i| parts.get(i + 1))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        let interface = parts
+            .iter()
+            .position(|&p| p == "dev")
+            .and_then(|i| parts.get(i + 1))
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
+        Some(RouteEntry {
+            destination,
+            gateway,
+            metric,
+            interface,
+        })
+    }
+
+    /// Convert legacy NM IPv4 address tuples to route entries
+    pub fn from_legacy_nm_addresses(addrs: &[(u32, u32, u32)]) -> Vec<Self> {
+        nm_ip4_addresses_to_strings(addrs)
+            .into_iter()
+            .map(|(addr, prefix, gw)| RouteEntry {
+                destination: format!("{}/{}", addr, prefix),
+                gateway: gw,
+                metric: 0,
+                interface: String::new(),
+            })
+            .collect()
+    }
+}
+
 // ── Network State Snapshot ────────────────────────────────────────────
 
 /// Complete snapshot of network state, cached and refreshed periodically

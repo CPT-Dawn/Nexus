@@ -51,7 +51,7 @@ impl<'a> WifiManager<'a> {
             if let Ok(settings) = conn_proxy.get_settings().await {
                 // Check if it's a WiFi connection
                 if let Some(conn) = settings.get("connection") {
-                    let conn_type = conn.get("type").and_then(|v| ov_to_string(v));
+                    let conn_type = conn.get("type").and_then(ov_to_string);
                     if conn_type.as_deref() != Some("802-11-wireless") {
                         continue;
                     }

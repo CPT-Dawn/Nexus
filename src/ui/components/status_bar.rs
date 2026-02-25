@@ -15,22 +15,27 @@ pub fn render(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
         .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
         .split(area);
 
-    // Left: keybindings
-    let keys = get_keybindings(app);
-    let key_spans: Vec<Span> = keys
-        .iter()
-        .flat_map(|(key, desc)| {
-            vec![
-                Span::styled(format!(" {} ", key), theme.help_key),
-                Span::styled(format!("{} ", desc), theme.help_desc),
-                Span::styled("│", Style::default().fg(theme.border)),
-            ]
-        })
-        .collect();
+    // Left: keybindings (only if help bar is enabled)
+    if app.show_help_bar {
+        let keys = get_keybindings(app);
+        let key_spans: Vec<Span> = keys
+            .iter()
+            .flat_map(|(key, desc)| {
+                vec![
+                    Span::styled(format!(" {} ", key), theme.help_key),
+                    Span::styled(format!("{} ", desc), theme.help_desc),
+                    Span::styled("│", Style::default().fg(theme.border)),
+                ]
+            })
+            .collect();
 
-    let help_line = Line::from(key_spans);
-    let help = Paragraph::new(help_line).style(theme.status_bar);
-    f.render_widget(help, chunks[0]);
+        let help_line = Line::from(key_spans);
+        let help = Paragraph::new(help_line).style(theme.status_bar);
+        f.render_widget(help, chunks[0]);
+    } else {
+        let empty = Paragraph::new("").style(theme.status_bar);
+        f.render_widget(empty, chunks[0]);
+    }
 
     // Right: status info
     let perm_color = match app.permission_level {

@@ -32,7 +32,10 @@ impl NetworkManager {
     /// Get NM version string
     pub async fn version(&self) -> NexusResult<String> {
         let proxy = NetworkManagerProxy::new(&self.connection).await?;
-        Ok(proxy.version().await?)
+        proxy
+            .version()
+            .await
+            .map_err(|e| NexusError::NetworkManager(format!("Failed to get NM version: {}", e)))
     }
 
     /// Get overall connectivity state
@@ -182,37 +185,76 @@ impl NetworkManager {
             None => return (None, None, Vec::new(), None),
         };
 
-        let address = ip4_proxy.address_data().await.ok().and_then(|addrs| {
+        let mut address = ip4_proxy.address_data().await.ok().and_then(|addrs| {
             addrs
                 .first()
-                .and_then(|a| a.get("address").and_then(|v| ov_to_string(v)))
+                .and_then(|a| a.get("address").and_then(ov_to_string))
         });
 
-        let subnet = ip4_proxy.address_data().await.ok().and_then(|addrs| {
+        let mut subnet = ip4_proxy.address_data().await.ok().and_then(|addrs| {
             addrs.first().and_then(|a| {
                 a.get("prefix")
                     .and_then(|v| ov_to_u32(v).map(|p| format!("/{}", p)))
             })
         });
 
-        let gateway =
+        let mut gateway =
             ip4_proxy
                 .gateway()
                 .await
                 .ok()
                 .and_then(|g| if g.is_empty() { None } else { Some(g) });
 
-        let dns = ip4_proxy
+        // Fallback: try legacy Addresses property for older NM versions
+        // Each address is [addr_u32, prefix_u32, gateway_u32] in network byte order
+        if address.is_none() {
+            if let Ok(raw_addrs) = ip4_proxy.addresses().await {
+                let tuples: Vec<(u32, u32, u32)> = raw_addrs
+                    .iter()
+                    .filter_map(|a| {
+                        if a.len() >= 3 {
+                            Some((a[0], a[1], a[2]))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let converted = RouteEntry::from_legacy_nm_addresses(&tuples);
+                if let Some(first) = converted.first() {
+                    if let Some((addr, prefix_str)) = first.destination.split_once('/') {
+                        address = Some(addr.to_string());
+                        subnet = Some(format!("/{}", prefix_str));
+                    }
+                    if first.gateway != "0.0.0.0" {
+                        gateway = Some(first.gateway.clone());
+                    }
+                }
+            }
+        }
+
+        let dns: Vec<String> = ip4_proxy
             .nameserver_data()
             .await
             .ok()
             .map(|servers| {
                 servers
                     .iter()
-                    .filter_map(|s| s.get("address").and_then(|v| ov_to_string(v)))
+                    .filter_map(|s| s.get("address").and_then(ov_to_string))
                     .collect()
             })
             .unwrap_or_default();
+
+        // Fallback: try legacy Nameservers property (u32 in network byte order)
+        let dns = if dns.is_empty() {
+            ip4_proxy
+                .nameservers()
+                .await
+                .ok()
+                .map(|ns| ns.iter().map(|&raw| nm_ip4_to_string(raw)).collect())
+                .unwrap_or_default()
+        } else {
+            dns
+        };
 
         (address, gateway, dns, subnet)
     }
@@ -233,7 +275,7 @@ impl NetworkManager {
         ip6_proxy.address_data().await.ok().and_then(|addrs| {
             addrs
                 .first()
-                .and_then(|a| a.get("address").and_then(|v| ov_to_string(v)))
+                .and_then(|a| a.get("address").and_then(ov_to_string))
         })
     }
 
@@ -546,6 +588,13 @@ impl NetworkManager {
         );
         connection.insert("802-11-wireless".into(), wifi_settings);
 
+        // Enterprise WiFi requires manual configuration
+        if security == WifiSecurity::Enterprise {
+            return Err(NexusError::NotSupported(
+                "Enterprise (802.1X) WiFi requires manual configuration via nmcli or nm-connection-editor".into(),
+            ));
+        }
+
         // Security settings
         if security != WifiSecurity::Open {
             let mut sec_settings: HashMap<String, OwnedValue> = HashMap::new();
@@ -711,20 +760,35 @@ impl NetworkManager {
             nm_running,
         }
     }
+
+    /// Find the first WiFi device path via WifiManager helper
+    pub async fn find_wifi_device_path(&self) -> NexusResult<Option<OwnedObjectPath>> {
+        let wm = crate::network::wifi::WifiManager::new(&self.connection);
+        wm.find_wifi_device().await
+    }
+
+    /// Find a saved WiFi connection by SSID via WifiManager
+    pub async fn find_saved_wifi_connection(
+        &self,
+        ssid: &str,
+    ) -> NexusResult<Option<OwnedObjectPath>> {
+        let wm = crate::network::wifi::WifiManager::new(&self.connection);
+        wm.find_saved_connection_for_ssid(ssid).await
+    }
 }
 
 // ── Helper functions for extracting values from NM settings dicts ─────
 
 fn extract_string(settings: &HashMap<String, OwnedValue>, key: &str) -> Option<String> {
-    settings.get(key).and_then(|v| ov_to_string(v))
+    settings.get(key).and_then(ov_to_string)
 }
 
 fn extract_bool(settings: &HashMap<String, OwnedValue>, key: &str) -> Option<bool> {
-    settings.get(key).and_then(|v| ov_to_bool(v))
+    settings.get(key).and_then(ov_to_bool)
 }
 
 fn extract_u64(settings: &HashMap<String, OwnedValue>, key: &str) -> Option<u64> {
-    settings.get(key).and_then(|v| ov_to_u64(v))
+    settings.get(key).and_then(ov_to_u64)
 }
 
 // ── Safe OwnedValue extraction via pattern matching ───────────────────

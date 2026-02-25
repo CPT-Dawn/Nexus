@@ -23,6 +23,7 @@ use tracing::info;
 
 use crate::app::App;
 use crate::config::Config;
+use crate::error::NexusError;
 use crate::event::{Event, EventHandler};
 use crate::network::stats::StatsPoller;
 use crate::network::NetworkManager;
@@ -52,8 +53,16 @@ async fn main() -> Result<()> {
     // Initialize color-eyre with custom panic hook that restores terminal
     install_panic_hook();
 
-    // Initialize tracing
-    init_logging(&cli.log);
+    // Create config from CLI args
+    let config = Config {
+        tick_rate: Duration::from_millis(cli.tick_rate),
+        mouse_support: !cli.no_mouse,
+        log_file: cli.log.clone(),
+        ..Default::default()
+    };
+
+    // Initialize tracing (uses config.log_file)
+    init_logging(&config.log_file);
 
     info!("nexus-nm starting");
 
@@ -80,20 +89,13 @@ async fn main() -> Result<()> {
     );
 
     // Setup terminal
-    enable_raw_mode()?;
+    enable_raw_mode()
+        .map_err(|e| NexusError::Terminal(format!("Failed to enable raw mode: {}", e)))?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
-
-    // Create config
-    let config = Config {
-        tick_rate: Duration::from_millis(cli.tick_rate),
-        mouse_support: !cli.no_mouse,
-        log_file: cli.log.clone(),
-        ..Default::default()
-    };
 
     // Setup terminal mouse support based on config
     if !config.mouse_support {
@@ -131,12 +133,13 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Spawn stats poller (1-second interval)
+    // Spawn stats poller (uses configured interval)
     let stats_tx = event_tx.clone();
     let _stats_nm = nm.clone();
+    let stats_interval = config.stats_poll_interval;
     tokio::spawn(async move {
         let mut poller = StatsPoller::new();
-        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        let mut interval = tokio::time::interval(stats_interval);
         loop {
             interval.tick().await;
             poller.poll().await;
@@ -167,24 +170,31 @@ async fn main() -> Result<()> {
                 Event::ActionSuccess(msg) if msg.starts_with("STATS:") => {
                     // Parse stats and merge into network state
                     if let Some(ref mut state) = app.network_state {
-                        if let Ok(stats) = serde_json::from_str::<
-                            std::collections::HashMap<String, StatsData>,
-                        >(&msg[6..])
-                        {
-                            for (iface, data) in stats {
-                                let entry = state.stats.entry(iface).or_default();
-                                entry.rx_bytes = data.rx_bytes;
-                                entry.tx_bytes = data.tx_bytes;
-                                entry.rx_packets = data.rx_packets;
-                                entry.tx_packets = data.tx_packets;
-                                entry.rx_errors = data.rx_errors;
-                                entry.tx_errors = data.tx_errors;
-                                entry.rx_dropped = data.rx_dropped;
-                                entry.tx_dropped = data.tx_dropped;
-                                entry.rx_rate = data.rx_rate;
-                                entry.tx_rate = data.tx_rate;
-                                entry.rx_history = data.rx_history.clone();
-                                entry.tx_history = data.tx_history.clone();
+                        match serde_json::from_str::<std::collections::HashMap<String, StatsData>>(
+                            &msg[6..],
+                        ) {
+                            Ok(stats) => {
+                                for (iface, data) in stats {
+                                    let entry = state.stats.entry(iface).or_default();
+                                    entry.rx_bytes = data.rx_bytes;
+                                    entry.tx_bytes = data.tx_bytes;
+                                    entry.rx_packets = data.rx_packets;
+                                    entry.tx_packets = data.tx_packets;
+                                    entry.rx_errors = data.rx_errors;
+                                    entry.tx_errors = data.tx_errors;
+                                    entry.rx_dropped = data.rx_dropped;
+                                    entry.tx_dropped = data.tx_dropped;
+                                    entry.rx_rate = data.rx_rate;
+                                    entry.tx_rate = data.tx_rate;
+                                    entry.rx_history = data.rx_history.clone();
+                                    entry.tx_history = data.tx_history.clone();
+                                }
+                            }
+                            Err(e) => {
+                                tracing::trace!(
+                                    "{}",
+                                    NexusError::Parse(format!("Stats data: {}", e))
+                                );
                             }
                         }
                     }

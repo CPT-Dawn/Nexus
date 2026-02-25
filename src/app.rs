@@ -1,8 +1,10 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::auth::PermissionLevel;
+use crate::error::NexusError;
 use crate::event::Event;
 use crate::network::types::*;
 use crate::network::NetworkManager;
@@ -82,6 +84,7 @@ pub struct App {
 
     // Config
     pub show_help_bar: bool,
+    pub wifi_scan_interval: Duration,
 
     // Toast notification
     pub toast_message: Option<String>,
@@ -108,6 +111,7 @@ impl App {
             theme: Theme::default(),
             permission_level: PermissionLevel::Unknown,
             show_help_bar: config.show_help_bar,
+            wifi_scan_interval: config.wifi_scan_interval,
 
             network_state: None,
             nm,
@@ -285,7 +289,8 @@ impl App {
 
     fn disconnect_selected_interface(&mut self) {
         if !self.permission_level.can_write() {
-            self.show_toast("Read-only mode — cannot disconnect", true);
+            let err = NexusError::PermissionDenied("Read-only mode — cannot disconnect".into());
+            self.show_toast(&err.to_string(), true);
             return;
         }
 
@@ -371,17 +376,30 @@ impl App {
         self.wifi_state.scanning = true;
         let nm = self.nm.clone();
         let tx = self.event_tx.clone();
+        let scan_delay = self.wifi_scan_interval;
 
         tokio::spawn(async move {
-            // Find WiFi device
-            let devices = nm.list_devices().await.unwrap_or_default();
-            for dev in &devices {
-                if dev.device_type == DeviceType::WiFi {
-                    let _ = nm.request_wifi_scan(&dev.path).await;
+            // Use WifiManager to find WiFi device
+            match nm.find_wifi_device_path().await {
+                Ok(Some(wifi_path)) => {
+                    let _ = nm.request_wifi_scan(&wifi_path).await;
+                }
+                Ok(None) => {
+                    let _ = tx.send(Event::ActionError(
+                        NexusError::DeviceNotFound("No WiFi device found for scanning".into())
+                            .to_string(),
+                    ));
+                    return;
+                }
+                Err(e) => {
+                    let _ = tx.send(Event::ActionError(
+                        NexusError::Wifi(format!("WiFi scan error: {}", e)).to_string(),
+                    ));
+                    return;
                 }
             }
             // Wait for scan to complete, then trigger a refresh
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            tokio::time::sleep(scan_delay).await;
             let _ = tx.send(Event::ActionSuccess("WiFi scan complete".into()));
         });
     }
@@ -476,7 +494,6 @@ impl App {
         let tx = self.event_tx.clone();
         let ssid = ap.ssid.clone();
 
-        // We need to find the saved connection path and WiFi device path
         let state = self.network_state.as_ref().unwrap();
         let wifi_device = state
             .devices
@@ -484,14 +501,27 @@ impl App {
             .find(|d| d.device_type == DeviceType::WiFi)
             .map(|d| d.path.clone());
 
-        let saved_conn = state
-            .saved_connections
-            .iter()
-            .find(|c| c.id == ap.ssid && c.conn_type == "802-11-wireless")
-            .map(|c| c.path.clone());
-
-        if let (Some(device_path), Some(conn_path)) = (wifi_device, saved_conn) {
+        if let Some(device_path) = wifi_device {
             tokio::spawn(async move {
+                // Use WifiManager to find saved connection for best SSID matching
+                let conn_path = match nm.find_saved_wifi_connection(&ssid).await {
+                    Ok(Some(path)) => path,
+                    Ok(None) => {
+                        let _ = tx.send(Event::ActionError(format!(
+                            "No saved connection found for '{}'",
+                            ssid
+                        )));
+                        return;
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Event::ActionError(format!(
+                            "Failed to find saved connection: {}",
+                            e
+                        )));
+                        return;
+                    }
+                };
+
                 match nm.activate_connection(&conn_path, &device_path).await {
                     Ok(_) => {
                         let _ = tx.send(Event::ActionSuccess(format!("Connecting to {}", ssid)));
@@ -818,7 +848,18 @@ impl App {
                 Ok(out) => {
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     for line in stdout.lines() {
-                        let _ = tx.send(Event::ActionSuccess(format!("DIAG:{}", line)));
+                        if line.trim().is_empty() {
+                            continue;
+                        }
+                        let display = if let Some(route) = RouteEntry::parse_route_line(line) {
+                            format!(
+                                "{:<22} via {:<16} dev {:<10} metric {}",
+                                route.destination, route.gateway, route.interface, route.metric
+                            )
+                        } else {
+                            line.to_string()
+                        };
+                        let _ = tx.send(Event::ActionSuccess(format!("DIAG:{}", display)));
                     }
                     let _ = tx.send(Event::ActionSuccess("DIAG_DONE:route".into()));
                 }
@@ -915,6 +956,10 @@ impl App {
                 Ok(out) => {
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     let stderr = String::from_utf8_lossy(&out.stderr);
+                    if stdout.is_empty() && !stderr.is_empty() {
+                        let err = NexusError::Timeout(format!("Ping to {} timed out", target));
+                        let _ = tx.send(Event::ActionSuccess(format!("DIAG:{}", err)));
+                    }
                     for line in stdout.lines().chain(stderr.lines()) {
                         let _ = tx.send(Event::ActionSuccess(format!("DIAG:{}", line)));
                     }
@@ -944,9 +989,10 @@ impl App {
                 }
             }
             Err(e) => {
+                let err = NexusError::Dns(format!("Failed to resolve '{}': {}", domain, e));
                 self.diagnostics_state
                     .output
-                    .push_back(format!("  Error: {}", e));
+                    .push_back(format!("  {}", err));
             }
         }
     }
@@ -1173,9 +1219,16 @@ impl App {
                 self.show_toast(&msg, true);
                 self.diagnostics_state.running = false;
             }
-            Event::Mouse(_) => {
-                // Mouse events are captured but not yet handled;
-                // reserved for future interactive click support
+            Event::Mouse(mouse) => {
+                // Basic mouse scroll support
+                let scroll_key = match mouse.kind {
+                    crossterm::event::MouseEventKind::ScrollUp => Some(KeyCode::Up),
+                    crossterm::event::MouseEventKind::ScrollDown => Some(KeyCode::Down),
+                    _ => None,
+                };
+                if let Some(code) = scroll_key {
+                    self.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
+                }
             }
             Event::Resize(_w, _h) => {
                 // Terminal resized — ratatui redraws automatically

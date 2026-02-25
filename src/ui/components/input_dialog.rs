@@ -116,11 +116,8 @@ impl InputDialog {
             .margin(0)
             .split(inner);
 
-        // Prompt
-        let prompt = Paragraph::new(Line::from(Span::styled(
-            &self.prompt,
-            Style::default().fg(theme.fg_dim),
-        )));
+        // Prompt (styled with inactive input theme)
+        let prompt = Paragraph::new(Line::from(Span::styled(&self.prompt, theme.input_inactive)));
         f.render_widget(prompt, chunks[0]);
 
         // Input field

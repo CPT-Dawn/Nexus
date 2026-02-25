@@ -176,6 +176,22 @@ fn render_connection_detail(f: &mut Frame, app: &App, state: &NetworkState, area
                 .fg(theme.success)
                 .add_modifier(Modifier::BOLD),
         )));
+        // Show active connection runtime details
+        if let Some(active) = state
+            .active_connections
+            .iter()
+            .find(|ac| ac.uuid == conn.uuid)
+        {
+            add_detail(&mut lines, "Active Name", &active.id, theme);
+            add_detail(&mut lines, "Active Type", &active.conn_type, theme);
+            add_detail(&mut lines, "State", &format!("{:?}", active.state), theme);
+            add_detail(
+                &mut lines,
+                "Devices",
+                &format!("{}", active.devices.len()),
+                theme,
+            );
+        }
     } else {
         lines.push(Line::from(Span::styled(
             "○ Inactive",

@@ -241,6 +241,14 @@ pub trait IP4Config {
     /// DNS search domains
     #[zbus(property)]
     fn searches(&self) -> zbus::Result<Vec<String>>;
+
+    /// Legacy nameservers as u32 array in network byte order (fallback for older NM)
+    #[zbus(property)]
+    fn nameservers(&self) -> zbus::Result<Vec<u32>>;
+
+    /// Legacy addresses: arrays of [address, prefix, gateway] as u32 (fallback for older NM)
+    #[zbus(property)]
+    fn addresses(&self) -> zbus::Result<Vec<Vec<u32>>>;
 }
 
 // ── IP6Config Interface ───────────────────────────────────────────────
