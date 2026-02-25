@@ -153,8 +153,8 @@ async fn main() -> Result<()> {
                     app.tick();
                 }
 
-                Event::Resize(_, _) => {
-                    // Ratatui handles resize automatically on next draw
+                Event::Resize(w, h) => {
+                    tracing::debug!("Terminal resized to {}x{}", w, h);
                 }
 
                 Event::NetworkScan(networks) => {
@@ -192,14 +192,18 @@ async fn main() -> Result<()> {
 
 /// Handle network events from D-Bus signals
 async fn handle_network_event(
-    app: &mut App,
+    _app: &mut App,
     nm: &NmBackend,
     event: NetworkEvent,
     tx: &tokio::sync::mpsc::UnboundedSender<Event>,
 ) {
     match event {
-        NetworkEvent::ScanComplete(_) => {
-            // Trigger a fresh scan
+        NetworkEvent::ScanComplete(networks) => {
+            if !networks.is_empty() {
+                let _ = tx.send(Event::NetworkScan(networks));
+                return;
+            }
+            // If empty, trigger a fresh scan
             let iface = nm.interface_name().to_string();
             let scan_tx = tx.clone();
             tokio::spawn(async move {
@@ -215,8 +219,9 @@ async fn handle_network_event(
                 }
             });
         }
-        NetworkEvent::ConnectionChanged(_) => {
-            // Refresh connection info
+        NetworkEvent::ConnectionChanged(status) => {
+            let _ = tx.send(Event::ConnectionChanged(status));
+            // Also refresh full connection info
             let iface = nm.interface_name().to_string();
             let conn_tx = tx.clone();
             tokio::spawn(async move {
@@ -234,22 +239,6 @@ async fn handle_network_event(
                     }
                 }
             });
-        }
-        NetworkEvent::AccessPointAdded | NetworkEvent::AccessPointRemoved => {
-            // Re-scan on AP changes (small debounce)
-            let iface = nm.interface_name().to_string();
-            let scan_tx = tx.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(500)).await;
-                if let Ok(backend) = NmBackend::new(Some(&iface)).await
-                    && let Ok(networks) = backend.scan().await {
-                        let _ = scan_tx.send(Event::NetworkScan(networks));
-                    }
-            });
-        }
-        NetworkEvent::Error(msg) => {
-            app.mode = AppMode::Error(msg);
-            app.animation.start_dialog_slide();
         }
     }
 }

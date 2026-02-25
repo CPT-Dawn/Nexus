@@ -185,19 +185,14 @@ pub struct ConnectionInfo {
 }
 
 /// Overall connection status
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum ConnectionStatus {
     Connected(ConnectionInfo),
     Connecting(String),
     Disconnecting,
+    #[default]
     Disconnected,
     Failed(String),
-}
-
-impl Default for ConnectionStatus {
-    fn default() -> Self {
-        Self::Disconnected
-    }
 }
 
 impl ConnectionStatus {
@@ -223,7 +218,4 @@ impl ConnectionStatus {
 pub enum NetworkEvent {
     ScanComplete(Vec<WiFiNetwork>),
     ConnectionChanged(ConnectionStatus),
-    AccessPointAdded,
-    AccessPointRemoved,
-    Error(String),
 }

@@ -1,14 +1,13 @@
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState};
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+use super::theme;
 use crate::animation::spinner;
 use crate::animation::transitions::fade_in_opacity;
 use crate::app::{App, AppMode};
-use crate::network::types::SignalLevel;
-use super::theme;
 
 /// Render the WiFi network list
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
@@ -17,15 +16,19 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
     // Build title
     let title_text = if is_scanning {
+        let scan_icon = if nerd { theme::ICON_SCAN } else { "" };
         let spin = spinner::spinner_frame(app.animation.tick_count);
-        format!(" {spin} Scanning… ")
+        format!(" {scan_icon}{spin} Scanning… ")
     } else {
         let count = app.networks.len();
         format!(" WiFi Networks ({count}) ")
     };
 
     let block = Block::default()
-        .title(Line::from(Span::styled(title_text, theme::style_accent_bold())))
+        .title(Line::from(Span::styled(
+            title_text,
+            theme::style_accent_bold(),
+        )))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(theme::style_border())
@@ -57,7 +60,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             // Selection indicator
             let selector = if is_selected {
                 if nerd {
-                    Span::styled(format!("{} ", theme::ICON_ARROW_RIGHT), theme::style_accent())
+                    Span::styled(
+                        format!("{} ", theme::ICON_ARROW_RIGHT),
+                        theme::style_accent(),
+                    )
                 } else {
                     Span::styled(format!("{} ", theme::PLAIN_ARROW), theme::style_accent())
                 }
@@ -95,7 +101,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             let sig_icon = theme::signal_icon(signal_display, nerd);
             let sig_color = theme::signal_color(signal_display);
             let signal_span = Span::styled(
-                format!("{sig_icon}"),
+                sig_icon.to_string(),
                 ratatui::style::Style::default().fg(sig_color),
             );
 
@@ -128,7 +134,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             // Saved indicator
             let saved = if net.is_saved {
                 Span::styled(
-                    if nerd { theme::ICON_SAVED } else { theme::PLAIN_SAVED },
+                    if nerd {
+                        theme::ICON_SAVED
+                    } else {
+                        theme::PLAIN_SAVED
+                    },
                     theme::style_accent(),
                 )
             } else {
@@ -136,15 +146,15 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             // Band indicator
-            let band = match SignalLevel::from_percentage(net.signal_strength) {
-                _ => {
-                    let band_str = match net.band() {
-                        crate::network::types::FrequencyBand::FiveGhz => "5G",
-                        crate::network::types::FrequencyBand::SixGhz => "6G",
-                        _ => "  ",
-                    };
-                    Span::styled(format!(" {band_str}"), theme::style_dim())
-                }
+            let band = {
+                let level = net.signal_level();
+                let band_str = match net.band() {
+                    crate::network::types::FrequencyBand::FiveGhz => "5G",
+                    crate::network::types::FrequencyBand::SixGhz => "6G",
+                    _ => "  ",
+                };
+                let _ = level; // signal level available for future use
+                Span::styled(format!(" {band_str}"), theme::style_dim())
             };
 
             let line = Line::from(vec![

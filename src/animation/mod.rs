@@ -8,9 +8,6 @@ use std::collections::HashSet;
 pub enum AnimationId {
     Spinner,
     DialogSlideIn,
-    SignalUpdate,
-    CursorBlink,
-    ListFadeIn,
 }
 
 /// Tracks animation state for the entire application
@@ -51,11 +48,6 @@ impl AnimationState {
         }
     }
 
-    /// Check if any animation is currently running
-    pub fn has_active_animation(&self) -> bool {
-        !self.active.is_empty()
-    }
-
     /// Start the dialog slide-in animation
     pub fn start_dialog_slide(&mut self) {
         self.dialog_offset = self.dialog_offset_max;
@@ -82,11 +74,6 @@ impl AnimationState {
     pub fn dialog_y_offset(&self) -> u16 {
         self.dialog_offset.ceil() as u16
     }
-}
-
-/// Linear interpolation
-pub fn lerp(from: f32, to: f32, t: f32) -> f32 {
-    from + (to - from) * t.clamp(0.0, 1.0)
 }
 
 /// Exponential ease-out interpolation (smooth approach)

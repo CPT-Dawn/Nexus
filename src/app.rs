@@ -289,17 +289,17 @@ impl App {
     }
 
     fn action_disconnect(&mut self) {
-        if !self.connection_status.is_connected() {
+        if !self.connection_status.is_connected() || self.connection_status.is_busy() {
             return;
         }
+        let _active_ssid = self.connection_status.ssid().map(|s| s.to_string());
         self.mode = AppMode::Disconnecting;
         self.connection_status = ConnectionStatus::Disconnecting;
         self.animation.start_spinner();
 
         let tx = self.event_tx.clone();
         tokio::spawn(async move {
-            // The actual disconnect will be handled by the main loop
-            let _ = tx.send(Event::Key(KeyEvent::new(KeyCode::Null, KeyModifiers::NONE)));
+            let _ = tx.send(Event::Error("DISCONNECT:".to_string()));
         });
     }
 

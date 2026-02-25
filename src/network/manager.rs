@@ -15,7 +15,6 @@ pub struct NmBackend {
     conn: Connection,
     wifi_device_path: OwnedObjectPath,
     interface: String,
-    event_rx: Option<mpsc::UnboundedReceiver<NetworkEvent>>,
     event_tx: mpsc::UnboundedSender<NetworkEvent>,
 }
 
@@ -52,13 +51,12 @@ impl NmBackend {
 
         info!("Using WiFi interface: {} ({})", iface_name, device_path);
 
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
 
         Ok(Self {
             conn,
             wifi_device_path: device_path,
             interface: iface_name,
-            event_rx: Some(event_rx),
             event_tx,
         })
     }
@@ -171,11 +169,10 @@ impl NmBackend {
             .unwrap_or_default();
 
             // If user specified an interface, only match that one
-            if let Some(preferred) = preferred_interface {
-                if iface != preferred {
+            if let Some(preferred) = preferred_interface
+                && iface != preferred {
                     continue;
                 }
-            }
 
             return Ok((device_path.clone(), iface));
         }
@@ -235,16 +232,14 @@ impl NmBackend {
             }
 
             // Get the SSID
-            if let Some(wireless) = settings.get("802-11-wireless") {
-                if let Some(ssid_val) = wireless.get("ssid") {
-                    if let Ok(ssid_bytes) = <Vec<u8>>::try_from(ssid_val.clone()) {
+            if let Some(wireless) = settings.get("802-11-wireless")
+                && let Some(ssid_val) = wireless.get("ssid")
+                    && let Ok(ssid_bytes) = <Vec<u8>>::try_from(ssid_val.clone()) {
                         let ssid = String::from_utf8_lossy(&ssid_bytes).to_string();
                         if !ssid.is_empty() {
                             ssids.push(ssid);
                         }
                     }
-                }
-            }
         }
 
         Ok(ssids)
@@ -328,7 +323,7 @@ impl NmBackend {
 
         let security = SecurityType::from_flags(flags, wpa_flags, rsn_flags);
         let is_saved = saved_ssids.contains(&ssid);
-        let is_active = active_ssid.map_or(false, |a| a == ssid);
+        let is_active = active_ssid.is_some_and(|a| a == ssid);
 
         Some(WiFiNetwork {
             ssid,
@@ -370,16 +365,14 @@ impl NmBackend {
                 Err(_) => continue,
             };
 
-            if let Some(wireless) = settings.get("802-11-wireless") {
-                if let Some(ssid_val) = wireless.get("ssid") {
-                    if let Ok(ssid_bytes) = <Vec<u8>>::try_from(ssid_val.clone()) {
+            if let Some(wireless) = settings.get("802-11-wireless")
+                && let Some(ssid_val) = wireless.get("ssid")
+                    && let Ok(ssid_bytes) = <Vec<u8>>::try_from(ssid_val.clone()) {
                         let profile_ssid = String::from_utf8_lossy(&ssid_bytes);
                         if profile_ssid == ssid {
                             return Ok(Some(conn_path.clone()));
                         }
                     }
-                }
-            }
         }
 
         Ok(None)
@@ -628,10 +621,6 @@ impl NetworkBackend for NmBackend {
         Ok(())
     }
 
-    async fn saved_networks(&self) -> Result<Vec<String>> {
-        self.get_saved_ssids().await
-    }
-
     async fn current_connection(&self) -> Result<Option<ConnectionInfo>> {
         let active_conn_path: OwnedObjectPath = match Self::get_property(
             &self.conn,
@@ -795,9 +784,5 @@ impl NetworkBackend for NmBackend {
 
     fn interface_name(&self) -> &str {
         &self.interface
-    }
-
-    fn event_receiver(&mut self) -> Option<tokio::sync::mpsc::UnboundedReceiver<NetworkEvent>> {
-        self.event_rx.take()
     }
 }

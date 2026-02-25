@@ -5,15 +5,18 @@ use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 
 use super::theme;
 use crate::app::App;
-use crate::network::types::ConnectionStatus;
+use crate::network::types::{ConnectionStatus, FrequencyBand, channel_from_frequency};
 
 /// Render the network detail panel (right side)
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
+    let nerd = !app.config.no_nerd_fonts;
+    let info_icon = if nerd { theme::ICON_INFO } else { "(i) " };
+
     let block = Block::default()
-        .title(Line::from(Span::styled(
-            " Details ",
-            theme::style_accent_bold(),
-        )))
+        .title(Line::from(vec![
+            Span::styled(format!(" {info_icon}"), theme::style_accent()),
+            Span::styled("Details ", theme::style_accent_bold()),
+        ]))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(theme::style_border())
@@ -30,13 +33,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
     let selected = &app.networks[app.selected_index.min(app.networks.len().saturating_sub(1))];
 
-    let mut lines: Vec<Line> = Vec::new();
-
-    // SSID
-    lines.push(Line::from(""));
-    lines.push(detail_line("  SSID", &selected.ssid));
-    lines.push(detail_line("  BSSID", &selected.bssid));
-    lines.push(Line::from(""));
+    let mut lines: Vec<Line> = vec![
+        Line::from(""),
+        detail_line("  SSID", &selected.ssid),
+        detail_line("  BSSID", &selected.bssid),
+        detail_line("  AP Path", &selected.ap_path),
+        Line::from(""),
+    ];
 
     // Signal
     let sig_color = theme::signal_color(selected.signal_strength);
@@ -88,26 +91,44 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
     // Active connection details
     if selected.is_active
-        && let ConnectionStatus::Connected(ref info) = app.connection_status {
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                "  ── Connection Info ──",
-                theme::style_accent(),
-            )));
-            lines.push(Line::from(""));
+        && let ConnectionStatus::Connected(ref info) = app.connection_status
+    {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ── Connection Info ──",
+            ratatui::style::Style::default().fg(theme::ACCENT2),
+        )));
+        lines.push(Line::from(""));
 
-            if let Some(ref ip) = info.ip4 {
-                lines.push(detail_line("  IPv4", ip));
-            }
-            if let Some(ref gw) = info.gateway {
-                lines.push(detail_line("  Gateway", gw));
-            }
-            lines.push(detail_line("  MAC", &info.mac));
-            if info.speed > 0 {
-                let speed_str = format!("{} Mbps", info.speed);
-                lines.push(detail_line("  Speed", &speed_str));
-            }
+        if let Some(ref ip) = info.ip4 {
+            lines.push(detail_line("  IPv4", ip));
         }
+        if let Some(ref ip6) = info.ip6 {
+            lines.push(detail_line("  IPv6", ip6));
+        }
+        if let Some(ref gw) = info.gateway {
+            lines.push(detail_line("  Gateway", gw));
+        }
+        if !info.dns.is_empty() {
+            lines.push(detail_line("  DNS", &info.dns.join(", ")));
+        }
+        lines.push(detail_line("  MAC", &info.mac));
+        lines.push(detail_line("  BSSID", &info.bssid));
+        lines.push(detail_line("  Interface", &info.interface));
+        if info.speed > 0 {
+            let speed_str = format!("{} Mbps", info.speed);
+            lines.push(detail_line("  Speed", &speed_str));
+        }
+        if info.frequency > 0 {
+            let band = FrequencyBand::from_mhz(info.frequency);
+            let ch = channel_from_frequency(info.frequency);
+            let freq_str = format!("{} MHz ({}, ch {})", info.frequency, band, ch);
+            lines.push(detail_line("  Frequency", &freq_str));
+        }
+        if info.signal > 0 {
+            lines.push(detail_line("  Signal", &format!("{}%", info.signal)));
+        }
+    }
 
     let para = Paragraph::new(lines)
         .block(block)
