@@ -1,10 +1,10 @@
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
-use crate::app::{App, AppMode};
 use super::theme;
+use crate::app::{App, AppMode};
 
 /// Render the bottom status bar with context-sensitive keybinding hints
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
@@ -24,51 +24,59 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
 fn normal_hints() -> Vec<Span<'static>> {
     vec![
-        key("↑↓/jk"), desc("Navigate "),
-        key("Enter"), desc("Connect "),
-        key("d"), desc("Disconnect "),
-        key("s"), desc("Scan "),
-        key("f"), desc("Forget "),
-        key("h"), desc("Hidden "),
-        key("i"), desc("Details "),
-        key("?"), desc("Help "),
-        key("q"), desc("Quit"),
+        key("↑↓/jk"),
+        desc("Navigate "),
+        key("Enter"),
+        desc("Connect "),
+        key("d"),
+        desc("Disconnect "),
+        key("s"),
+        desc("Scan "),
+        key("f"),
+        desc("Forget "),
+        key("h"),
+        desc("Hidden "),
+        key("i"),
+        desc("Details "),
+        key("/"),
+        desc("Help "),
+        key("q"),
+        desc("Quit"),
     ]
 }
 
 fn password_hints() -> Vec<Span<'static>> {
     vec![
-        key("Enter"), desc("Submit "),
-        key("Esc"), desc("Cancel "),
-        key("Ctrl+H"), desc("Toggle visibility"),
+        key("Enter"),
+        desc("Submit "),
+        key("Esc"),
+        desc("Cancel "),
+        key("Ctrl+H"),
+        desc("Toggle visibility"),
     ]
 }
 
 fn hidden_hints() -> Vec<Span<'static>> {
     vec![
-        key("Tab"), desc("Switch field "),
-        key("Enter"), desc("Connect "),
-        key("Esc"), desc("Cancel"),
+        key("Tab"),
+        desc("Switch field "),
+        key("Enter"),
+        desc("Connect "),
+        key("Esc"),
+        desc("Cancel"),
     ]
 }
 
 fn help_hints() -> Vec<Span<'static>> {
-    vec![
-        key("?"), desc("Close "),
-        key("Esc"), desc("Close"),
-    ]
+    vec![key("?"), desc("Close "), key("Esc"), desc("Close")]
 }
 
 fn busy_hints() -> Vec<Span<'static>> {
-    vec![
-        Span::styled("Please wait…", theme::style_dim()),
-    ]
+    vec![Span::styled("Please wait…", theme::style_dim())]
 }
 
 fn error_hints() -> Vec<Span<'static>> {
-    vec![
-        key("Esc"), desc("Close"),
-    ]
+    vec![key("Esc"), desc("Close")]
 }
 
 fn key(k: &'static str) -> Span<'static> {

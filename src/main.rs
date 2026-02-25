@@ -12,7 +12,7 @@ use std::time::Duration;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use crossterm::{
-    execute,
+    cursor, execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::Terminal;
@@ -183,9 +183,14 @@ async fn main() -> Result<()> {
     // ─── Cleanup ────────────────────────────────────────────────────
     info!("Nexus shutting down");
 
-    terminal.show_cursor()?;
+    // Restore terminal state
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, cursor::Show)?;
+    terminal.show_cursor()?;
+
+    // Flush to ensure all escape sequences are written immediately
+    use std::io::Write;
+    io::stdout().flush()?;
 
     Ok(())
 }

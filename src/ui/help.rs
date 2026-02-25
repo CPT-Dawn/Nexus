@@ -21,7 +21,7 @@ const KEYBINDINGS: &[(&str, &str)] = &[
     ("Ctrl+H", "Show/hide password"),
     ("Tab", "Switch fields (in dialogs)"),
     ("Esc", "Close dialog / cancel"),
-    ("?", "Toggle this help"),
+    ("/ or ?", "Toggle this help"),
     ("q", "Quit Nexus"),
 ];
 

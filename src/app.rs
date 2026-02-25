@@ -112,7 +112,7 @@ impl App {
             }
 
             // Help
-            KeyCode::Char('?') => {
+            KeyCode::Char('?') | KeyCode::Char('/') => {
                 self.mode = AppMode::Help;
                 self.animation.start_dialog_slide();
             }
@@ -215,7 +215,7 @@ impl App {
     /// Handle keys in help overlay
     fn handle_key_help(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => {
+            KeyCode::Char('?') | KeyCode::Char('/') | KeyCode::Esc | KeyCode::Char('q') => {
                 self.mode = AppMode::Normal;
             }
             _ => {}
