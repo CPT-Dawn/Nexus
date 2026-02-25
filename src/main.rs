@@ -183,6 +183,11 @@ async fn main() -> Result<()> {
     // ─── Cleanup ────────────────────────────────────────────────────
     info!("Nexus shutting down");
 
+    // Stop background event tasks first so they release stdin
+    events.stop();
+    // Give tasks a moment to exit (they poll every ~33ms)
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
     // Restore terminal state
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen, cursor::Show)?;

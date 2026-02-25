@@ -1,4 +1,6 @@
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, KeyEventKind};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -27,6 +29,7 @@ pub enum Event {
 pub struct EventHandler {
     rx: mpsc::UnboundedReceiver<Event>,
     _tx: mpsc::UnboundedSender<Event>,
+    stop: Arc<AtomicBool>,
 }
 
 impl EventHandler {
@@ -34,14 +37,23 @@ impl EventHandler {
     pub fn new(tick_rate_ms: u64) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         let _tx = tx.clone();
+        let stop = Arc::new(AtomicBool::new(false));
 
         // Input polling task
         let input_tx = tx.clone();
+        let input_stop = stop.clone();
         tokio::spawn(async move {
             loop {
+                if input_stop.load(Ordering::Relaxed) {
+                    return;
+                }
+                // Poll with a short timeout so we can check the stop flag frequently
                 if event::poll(Duration::from_millis(tick_rate_ms)).unwrap_or(false)
                     && let Ok(evt) = event::read()
                 {
+                    if input_stop.load(Ordering::Relaxed) {
+                        return;
+                    }
                     match evt {
                         CrosstermEvent::Key(key) => {
                             // Only forward key press events, not release/repeat
@@ -64,17 +76,21 @@ impl EventHandler {
 
         // Tick task
         let tick_tx = tx.clone();
+        let tick_stop = stop.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(tick_rate_ms));
             loop {
                 interval.tick().await;
+                if tick_stop.load(Ordering::Relaxed) {
+                    return;
+                }
                 if tick_tx.send(Event::Tick).is_err() {
                     return;
                 }
             }
         });
 
-        Self { rx, _tx: tx }
+        Self { rx, _tx: tx, stop }
     }
 
     /// Get a clone of the sender for forwarding network events
@@ -85,5 +101,10 @@ impl EventHandler {
     /// Receive the next event
     pub async fn next(&mut self) -> Option<Event> {
         self.rx.recv().await
+    }
+
+    /// Signal all background tasks to stop
+    pub fn stop(&self) {
+        self.stop.store(true, Ordering::Relaxed);
     }
 }
