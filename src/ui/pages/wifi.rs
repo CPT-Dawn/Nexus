@@ -197,6 +197,7 @@ fn render_ap_list(f: &mut Frame, app: &App, state: &NetworkState, area: Rect) {
     let header = Row::new(vec![
         Cell::from(""),
         Cell::from("SSID"),
+        Cell::from("BSSID"),
         Cell::from("Signal"),
         Cell::from("Security"),
         Cell::from("Band"),
@@ -234,6 +235,10 @@ fn render_ap_list(f: &mut Frame, app: &App, state: &NetworkState, area: Rect) {
                     },
                 )),
                 Cell::from(Span::styled(
+                    ap.bssid.clone(),
+                    Style::default().fg(theme.fg_muted),
+                )),
+                Cell::from(Span::styled(
                     format!("{} {}%", ap.signal_bars(), ap.strength),
                     Style::default().fg(signal_color),
                 )),
@@ -253,7 +258,8 @@ fn render_ap_list(f: &mut Frame, app: &App, state: &NetworkState, area: Rect) {
 
     let widths = [
         Constraint::Length(3),
-        Constraint::Min(15),
+        Constraint::Min(12),
+        Constraint::Length(17),
         Constraint::Length(14),
         Constraint::Length(10),
         Constraint::Length(5),

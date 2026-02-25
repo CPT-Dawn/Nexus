@@ -208,6 +208,16 @@ fn render_detail_panel(f: &mut Frame, app: &App, state: &NetworkState, area: Rec
         );
     }
 
+    if let Some(ref ac_path) = device.active_connection_path {
+        add_detail_line(
+            &mut lines,
+            "Active Conn",
+            &ac_path.to_string(),
+            theme.fg_dim,
+            theme,
+        );
+    }
+
     add_detail_line(
         &mut lines,
         "Autoconnect",

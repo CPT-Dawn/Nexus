@@ -33,13 +33,20 @@ pub fn render(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
     f.render_widget(help, chunks[0]);
 
     // Right: status info
-    let perm_label = match app.permission_level {
-        PermissionLevel::Full => Span::styled(" ● Full", Style::default().fg(theme.success)),
-        PermissionLevel::ReadOnly => {
-            Span::styled(" ○ Read-Only", Style::default().fg(theme.warning))
-        }
-        PermissionLevel::Unknown => Span::styled(" … Checking", Style::default().fg(theme.fg_dim)),
+    let perm_color = match app.permission_level {
+        PermissionLevel::Full => theme.success,
+        PermissionLevel::ReadOnly => theme.warning,
+        PermissionLevel::Unknown => theme.fg_dim,
     };
+    let perm_icon = match app.permission_level {
+        PermissionLevel::Full => "●",
+        PermissionLevel::ReadOnly => "○",
+        PermissionLevel::Unknown => "…",
+    };
+    let perm_label = Span::styled(
+        format!(" {} {} ", perm_icon, app.permission_level.label()),
+        Style::default().fg(perm_color),
+    );
 
     let connectivity = if let Some(ref state) = app.network_state {
         let style = theme.connectivity_style(&state.connectivity);
@@ -48,7 +55,12 @@ pub fn render(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
         Span::styled(" No NM ", Style::default().fg(theme.error))
     };
 
-    let status_line = Line::from(vec![connectivity, Span::raw("│"), perm_label, Span::raw(" ")]);
+    let status_line = Line::from(vec![
+        connectivity,
+        Span::raw("│"),
+        perm_label,
+        Span::raw(" "),
+    ]);
     let status = Paragraph::new(status_line)
         .style(theme.status_bar)
         .alignment(ratatui::layout::Alignment::Right);

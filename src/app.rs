@@ -80,6 +80,9 @@ pub struct App {
     pub input_dialog: InputDialog,
     pub confirm_dialog: ConfirmDialog,
 
+    // Config
+    pub show_help_bar: bool,
+
     // Toast notification
     pub toast_message: Option<String>,
     pub toast_is_error: bool,
@@ -93,13 +96,18 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(nm: Arc<NetworkManager>, event_tx: mpsc::UnboundedSender<Event>) -> Self {
+    pub fn new(
+        nm: Arc<NetworkManager>,
+        event_tx: mpsc::UnboundedSender<Event>,
+        config: &crate::config::Config,
+    ) -> Self {
         Self {
             active_page: Page::Dashboard,
             mode: Mode::Normal,
             should_quit: false,
             theme: Theme::default(),
             permission_level: PermissionLevel::Unknown,
+            show_help_bar: config.show_help_bar,
 
             network_state: None,
             nm,
@@ -886,6 +894,7 @@ impl App {
     }
 
     fn run_ping(&mut self, target: &str) {
+        self.diagnostics_state.target = target.to_string();
         self.diagnostics_state.output.clear();
         self.diagnostics_state
             .output
@@ -919,6 +928,7 @@ impl App {
     }
 
     fn run_dns_lookup(&mut self, domain: &str) {
+        self.diagnostics_state.target = domain.to_string();
         self.diagnostics_state.output.clear();
         self.diagnostics_state
             .output
@@ -1163,7 +1173,13 @@ impl App {
                 self.show_toast(&msg, true);
                 self.diagnostics_state.running = false;
             }
-            _ => {}
+            Event::Mouse(_) => {
+                // Mouse events are captured but not yet handled;
+                // reserved for future interactive click support
+            }
+            Event::Resize(_w, _h) => {
+                // Terminal resized — ratatui redraws automatically
+            }
         }
     }
 }

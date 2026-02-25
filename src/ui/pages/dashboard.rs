@@ -1,7 +1,7 @@
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, Sparkline};
+use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Sparkline, Table};
 use ratatui::Frame;
 
 use crate::app::App;
@@ -35,7 +35,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(5), // Header: connectivity + hostname + version
-            Constraint::Min(8),   // Interface table
+            Constraint::Min(8),    // Interface table
             Constraint::Length(6), // Bandwidth sparklines
         ])
         .split(area);
@@ -104,7 +104,10 @@ fn render_header(f: &mut Frame, state: &NetworkState, theme: &crate::ui::theme::
         ]),
         Line::from(vec![
             Span::styled("NM: ", Style::default().fg(theme.fg_dim)),
-            Span::styled(format!("v{}", state.nm_version), Style::default().fg(theme.fg)),
+            Span::styled(
+                format!("v{}", state.nm_version),
+                Style::default().fg(theme.fg),
+            ),
         ]),
     ])
     .alignment(Alignment::Center);
@@ -117,16 +120,25 @@ fn render_header(f: &mut Frame, state: &NetworkState, theme: &crate::ui::theme::
     } else {
         Span::styled("WiFi: OFF", Style::default().fg(theme.error))
     };
+    let net_label = if state.networking_enabled {
+        Span::styled("Net: ON", Style::default().fg(theme.success))
+    } else {
+        Span::styled("Net: OFF", Style::default().fg(theme.error))
+    };
 
     let summary = Paragraph::new(vec![
         Line::from(vec![
             Span::styled("Active: ", Style::default().fg(theme.fg_dim)),
             Span::styled(
-                format!("{} connection{}", active_count, if active_count == 1 { "" } else { "s" }),
+                format!(
+                    "{} connection{}",
+                    active_count,
+                    if active_count == 1 { "" } else { "s" }
+                ),
                 Style::default().fg(theme.fg),
             ),
         ]),
-        Line::from(wifi_label),
+        Line::from(vec![wifi_label, Span::raw("  "), net_label]),
     ])
     .alignment(Alignment::Right);
     f.render_widget(summary, cols[2]);
@@ -178,12 +190,20 @@ fn render_interface_table(
                 Cell::from(dev.device_type.icon()),
                 Cell::from(dev.interface.clone()),
                 Cell::from(dev.device_type.label()),
-                Cell::from(Span::styled(dev.state.label(), Style::default().fg(state_color))),
+                Cell::from(Span::styled(
+                    dev.state.label(),
+                    Style::default().fg(state_color),
+                )),
                 Cell::from(dev.display_ip()),
-                Cell::from(dev.connection_name.clone().unwrap_or_else(|| "—".to_string())),
+                Cell::from(
+                    dev.connection_name
+                        .clone()
+                        .unwrap_or_else(|| "—".to_string()),
+                ),
                 Cell::from(rx_rate),
                 Cell::from(tx_rate),
             ])
+            .style(theme.table_row)
         })
         .collect();
 
@@ -214,12 +234,7 @@ fn render_bandwidth(
     area: Rect,
 ) {
     let block = Block::default()
-        .title(Span::styled(
-            " 󰓅 Bandwidth ",
-            Style::default()
-                .fg(theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ))
+        .title(Span::styled(" 󰓅 Bandwidth ", theme.title_style()))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(theme.border));
 
@@ -247,12 +262,12 @@ fn render_bandwidth(
                 InterfaceStats::format_rate(stats.rx_rate)
             );
             let rx_spark = Sparkline::default()
-                .block(Block::default().title(Span::styled(
-                    rx_label,
-                    Style::default().fg(theme.success),
-                )))
+                .block(
+                    Block::default()
+                        .title(Span::styled(rx_label, Style::default().fg(theme.success))),
+                )
                 .data(&rx_data)
-                .style(Style::default().fg(theme.success));
+                .style(Style::default().fg(theme.sparkline_fg));
             f.render_widget(rx_spark, cols[0]);
 
             // TX sparkline
@@ -263,12 +278,11 @@ fn render_bandwidth(
                 InterfaceStats::format_rate(stats.tx_rate)
             );
             let tx_spark = Sparkline::default()
-                .block(Block::default().title(Span::styled(
-                    tx_label,
-                    Style::default().fg(theme.info),
-                )))
+                .block(
+                    Block::default().title(Span::styled(tx_label, Style::default().fg(theme.info))),
+                )
                 .data(&tx_data)
-                .style(Style::default().fg(theme.info));
+                .style(Style::default().fg(theme.sparkline_fg));
             f.render_widget(tx_spark, cols[1]);
 
             return;

@@ -87,17 +87,25 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    // Create event handler
+    // Create config
     let config = Config {
         tick_rate: Duration::from_millis(cli.tick_rate),
         mouse_support: !cli.no_mouse,
+        log_file: cli.log.clone(),
         ..Default::default()
     };
+
+    // Setup terminal mouse support based on config
+    if !config.mouse_support {
+        execute!(io::stdout(), DisableMouseCapture)?;
+    }
+
+    // Create event handler
     let mut event_handler = EventHandler::new(config.tick_rate);
     let event_tx = event_handler.sender();
 
     // Create app
-    let mut app = App::new(nm.clone(), event_tx.clone());
+    let mut app = App::new(nm.clone(), event_tx.clone(), &config);
 
     // Check permissions
     app.permission_level = auth::check_permissions(&nm).await;
