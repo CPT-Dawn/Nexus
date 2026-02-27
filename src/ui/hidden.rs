@@ -1,13 +1,14 @@
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
-use ratatui::Frame;
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 
-use crate::app::App;
 use super::theme;
+use crate::app::App;
 
 /// Render the hidden network connection modal
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
     let width = 56_u16.min(area.width.saturating_sub(4));
     let height = 11_u16.min(area.height.saturating_sub(4));
 
@@ -20,22 +21,30 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
     frame.render_widget(Clear, dialog);
 
-    let nerd = !app.config.no_nerd_fonts;
-    let icon = if nerd { theme::ICON_HIDDEN } else { theme::PLAIN_HIDDEN };
+    let nerd = app.config.nerd_fonts();
+    let icon = if nerd {
+        theme::ICON_HIDDEN
+    } else {
+        theme::PLAIN_HIDDEN
+    };
 
     let block = Block::default()
         .title(Line::from(vec![
-            Span::styled(format!(" {icon}"), theme::style_accent()),
-            Span::styled(" Connect to Hidden Network ", theme::style_accent_bold()),
+            Span::styled(format!(" {icon}"), t.style_accent()),
+            Span::styled(" Connect to Hidden Network ", t.style_accent_bold()),
         ]))
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(theme::style_accent())
-        .style(theme::style_default());
+        .border_type(t.border_type)
+        .border_style(t.style_accent())
+        .style(t.style_default());
 
     frame.render_widget(block, dialog);
 
-    let cursor_char = if app.animation.cursor_visible() { "█" } else { " " };
+    let cursor_char = if app.animation.cursor_visible() {
+        "█"
+    } else {
+        " "
+    };
 
     // SSID field
     let ssid_area = Rect {
@@ -46,16 +55,16 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let ssid_label_style = if app.hidden_field_focus == 0 {
-        theme::style_accent()
+        t.style_accent()
     } else {
-        theme::style_dim()
+        t.style_dim()
     };
 
     let ssid_line = Line::from(vec![
         Span::styled("SSID:     ", ssid_label_style),
-        Span::styled(app.hidden_ssid_input.clone(), theme::style_default()),
+        Span::styled(app.hidden_ssid_input.clone(), t.style_default()),
         if app.hidden_field_focus == 0 {
-            Span::styled(cursor_char.to_string(), theme::style_accent())
+            Span::styled(cursor_char.to_string(), t.style_accent())
         } else {
             Span::raw("")
         },
@@ -71,9 +80,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let pwd_label_style = if app.hidden_field_focus == 1 {
-        theme::style_accent()
+        t.style_accent()
     } else {
-        theme::style_dim()
+        t.style_dim()
     };
 
     let pwd_display = if app.password_visible {
@@ -84,9 +93,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
     let pwd_line = Line::from(vec![
         Span::styled("Password: ", pwd_label_style),
-        Span::styled(pwd_display, theme::style_default()),
+        Span::styled(pwd_display, t.style_default()),
         if app.hidden_field_focus == 1 {
-            Span::styled(cursor_char.to_string(), theme::style_accent())
+            Span::styled(cursor_char.to_string(), t.style_accent())
         } else {
             Span::raw("")
         },
@@ -101,7 +110,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         height: 1,
     };
     frame.render_widget(
-        Paragraph::new(Span::styled("(leave empty for open networks)", theme::style_dim())),
+        Paragraph::new(Span::styled(
+            "(leave empty for open networks)",
+            t.style_dim(),
+        )),
         opt_area,
     );
 
@@ -114,16 +126,18 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let hints = Line::from(vec![
-        Span::styled("[Tab]", theme::style_key_hint()),
-        Span::styled(" Switch  ", theme::style_key_desc()),
-        Span::styled("[Enter]", theme::style_key_hint()),
-        Span::styled(" Connect  ", theme::style_key_desc()),
-        Span::styled("[Esc]", theme::style_key_hint()),
-        Span::styled(" Cancel ", theme::style_key_desc()),
+        Span::styled("[Tab]", t.style_key_hint()),
+        Span::styled(" Switch  ", t.style_key_desc()),
+        Span::styled("[Enter]", t.style_key_hint()),
+        Span::styled(" Connect  ", t.style_key_desc()),
+        Span::styled("[Esc]", t.style_key_hint()),
+        Span::styled(" Cancel ", t.style_key_desc()),
     ]);
 
     frame.render_widget(
-        Paragraph::new(hints).alignment(Alignment::Left).wrap(Wrap { trim: true }),
+        Paragraph::new(hints)
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: true }),
         hint_area,
     );
 }

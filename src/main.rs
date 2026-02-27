@@ -20,34 +20,55 @@ use ratatui::backend::CrosstermBackend;
 use tracing::info;
 
 use app::{App, AppMode};
-use config::Config;
+use config::CliArgs;
 use event::{Event, EventHandler};
 use network::NetworkBackend;
 use network::manager::NmBackend;
 use network::types::*;
+use ui::theme::Theme;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Parse CLI arguments
-    let config = Config::parse();
+    // Parse CLI arguments (thin layer — just flags)
+    let cli = CliArgs::parse();
+
+    // Handle --print-default-config early exit
+    if cli.print_default_config {
+        print!("{}", config::default_config_toml());
+        return Ok(());
+    }
 
     // Initialize error reporting
     color_eyre::install()?;
 
+    // Load configuration (TOML + CLI overrides)
+    let config = config::load(&cli)?;
+
+    // Build the runtime theme from config
+    let theme = Theme::from_config(&config);
+
     // Set up logging to file
-    let log_dir = Config::log_dir();
+    let log_dir = config::Config::log_dir();
     let file_appender = tracing_appender::rolling::daily(&log_dir, "nexus.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level)),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.general.log_level)),
         )
         .with_writer(non_blocking)
         .with_ansi(false)
         .init();
 
     info!("Nexus starting up");
+    info!(
+        "Config: fps={}, animations={}, nerd_fonts={}, scan_interval={}s, help_key={}",
+        config.appearance.fps,
+        config.animations(),
+        config.nerd_fonts(),
+        config.scan_interval().as_secs(),
+        config.keys().help
+    );
 
     // Install custom panic hook that restores terminal
     let original_hook = panic::take_hook();
@@ -59,7 +80,7 @@ async fn main() -> Result<()> {
     }));
 
     // Initialize network backend
-    let nm_backend = match NmBackend::new(config.interface.as_deref()).await {
+    let nm_backend = match NmBackend::new(config.interface()).await {
         Ok(b) => b,
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -88,12 +109,12 @@ async fn main() -> Result<()> {
     terminal.clear()?;
     terminal.hide_cursor()?;
 
-    // Set up event handler (33ms tick = ~30 FPS)
-    let mut events = EventHandler::new(33);
+    // Set up event handler (tick rate from config FPS)
+    let mut events = EventHandler::new(config.tick_rate_ms());
     let event_tx = events.sender();
 
     // Create app state
-    let mut app = App::new(config, interface_name, event_tx.clone());
+    let mut app = App::new(config, theme, interface_name, event_tx.clone());
 
     // Perform initial scan
     app.mode = AppMode::Scanning;

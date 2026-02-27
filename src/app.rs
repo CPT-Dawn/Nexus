@@ -6,6 +6,7 @@ use crate::animation::transitions::smooth_signals;
 use crate::config::Config;
 use crate::event::Event;
 use crate::network::types::*;
+use crate::ui::theme::Theme;
 
 /// Application mode / state machine
 #[derive(Debug, Clone)]
@@ -43,6 +44,7 @@ pub struct App {
     pub should_quit: bool,
     pub detail_visible: bool,
     pub config: Config,
+    pub theme: Theme,
     pub interface_name: String,
     event_tx: mpsc::UnboundedSender<Event>,
 }
@@ -50,9 +52,11 @@ pub struct App {
 impl App {
     pub fn new(
         config: Config,
+        theme: Theme,
         interface_name: String,
         event_tx: mpsc::UnboundedSender<Event>,
     ) -> Self {
+        let detail_visible = config.appearance.show_details;
         Self {
             mode: AppMode::Normal,
             networks: Vec::new(),
@@ -65,8 +69,9 @@ impl App {
             hidden_field_focus: 0,
             animation: AnimationState::default(),
             should_quit: false,
-            detail_visible: true,
+            detail_visible,
             config,
+            theme,
             interface_name,
             event_tx,
         }
@@ -379,7 +384,10 @@ impl App {
 
     /// Called every tick to advance animations and smooth values
     pub fn tick(&mut self) {
-        self.animation.tick();
+        // Only advance animations if enabled in config
+        if self.config.animations() {
+            self.animation.tick();
+        }
 
         // Smooth signal strength display values
         smooth_signals(&mut self.networks, 0.2);

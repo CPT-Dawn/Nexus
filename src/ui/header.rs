@@ -1,7 +1,7 @@
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph};
 
 use super::theme;
 use crate::animation::spinner;
@@ -10,7 +10,8 @@ use crate::network::types::{ConnectionStatus, FrequencyBand};
 
 /// Render the application header bar
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
-    let nerd = !app.config.no_nerd_fonts;
+    let nerd = app.config.nerd_fonts();
+    let t = &app.theme;
 
     // Build the title with WiFi icon
     let wifi_icon = if nerd {
@@ -19,8 +20,8 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         theme::PLAIN_WIFI
     };
     let title = Line::from(vec![
-        Span::styled(format!(" {wifi_icon}"), theme::style_accent_bold()),
-        Span::styled("Nexus ", theme::style_accent_bold()),
+        Span::styled(format!(" {wifi_icon}"), t.style_accent_bold()),
+        Span::styled("Nexus ", t.style_accent_bold()),
     ]);
 
     // Build connection status (right side)
@@ -30,9 +31,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         .title(title)
         .title_alignment(Alignment::Left)
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(theme::style_border_focused())
-        .style(theme::style_default());
+        .border_type(t.border_type)
+        .border_style(t.style_border_focused())
+        .style(t.style_default());
 
     // Render the block
     frame.render_widget(block, area);
@@ -52,7 +53,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     // Render interface name on the left inside the block
     let iface = Line::from(vec![Span::styled(
         format!("  {}", app.interface_name),
-        theme::style_dim(),
+        t.style_dim(),
     )]);
     let iface_para = Paragraph::new(iface).alignment(Alignment::Left);
     frame.render_widget(iface_para, inner);
@@ -61,6 +62,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 /// Build status indicator spans based on connection state
 fn build_status_spans(app: &App, nerd: bool) -> Vec<Span<'static>> {
     let tick = app.animation.tick_count;
+    let t = &app.theme;
 
     match &app.connection_status {
         ConnectionStatus::Connected(info) => {
@@ -76,11 +78,8 @@ fn build_status_spans(app: &App, nerd: bool) -> Vec<Span<'static>> {
                 _ => "",
             };
             vec![
-                Span::styled(
-                    format!("{connected_icon}{pulse} "),
-                    theme::style_connected(),
-                ),
-                Span::styled(info.ssid.clone(), theme::style_connected()),
+                Span::styled(format!("{connected_icon}{pulse} "), t.style_connected()),
+                Span::styled(info.ssid.clone(), t.style_connected()),
                 Span::styled(
                     format!(
                         " ({}{}{})",
@@ -92,25 +91,25 @@ fn build_status_spans(app: &App, nerd: bool) -> Vec<Span<'static>> {
                         },
                         band_str,
                     ),
-                    theme::style_dim(),
+                    t.style_dim(),
                 ),
-                Span::styled(" ", theme::style_default()),
+                Span::styled(" ", t.style_default()),
             ]
         }
         ConnectionStatus::Connecting(ssid) => {
             let spin = spinner::spinner_frame(tick);
             vec![
-                Span::styled(format!("{spin} "), theme::style_accent()),
-                Span::styled("Connecting to ", theme::style_dim()),
-                Span::styled(ssid.clone(), theme::style_accent()),
-                Span::styled("… ", theme::style_dim()),
+                Span::styled(format!("{spin} "), t.style_accent()),
+                Span::styled("Connecting to ", t.style_dim()),
+                Span::styled(ssid.clone(), t.style_accent()),
+                Span::styled("… ", t.style_dim()),
             ]
         }
         ConnectionStatus::Disconnecting => {
             let bar = spinner::bar_frame(tick);
             vec![
-                Span::styled(format!("{bar} "), theme::style_warning()),
-                Span::styled("Disconnecting… ", theme::style_dim()),
+                Span::styled(format!("{bar} "), t.style_warning()),
+                Span::styled("Disconnecting… ", t.style_dim()),
             ]
         }
         ConnectionStatus::Disconnected => {
@@ -120,15 +119,15 @@ fn build_status_spans(app: &App, nerd: bool) -> Vec<Span<'static>> {
                 theme::PLAIN_WIFI_OFF
             };
             vec![
-                Span::styled(wifi_off.to_string(), theme::style_dim()),
-                Span::styled("Disconnected ", theme::style_dim()),
+                Span::styled(wifi_off.to_string(), t.style_dim()),
+                Span::styled("Disconnected ", t.style_dim()),
             ]
         }
         ConnectionStatus::Failed(msg) => {
             let err_icon = if nerd { theme::ICON_ERROR } else { "[!] " };
             vec![
-                Span::styled(err_icon.to_string(), theme::style_error()),
-                Span::styled(format!("Failed: {} ", msg), theme::style_error()),
+                Span::styled(err_icon.to_string(), t.style_error()),
+                Span::styled(format!("Failed: {} ", msg), t.style_error()),
             ]
         }
     }

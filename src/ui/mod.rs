@@ -18,7 +18,7 @@ pub fn render(frame: &mut Frame, app: &App) {
 
     // Check minimum terminal size
     if area.width < 50 || area.height < 12 {
-        render_too_small(frame, area);
+        render_too_small(frame, app, area);
         return;
     }
 
@@ -62,47 +62,50 @@ pub fn render(frame: &mut Frame, app: &App) {
             hidden::render(frame, app, area);
         }
         AppMode::Help => {
-            help::render(frame, area);
+            help::render(frame, app, area);
         }
         AppMode::Error(msg) => {
-            render_error_dialog(frame, area, msg);
+            render_error_dialog(frame, app, area, msg);
         }
         _ => {}
     }
 }
 
 /// Render a "terminal too small" message
-fn render_too_small(frame: &mut Frame, area: Rect) {
+fn render_too_small(frame: &mut Frame, app: &App, area: Rect) {
     use ratatui::text::Text;
     use ratatui::widgets::Paragraph;
 
-    let msg = Text::styled("Terminal too small\nMinimum: 50×12", theme::style_warning());
+    let msg = Text::styled(
+        "Terminal too small\nMinimum: 50×12",
+        app.theme.style_warning(),
+    );
     let para = Paragraph::new(msg).alignment(ratatui::layout::Alignment::Center);
     frame.render_widget(para, area);
 }
 
 /// Render an error dialog overlay
-fn render_error_dialog(frame: &mut Frame, area: Rect, message: &str) {
+fn render_error_dialog(frame: &mut Frame, app: &App, area: Rect, message: &str) {
     use ratatui::text::{Line, Span};
-    use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
+    use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 
     let dialog = centered_rect(60, 30, area);
     frame.render_widget(Clear, dialog);
 
     let block = Block::default()
         .title(Line::from(vec![
-            Span::styled(" ", theme::style_error()),
-            Span::styled(" Error ", theme::style_error()),
+            Span::styled(" ", app.theme.style_error()),
+            Span::styled(" Error ", app.theme.style_error()),
         ]))
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(theme::style_error())
-        .style(theme::style_default());
+        .border_type(app.theme.border_type)
+        .border_style(app.theme.style_error())
+        .style(app.theme.style_default());
 
     let para = Paragraph::new(message.to_string())
         .block(block)
         .wrap(Wrap { trim: true })
-        .style(theme::style_default());
+        .style(app.theme.style_default());
 
     frame.render_widget(para, dialog);
 
@@ -114,8 +117,8 @@ fn render_error_dialog(frame: &mut Frame, area: Rect, message: &str) {
         height: 1,
     };
     let hint = ratatui::text::Line::from(vec![
-        Span::styled("[Esc]", theme::style_key_hint()),
-        Span::styled(" Close", theme::style_key_desc()),
+        Span::styled("[Esc]", app.theme.style_key_hint()),
+        Span::styled(" Close", app.theme.style_key_desc()),
     ]);
     frame.render_widget(ratatui::widgets::Paragraph::new(hint), hint_area);
 }

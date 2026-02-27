@@ -1,7 +1,7 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState};
+use ratatui::widgets::{Block, Borders, List, ListItem, ListState};
 use unicode_width::UnicodeWidthStr;
 
 use super::theme;
@@ -11,7 +11,8 @@ use crate::app::{App, AppMode};
 
 /// Render the WiFi network list
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
-    let nerd = !app.config.no_nerd_fonts;
+    let nerd = app.config.nerd_fonts();
+    let t = &app.theme;
     let is_scanning = matches!(app.mode, AppMode::Scanning);
 
     // Build title
@@ -25,14 +26,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let block = Block::default()
-        .title(Line::from(Span::styled(
-            title_text,
-            theme::style_accent_bold(),
-        )))
+        .title(Line::from(Span::styled(title_text, t.style_accent_bold())))
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(theme::style_border())
-        .style(theme::style_default());
+        .border_type(t.border_type)
+        .border_style(t.style_border())
+        .style(t.style_default());
 
     if app.networks.is_empty() {
         let empty_msg = if is_scanning {
@@ -42,7 +40,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         };
         let para = ratatui::widgets::Paragraph::new(empty_msg)
             .block(block)
-            .style(theme::style_dim())
+            .style(t.style_dim())
             .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(para, area);
         return;
@@ -60,22 +58,19 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             // Selection indicator
             let selector = if is_selected {
                 if nerd {
-                    Span::styled(
-                        format!("{} ", theme::ICON_ARROW_RIGHT),
-                        theme::style_accent(),
-                    )
+                    Span::styled(format!("{} ", theme::ICON_ARROW_RIGHT), t.style_accent())
                 } else {
-                    Span::styled(format!("{} ", theme::PLAIN_ARROW), theme::style_accent())
+                    Span::styled(format!("{} ", theme::PLAIN_ARROW), t.style_accent())
                 }
             } else {
-                Span::styled("  ", theme::style_default())
+                Span::styled("  ", t.style_default())
             };
 
             // Connection status dot
             let status_dot = if net.is_active {
-                Span::styled("● ", theme::style_connected())
+                Span::styled("● ", t.style_connected())
             } else {
-                Span::styled("  ", theme::style_default())
+                Span::styled("  ", t.style_default())
             };
 
             // SSID with padding
@@ -87,19 +82,19 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             let ssid_style = if net.is_active {
-                theme::style_connected()
+                t.style_connected()
             } else if is_selected {
-                theme::style_selected()
+                t.style_selected()
             } else if opacity < 1.0 {
-                theme::style_dim()
+                t.style_dim()
             } else {
-                theme::style_default()
+                t.style_default()
             };
 
             // Signal strength
             let signal_display = net.display_signal.round() as u8;
-            let sig_icon = theme::signal_icon(signal_display, nerd);
-            let sig_color = theme::signal_color(signal_display);
+            let sig_icon = t.signal_icon(signal_display, nerd);
+            let sig_color = t.signal_color(signal_display);
             let signal_span = Span::styled(
                 sig_icon.to_string(),
                 ratatui::style::Style::default().fg(sig_color),
@@ -114,20 +109,20 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             // Security badge
             let sec_str = format!(" {:<6}", net.security.to_string());
             let sec_style = if net.security == crate::network::types::SecurityType::Open {
-                theme::style_warning()
+                t.style_warning()
             } else {
-                theme::style_dim()
+                t.style_dim()
             };
             let security = Span::styled(sec_str, sec_style);
 
             // Lock icon
-            let lock = theme::lock_icon(net.security.needs_password(), nerd);
+            let lock = t.lock_icon(net.security.needs_password(), nerd);
             let lock_span = Span::styled(
                 format!("{lock} "),
                 if net.security.needs_password() {
-                    theme::style_dim()
+                    t.style_dim()
                 } else {
-                    theme::style_warning()
+                    t.style_warning()
                 },
             );
 
@@ -139,7 +134,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     } else {
                         theme::PLAIN_SAVED
                     },
-                    theme::style_accent(),
+                    t.style_accent(),
                 )
             } else {
                 Span::raw(" ")
@@ -154,7 +149,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     _ => "  ",
                 };
                 let _ = level; // signal level available for future use
-                Span::styled(format!(" {band_str}"), theme::style_dim())
+                Span::styled(format!(" {band_str}"), t.style_dim())
             };
 
             let line = Line::from(vec![
@@ -177,7 +172,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
     let list = List::new(items)
         .block(block)
-        .highlight_style(theme::style_selected())
+        .highlight_style(t.style_selected())
         .highlight_symbol("");
 
     let mut state = ListState::default();

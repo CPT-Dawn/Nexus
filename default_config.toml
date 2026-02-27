@@ -1,0 +1,125 @@
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                          Nexus Configuration                             ║
+# ║                                                                          ║
+# ║  A beautiful, modern TUI WiFi manager for Linux.                         ║
+# ║  Edit this file to customize Nexus to your liking.                       ║
+# ║                                                                          ║
+# ║  Delete this file to regenerate defaults on next launch.                 ║
+# ║  Location: ~/.config/nexus/config.toml                                   ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+# ─── General ─────────────────────────────────────────────────────────────
+[general]
+
+# WiFi interface to use. Leave empty to auto-detect.
+# Examples: "wlan0", "wlp3s0"
+interface = ""
+
+# Log level for the file logger (~/.local/share/nexus/nexus.log).
+# One of: "trace", "debug", "info", "warn", "error"
+log_level = "info"
+
+# Scan interval in seconds. How often Nexus polls NetworkManager for
+# network changes when idle. Lower = more responsive, higher = less
+# D-Bus traffic.
+scan_interval_secs = 5
+
+# ─── Appearance ──────────────────────────────────────────────────────────
+[appearance]
+
+# Use Nerd Font icons for WiFi, lock, signal bars, etc.
+# Set to false if your terminal font doesn't include Nerd Font glyphs.
+nerd_fonts = true
+
+# Enable smooth signal strength animation (exponential ease-out).
+# Disable for a snappier, instant-update feel.
+animations = true
+
+# Target frames per second for the render loop.
+# 30 is buttery smooth. Drop to 15 on resource-constrained machines.
+fps = 30
+
+# Show the detail panel on the right side by default.
+# Toggle at runtime with [i].
+show_details = true
+
+# Unicode border style for panels. Options:
+#   "rounded"  — ╭─╮│╰─╯  (default, modern look)
+#   "plain"    — ┌─┐│└─┘  (classic box-drawing)
+#   "thick"    — ┏━┓┃┗━┛  (heavy lines)
+#   "double"   — ╔═╗║╚═╝  (double-line borders)
+border_style = "rounded"
+
+# ─── Theme / Colors ─────────────────────────────────────────────────────
+# All color values accept:
+#   - Named colors:  "red", "green", "yellow", "blue", "magenta", "cyan",
+#                     "white", "black", "gray", "darkgray",
+#                     "lightred", "lightgreen", "lightyellow", "lightblue",
+#                     "lightmagenta", "lightcyan"
+#   - "reset"      — Use terminal default (transparency-friendly)
+#   - "#RRGGBB"    — True color hex (e.g. "#89b4fa" for Catppuccin blue)
+[theme]
+
+# Background for all UI elements. "reset" = transparent (recommended).
+bg = "reset"
+
+# Primary foreground text color.
+fg = "white"
+
+# Dimmed text (labels, inactive elements, descriptions).
+fg_dim = "darkgray"
+
+# Accent color — selected items, active borders, keybinding hints.
+accent = "cyan"
+
+# Secondary accent — section headers in the detail panel.
+accent_secondary = "magenta"
+
+# Inactive border color.
+border = "darkgray"
+
+# Focused/active panel border color.
+border_focused = "cyan"
+
+# ─── Semantic Colors ────────────────────────────────────────────────────
+[theme.semantic]
+
+# Connected / success indicator.
+connected = "green"
+
+# Warning indicators (open networks, rfkill).
+warning = "yellow"
+
+# Error text and indicators.
+error = "red"
+
+# Background color of the currently selected list item.
+# This is the only element that uses a non-reset background.
+selected_bg = "darkgray"
+
+# ─── Signal Strength Colors ────────────────────────────────────────────
+# Gradient from strongest to weakest signal.
+[theme.signal]
+excellent = "green" # 80-100%
+good = "green"      # 60-79%
+fair = "yellow"     # 40-59%
+weak = "red"        # 20-39%
+none = "darkgray"   #  0-19%
+
+# ─── Keybindings ────────────────────────────────────────────────────────
+# Remap any action to your preferred key. Values are single characters
+# or special key names: "enter", "esc", "tab", "backtab", "up", "down",
+# "left", "right", "home", "end", "backspace", "delete".
+#
+# Navigation keys (up/k, down/j) and modifier combos (Ctrl+H) are
+# hard-coded and cannot be remapped here — only action keys.
+[keys]
+scan = "s"
+connect = "enter"
+disconnect = "d"
+forget = "f"
+hidden = "h"
+details = "i"
+refresh = "r"
+help = "/"
+quit = "q"

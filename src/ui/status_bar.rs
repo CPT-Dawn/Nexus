@@ -3,18 +3,19 @@ use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use super::theme;
 use crate::app::{App, AppMode};
+use crate::ui::theme::Theme;
 
 /// Render the bottom status bar with context-sensitive keybinding hints
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
     let hints = match &app.mode {
-        AppMode::Normal | AppMode::Scanning => normal_hints(),
-        AppMode::PasswordInput { .. } => password_hints(),
-        AppMode::Hidden => hidden_hints(),
-        AppMode::Help => help_hints(),
-        AppMode::Connecting | AppMode::Disconnecting => busy_hints(),
-        AppMode::Error(_) => error_hints(),
+        AppMode::Normal | AppMode::Scanning => normal_hints(t),
+        AppMode::PasswordInput { .. } => password_hints(t),
+        AppMode::Hidden => hidden_hints(t),
+        AppMode::Help => help_hints(t),
+        AppMode::Connecting | AppMode::Disconnecting => busy_hints(t),
+        AppMode::Error(_) => error_hints(t),
     };
 
     let line = Line::from(hints);
@@ -22,67 +23,72 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(para, area);
 }
 
-fn normal_hints() -> Vec<Span<'static>> {
+fn normal_hints(t: &Theme) -> Vec<Span<'static>> {
     vec![
-        key("↑↓/jk"),
-        desc("Navigate "),
-        key("Enter"),
-        desc("Connect "),
-        key("d"),
-        desc("Disconnect "),
-        key("s"),
-        desc("Scan "),
-        key("f"),
-        desc("Forget "),
-        key("h"),
-        desc("Hidden "),
-        key("i"),
-        desc("Details "),
-        key("/"),
-        desc("Help "),
-        key("q"),
-        desc("Quit"),
+        key(t, "↑↓/jk"),
+        desc(t, "Navigate "),
+        key(t, "Enter"),
+        desc(t, "Connect "),
+        key(t, "d"),
+        desc(t, "Disconnect "),
+        key(t, "s"),
+        desc(t, "Scan "),
+        key(t, "f"),
+        desc(t, "Forget "),
+        key(t, "h"),
+        desc(t, "Hidden "),
+        key(t, "i"),
+        desc(t, "Details "),
+        key(t, "/"),
+        desc(t, "Help "),
+        key(t, "q"),
+        desc(t, "Quit"),
     ]
 }
 
-fn password_hints() -> Vec<Span<'static>> {
+fn password_hints(t: &Theme) -> Vec<Span<'static>> {
     vec![
-        key("Enter"),
-        desc("Submit "),
-        key("Esc"),
-        desc("Cancel "),
-        key("Ctrl+H"),
-        desc("Toggle visibility"),
+        key(t, "Enter"),
+        desc(t, "Submit "),
+        key(t, "Esc"),
+        desc(t, "Cancel "),
+        key(t, "Ctrl+H"),
+        desc(t, "Toggle visibility"),
     ]
 }
 
-fn hidden_hints() -> Vec<Span<'static>> {
+fn hidden_hints(t: &Theme) -> Vec<Span<'static>> {
     vec![
-        key("Tab"),
-        desc("Switch field "),
-        key("Enter"),
-        desc("Connect "),
-        key("Esc"),
-        desc("Cancel"),
+        key(t, "Tab"),
+        desc(t, "Switch field "),
+        key(t, "Enter"),
+        desc(t, "Connect "),
+        key(t, "Esc"),
+        desc(t, "Cancel"),
     ]
 }
 
-fn help_hints() -> Vec<Span<'static>> {
-    vec![key("?"), desc("Close "), key("Esc"), desc("Close")]
+fn help_hints(t: &Theme) -> Vec<Span<'static>> {
+    vec![
+        key(t, "?"),
+        desc(t, "Close "),
+        key(t, "Esc"),
+        desc(t, "Close"),
+    ]
 }
 
-fn busy_hints() -> Vec<Span<'static>> {
-    vec![Span::styled("Please wait…", theme::style_dim())]
+fn busy_hints(t: &Theme) -> Vec<Span<'static>> {
+    vec![Span::styled("Please wait…", t.style_dim())]
 }
 
-fn error_hints() -> Vec<Span<'static>> {
-    vec![key("Esc"), desc("Close")]
+fn error_hints(t: &Theme) -> Vec<Span<'static>> {
+    vec![key(t, "Esc"), desc(t, "Close")]
 }
 
-fn key(k: &'static str) -> Span<'static> {
-    Span::styled(format!(" [{k}] "), theme::style_key_hint())
+fn key(t: &Theme, k: &'static str) -> Span<'static> {
+    Span::styled(format!(" [{k}] "), t.style_key_hint())
 }
 
-fn desc(d: &'static str) -> Span<'static> {
-    Span::styled(d, theme::style_key_desc())
+fn desc(t: &Theme, d: &'static str) -> Span<'static> {
+    Span::styled(d, t.style_key_desc())
 }

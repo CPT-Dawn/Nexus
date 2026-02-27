@@ -1,13 +1,13 @@
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
-use ratatui::Frame;
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 
 use crate::app::App;
-use super::theme;
 
 /// Render the password input modal dialog
 pub fn render(frame: &mut Frame, app: &App, area: Rect, ssid: &str) {
+    let t = &app.theme;
     let width = 56_u16.min(area.width.saturating_sub(4));
     let height = 8_u16.min(area.height.saturating_sub(4));
 
@@ -22,13 +22,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, ssid: &str) {
 
     let block = Block::default()
         .title(Line::from(vec![
-            Span::styled(" 󰌾 ", theme::style_accent()),
-            Span::styled(format!("Connect to \"{ssid}\" "), theme::style_accent_bold()),
+            Span::styled(" 󰌾 ", t.style_accent()),
+            Span::styled(format!("Connect to \"{ssid}\" "), t.style_accent_bold()),
         ]))
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(theme::style_accent())
-        .style(theme::style_default());
+        .border_type(t.border_type)
+        .border_style(t.style_accent())
+        .style(t.style_default());
 
     frame.render_widget(block, dialog);
 
@@ -40,7 +40,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, ssid: &str) {
         height: 1,
     };
 
-    let label = Span::styled("Password: ", theme::style_dim());
+    let label = Span::styled("Password: ", t.style_dim());
 
     let password_display = if app.password_visible {
         app.password_input.clone()
@@ -57,8 +57,8 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, ssid: &str) {
 
     let input_line = Line::from(vec![
         label,
-        Span::styled(password_display, theme::style_default()),
-        Span::styled(cursor_char.to_string(), theme::style_accent()),
+        Span::styled(password_display, t.style_default()),
+        Span::styled(cursor_char.to_string(), t.style_accent()),
     ]);
 
     frame.render_widget(Paragraph::new(input_line), inner);
@@ -78,15 +78,17 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, ssid: &str) {
     };
 
     let hints = Line::from(vec![
-        Span::styled("[Enter]", theme::style_key_hint()),
-        Span::styled(" Connect  ", theme::style_key_desc()),
-        Span::styled("[Esc]", theme::style_key_hint()),
-        Span::styled(" Cancel  ", theme::style_key_desc()),
-        Span::styled(toggle_hint, theme::style_key_desc()),
+        Span::styled("[Enter]", t.style_key_hint()),
+        Span::styled(" Connect  ", t.style_key_desc()),
+        Span::styled("[Esc]", t.style_key_hint()),
+        Span::styled(" Cancel  ", t.style_key_desc()),
+        Span::styled(toggle_hint, t.style_key_desc()),
     ]);
 
     frame.render_widget(
-        Paragraph::new(hints).alignment(Alignment::Left).wrap(Wrap { trim: true }),
+        Paragraph::new(hints)
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: true }),
         hint_area,
     );
 }

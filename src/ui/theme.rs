@@ -1,9 +1,13 @@
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::widgets::BorderType;
+
+use crate::config::{Config, ThemeConfig};
 
 // ─── Nerd Font Icons ──────────────────────────────────────────────────────
-// Signal strength icons (Nerd Font: nf-md-wifi_strength)
+// These are glyph constants — not configurable via TOML (they'd break
+// alignment if users changed them). The nerd_fonts toggle switches between
+// these and the PLAIN_* fallbacks.
 pub const SIGNAL_ICONS_NERD: &[&str] = &["󰤯 ", "󰤟 ", "󰤢 ", "󰤥 ", "󰤨 "];
-// Fallback plain Unicode signal bars
 pub const SIGNAL_ICONS_PLAIN: &[&str] = &["▂   ", "▂▄  ", "▂▄▆ ", "▂▄▆█", "▂▄▆█"];
 
 pub const ICON_WIFI: &str = "󰤨 ";
@@ -18,7 +22,6 @@ pub const ICON_SCAN: &str = "󰑐 ";
 pub const ICON_ERROR: &str = " ";
 pub const ICON_INFO: &str = " ";
 
-// Plain fallbacks
 pub const PLAIN_WIFI: &str = "[W]";
 pub const PLAIN_WIFI_OFF: &str = "[X]";
 pub const PLAIN_LOCK: &str = "[L]";
@@ -28,148 +31,177 @@ pub const PLAIN_SAVED: &str = "*";
 pub const PLAIN_ARROW: &str = ">";
 pub const PLAIN_HIDDEN: &str = "[H]";
 
-// ─── Color Palette (terminal-adaptive, transparency-friendly) ──────────
+// ─── Theme (runtime, config-driven) ─────────────────────────────────────
 
-/// Background: always Reset (transparent) — respects terminal background
-pub const BG: Color = Color::Reset;
+/// Runtime theme struct. Built once from Config, then passed around by
+/// reference. All colors come from the user's config.toml.
+#[derive(Debug, Clone)]
+pub struct Theme {
+    // Core palette
+    pub bg: Color,
+    pub fg: Color,
+    pub fg_dim: Color,
+    pub accent: Color,
+    pub accent2: Color,
+    pub border: Color,
+    pub border_focused: Color,
 
-/// Primary text color
-pub const FG: Color = Color::White;
+    // Semantic
+    pub connected: Color,
+    pub warning: Color,
+    pub error: Color,
+    pub selected_bg: Color,
 
-/// Dimmed text (labels, inactive elements)
-pub const FG_DIM: Color = Color::DarkGray;
+    // Signal gradient
+    pub signal_excellent: Color,
+    pub signal_good: Color,
+    pub signal_fair: Color,
+    pub signal_weak: Color,
+    pub signal_none: Color,
 
-/// Accent color (selected items, active borders, keybinding hints)
-pub const ACCENT: Color = Color::Cyan;
-
-/// Secondary accent
-pub const ACCENT2: Color = Color::Magenta;
-
-/// Border color (inactive)
-pub const BORDER: Color = Color::DarkGray;
-
-/// Border color (focused/active panel)
-pub const BORDER_FOCUSED: Color = Color::Cyan;
-
-/// Connected/success indicator
-pub const CONNECTED: Color = Color::Green;
-
-/// Signal strength colors
-pub const SIGNAL_EXCELLENT: Color = Color::Green;
-pub const SIGNAL_GOOD: Color = Color::Green;
-pub const SIGNAL_FAIR: Color = Color::Yellow;
-pub const SIGNAL_WEAK: Color = Color::Red;
-pub const SIGNAL_NONE: Color = Color::DarkGray;
-
-/// Warning color (open networks, rfkill)
-pub const WARNING: Color = Color::Yellow;
-
-/// Error color
-pub const ERROR: Color = Color::Red;
-
-/// Selected item background (only element that gets a bg)
-pub const SELECTED_BG: Color = Color::DarkGray;
-
-// ─── Style Constructors ──────────────────────────────────────────────────
-
-pub fn style_default() -> Style {
-    Style::default().fg(FG).bg(BG)
+    // Border type
+    pub border_type: BorderType,
 }
 
-pub fn style_dim() -> Style {
-    Style::default().fg(FG_DIM).bg(BG)
-}
+impl Theme {
+    /// Construct from the loaded Config.
+    pub fn from_config(config: &Config) -> Self {
+        let t: &ThemeConfig = &config.theme;
 
-pub fn style_accent() -> Style {
-    Style::default().fg(ACCENT).bg(BG)
-}
+        let border_type = match config.appearance.border_style.as_str() {
+            "plain" => BorderType::Plain,
+            "thick" => BorderType::Thick,
+            "double" => BorderType::Double,
+            _ => BorderType::Rounded,
+        };
 
-pub fn style_accent_bold() -> Style {
-    Style::default()
-        .fg(ACCENT)
-        .bg(BG)
-        .add_modifier(Modifier::BOLD)
-}
-
-pub fn style_selected() -> Style {
-    Style::default()
-        .fg(FG)
-        .bg(SELECTED_BG)
-        .add_modifier(Modifier::BOLD)
-}
-
-pub fn style_connected() -> Style {
-    Style::default()
-        .fg(CONNECTED)
-        .bg(BG)
-        .add_modifier(Modifier::BOLD)
-}
-
-pub fn style_error() -> Style {
-    Style::default().fg(ERROR).bg(BG)
-}
-
-pub fn style_warning() -> Style {
-    Style::default().fg(WARNING).bg(BG)
-}
-
-pub fn style_border() -> Style {
-    Style::default().fg(BORDER).bg(BG)
-}
-
-pub fn style_border_focused() -> Style {
-    Style::default().fg(BORDER_FOCUSED).bg(BG)
-}
-
-pub fn style_key_hint() -> Style {
-    Style::default()
-        .fg(ACCENT)
-        .bg(BG)
-        .add_modifier(Modifier::BOLD)
-}
-
-pub fn style_key_desc() -> Style {
-    Style::default().fg(FG_DIM).bg(BG)
-}
-
-/// Get signal color based on strength percentage
-pub fn signal_color(strength: u8) -> Color {
-    match strength {
-        0..=19 => SIGNAL_NONE,
-        20..=39 => SIGNAL_WEAK,
-        40..=59 => SIGNAL_FAIR,
-        60..=79 => SIGNAL_GOOD,
-        _ => SIGNAL_EXCELLENT,
-    }
-}
-
-/// Get signal icon based on strength percentage
-pub fn signal_icon(strength: u8, nerd_fonts: bool) -> &'static str {
-    let icons = if nerd_fonts {
-        SIGNAL_ICONS_NERD
-    } else {
-        SIGNAL_ICONS_PLAIN
-    };
-    match strength {
-        0..=19 => icons[0],
-        20..=39 => icons[1],
-        40..=59 => icons[2],
-        60..=79 => icons[3],
-        _ => icons[4],
-    }
-}
-
-/// Get lock icon based on security needs password
-pub fn lock_icon(needs_password: bool, nerd_fonts: bool) -> &'static str {
-    if nerd_fonts {
-        if needs_password {
-            ICON_LOCK
-        } else {
-            ICON_LOCK_OPEN
+        Self {
+            bg: t.bg,
+            fg: t.fg,
+            fg_dim: t.fg_dim,
+            accent: t.accent,
+            accent2: t.accent_secondary,
+            border: t.border,
+            border_focused: t.border_focused,
+            connected: t.semantic.connected,
+            warning: t.semantic.warning,
+            error: t.semantic.error,
+            selected_bg: t.semantic.selected_bg,
+            signal_excellent: t.signal.excellent,
+            signal_good: t.signal.good,
+            signal_fair: t.signal.fair,
+            signal_weak: t.signal.weak,
+            signal_none: t.signal.none,
+            border_type,
         }
-    } else if needs_password {
-        PLAIN_LOCK
-    } else {
-        PLAIN_LOCK_OPEN
+    }
+
+    // ─── Style Constructors ─────────────────────────────────────────
+
+    pub fn style_default(&self) -> Style {
+        Style::default().fg(self.fg).bg(self.bg)
+    }
+
+    pub fn style_dim(&self) -> Style {
+        Style::default().fg(self.fg_dim).bg(self.bg)
+    }
+
+    pub fn style_accent(&self) -> Style {
+        Style::default().fg(self.accent).bg(self.bg)
+    }
+
+    pub fn style_accent_bold(&self) -> Style {
+        Style::default()
+            .fg(self.accent)
+            .bg(self.bg)
+            .add_modifier(Modifier::BOLD)
+    }
+
+    pub fn style_selected(&self) -> Style {
+        Style::default()
+            .fg(self.fg)
+            .bg(self.selected_bg)
+            .add_modifier(Modifier::BOLD)
+    }
+
+    pub fn style_connected(&self) -> Style {
+        Style::default()
+            .fg(self.connected)
+            .bg(self.bg)
+            .add_modifier(Modifier::BOLD)
+    }
+
+    pub fn style_error(&self) -> Style {
+        Style::default().fg(self.error).bg(self.bg)
+    }
+
+    pub fn style_warning(&self) -> Style {
+        Style::default().fg(self.warning).bg(self.bg)
+    }
+
+    pub fn style_border(&self) -> Style {
+        Style::default().fg(self.border).bg(self.bg)
+    }
+
+    pub fn style_border_focused(&self) -> Style {
+        Style::default().fg(self.border_focused).bg(self.bg)
+    }
+
+    pub fn style_key_hint(&self) -> Style {
+        Style::default()
+            .fg(self.accent)
+            .bg(self.bg)
+            .add_modifier(Modifier::BOLD)
+    }
+
+    pub fn style_key_desc(&self) -> Style {
+        Style::default().fg(self.fg_dim).bg(self.bg)
+    }
+
+    // ─── Signal Helpers ─────────────────────────────────────────────
+
+    pub fn signal_color(&self, strength: u8) -> Color {
+        match strength {
+            0..=19 => self.signal_none,
+            20..=39 => self.signal_weak,
+            40..=59 => self.signal_fair,
+            60..=79 => self.signal_good,
+            _ => self.signal_excellent,
+        }
+    }
+
+    pub fn signal_icon(&self, strength: u8, nerd_fonts: bool) -> &'static str {
+        let icons = if nerd_fonts {
+            SIGNAL_ICONS_NERD
+        } else {
+            SIGNAL_ICONS_PLAIN
+        };
+        match strength {
+            0..=19 => icons[0],
+            20..=39 => icons[1],
+            40..=59 => icons[2],
+            60..=79 => icons[3],
+            _ => icons[4],
+        }
+    }
+
+    pub fn lock_icon(&self, needs_password: bool, nerd_fonts: bool) -> &'static str {
+        if nerd_fonts {
+            if needs_password {
+                ICON_LOCK
+            } else {
+                ICON_LOCK_OPEN
+            }
+        } else if needs_password {
+            PLAIN_LOCK
+        } else {
+            PLAIN_LOCK_OPEN
+        }
+    }
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self::from_config(&Config::default())
     }
 }
