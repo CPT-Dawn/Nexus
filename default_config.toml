@@ -36,8 +36,9 @@ nerd_fonts = true
 animations = true
 
 # Target frames per second for the render loop.
-# 30 is buttery smooth. Drop to 15 on resource-constrained machines.
-fps = 30
+# 60 is buttery smooth for modern terminals. Drop to 30 on
+# resource-constrained machines, or set to 144 for high-refresh displays.
+fps = 60
 
 # Show the detail panel on the right side by default.
 # Toggle at runtime with [i].
@@ -60,51 +61,52 @@ border_style = "rounded"
 #   - "#RRGGBB"    — True color hex (e.g. "#89b4fa" for Catppuccin blue)
 [theme]
 
-# Background for all UI elements. "reset" = transparent (recommended).
-bg = "reset"
+# Background for all UI elements.
+# "reset" = use terminal default (transparency-friendly).
+# The Cosmic Dawn default uses a deep void-purple.
+bg = "#0D0B14"
 
 # Primary foreground text color.
-fg = "white"
+fg = "#E0DEE6"
 
 # Dimmed text (labels, inactive elements, descriptions).
-fg_dim = "darkgray"
+fg_dim = "#4A4458"
 
 # Accent color — selected items, active borders, keybinding hints.
-accent = "cyan"
+accent = "#00FFFF"
 
 # Secondary accent — section headers in the detail panel.
-accent_secondary = "magenta"
+accent_secondary = "#FF4500"
 
 # Inactive border color.
-border = "darkgray"
+border = "#2A2438"
 
 # Focused/active panel border color.
-border_focused = "cyan"
+border_focused = "#00FFFF"
 
 # ─── Semantic Colors ────────────────────────────────────────────────────
 [theme.semantic]
 
 # Connected / success indicator.
-connected = "green"
+connected = "#00FF9F"
 
 # Warning indicators (open networks, rfkill).
-warning = "yellow"
+warning = "#FFB347"
 
 # Error text and indicators.
-error = "red"
+error = "#FF4500"
 
 # Background color of the currently selected list item.
-# This is the only element that uses a non-reset background.
-selected_bg = "darkgray"
+selected_bg = "#1E1A2E"
 
 # ─── Signal Strength Colors ────────────────────────────────────────────
 # Gradient from strongest to weakest signal.
 [theme.signal]
-excellent = "green" # 80-100%
-good = "green"      # 60-79%
-fair = "yellow"     # 40-59%
-weak = "red"        # 20-39%
-none = "darkgray"   #  0-19%
+excellent = "#00FF9F" # 80-100%  neon mint
+good = "#00FFFF"      # 60-79%  electric cyan
+fair = "#FFB347"      # 40-59%  warm amber
+weak = "#FF4500"      # 20-39%  dawn red
+none = "#4A4458"      #  0-19%  muted lavender
 
 # ─── Keybindings ────────────────────────────────────────────────────────
 # Remap any action to your preferred key. Values are single characters
@@ -121,5 +123,7 @@ forget = "f"
 hidden = "h"
 details = "i"
 refresh = "r"
-help = "/"
+help = "?"
 quit = "q"
+sort = "S"
+search = "/"

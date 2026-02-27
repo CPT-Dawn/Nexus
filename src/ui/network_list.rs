@@ -1,7 +1,7 @@
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState};
+use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use unicode_width::UnicodeWidthStr;
 
 use super::theme;
@@ -9,20 +9,64 @@ use crate::animation::spinner;
 use crate::animation::transitions::fade_in_opacity;
 use crate::app::{App, AppMode};
 
+/// Truncate a string to `max_chars` grapheme-safe width, appending `…` if truncated.
+/// Never slices into the middle of a multi-byte character.
+fn truncate_ssid(s: &str, max_chars: usize) -> String {
+    if s.width() <= max_chars {
+        return format!("{:<width$}", s, width = max_chars);
+    }
+    let mut result = String::new();
+    let mut w = 0;
+    for ch in s.chars() {
+        let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if w + cw >= max_chars {
+            break;
+        }
+        result.push(ch);
+        w += cw;
+    }
+    result.push('…');
+    // pad to max_chars
+    let rw = result.width();
+    if rw < max_chars {
+        for _ in 0..(max_chars - rw) {
+            result.push(' ');
+        }
+    }
+    result
+}
+
 /// Render the WiFi network list
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let nerd = app.config.nerd_fonts();
     let t = &app.theme;
     let is_scanning = matches!(app.mode, AppMode::Scanning);
+    let is_search = matches!(app.mode, AppMode::Search);
+
+    // Reserve one line at the bottom for the search bar when in search mode
+    let (list_area, search_area) = if is_search || !app.search_query.is_empty() {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(3), Constraint::Length(1)])
+            .split(area);
+        (chunks[0], Some(chunks[1]))
+    } else {
+        (area, None)
+    };
 
     // Build title
+    let visible_count = app.filtered_indices.len();
+    let total_count = app.networks.len();
+    let sort_label = app.sort_mode.label();
+
     let title_text = if is_scanning {
         let scan_icon = if nerd { theme::ICON_SCAN } else { "" };
         let spin = spinner::spinner_frame(app.animation.tick_count);
         format!(" {scan_icon}{spin} Scanning… ")
+    } else if !app.search_query.is_empty() {
+        format!(" WiFi Networks ({visible_count}/{total_count}) [{sort_label}] ")
     } else {
-        let count = app.networks.len();
-        format!(" WiFi Networks ({count}) ")
+        format!(" WiFi Networks ({total_count}) [{sort_label}] ")
     };
 
     let block = Block::default()
@@ -32,9 +76,14 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         .border_style(t.style_border())
         .style(t.style_default());
 
-    if app.networks.is_empty() {
+    // Use the filtered visible list
+    let visible = app.visible_networks();
+
+    if visible.is_empty() {
         let empty_msg = if is_scanning {
             "Scanning for networks…"
+        } else if !app.search_query.is_empty() {
+            "No matching networks"
         } else {
             "No networks found. Press [s] to scan."
         };
@@ -42,17 +91,21 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             .block(block)
             .style(t.style_dim())
             .alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(para, area);
+        frame.render_widget(para, list_area);
+
+        // Render search bar even when list is empty
+        if let Some(sa) = search_area {
+            render_search_bar(frame, app, sa);
+        }
         return;
     }
 
-    // Build list items
-    let items: Vec<ListItem> = app
-        .networks
+    // Build list items from filtered view
+    let items: Vec<ListItem> = visible
         .iter()
         .enumerate()
-        .map(|(idx, net)| {
-            let is_selected = idx == app.selected_index;
+        .map(|(vis_idx, net)| {
+            let is_selected = vis_idx == app.selected_index;
             let opacity = fade_in_opacity(net.seen_ticks);
 
             // Selection indicator
@@ -73,13 +126,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Span::styled("  ", t.style_default())
             };
 
-            // SSID with padding
+            // SSID with padding (char-boundary-safe truncation)
             let ssid_width = 28;
-            let ssid_display = if net.ssid.width() > ssid_width {
-                format!("{}…", &net.ssid[..ssid_width - 1])
-            } else {
-                format!("{:<width$}", net.ssid, width = ssid_width)
-            };
+            let ssid_display = truncate_ssid(&net.ssid, ssid_width);
 
             let ssid_style = if net.is_active {
                 t.style_connected()
@@ -142,13 +191,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
             // Band indicator
             let band = {
-                let level = net.signal_level();
                 let band_str = match net.band() {
                     crate::network::types::FrequencyBand::FiveGhz => "5G",
                     crate::network::types::FrequencyBand::SixGhz => "6G",
                     _ => "  ",
                 };
-                let _ = level; // signal level available for future use
                 Span::styled(format!(" {band_str}"), t.style_dim())
             };
 
@@ -178,5 +225,31 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let mut state = ListState::default();
     state.select(Some(app.selected_index));
 
-    frame.render_stateful_widget(list, area, &mut state);
+    frame.render_stateful_widget(list, list_area, &mut state);
+
+    // Render search bar
+    if let Some(sa) = search_area {
+        render_search_bar(frame, app, sa);
+    }
+}
+
+/// Render the inline search/filter bar at the bottom of the network list
+fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+    let is_active = matches!(app.mode, AppMode::Search);
+
+    let cursor = if is_active && app.animation.cursor_visible() {
+        "█"
+    } else {
+        ""
+    };
+
+    let line = Line::from(vec![
+        Span::styled(" /", t.style_accent_bold()),
+        Span::styled(&app.search_query, t.style_default()),
+        Span::styled(cursor, t.style_accent()),
+    ]);
+
+    let para = Paragraph::new(line).style(t.style_default());
+    frame.render_widget(para, area);
 }

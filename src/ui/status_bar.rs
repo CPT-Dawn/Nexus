@@ -14,6 +14,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         AppMode::PasswordInput { .. } => password_hints(t),
         AppMode::Hidden => hidden_hints(t),
         AppMode::Help => help_hints(t),
+        AppMode::Search => search_hints(t),
         AppMode::Connecting | AppMode::Disconnecting => busy_hints(t),
         AppMode::Error(_) => error_hints(t),
     };
@@ -33,13 +34,11 @@ fn normal_hints(t: &Theme) -> Vec<Span<'static>> {
         desc(t, "Disconnect "),
         key(t, "s"),
         desc(t, "Scan "),
-        key(t, "f"),
-        desc(t, "Forget "),
-        key(t, "h"),
-        desc(t, "Hidden "),
-        key(t, "i"),
-        desc(t, "Details "),
         key(t, "/"),
+        desc(t, "Search "),
+        key(t, "S"),
+        desc(t, "Sort "),
+        key(t, "?"),
         desc(t, "Help "),
         key(t, "q"),
         desc(t, "Quit"),
@@ -74,6 +73,19 @@ fn help_hints(t: &Theme) -> Vec<Span<'static>> {
         desc(t, "Close "),
         key(t, "Esc"),
         desc(t, "Close"),
+    ]
+}
+
+fn search_hints(t: &Theme) -> Vec<Span<'static>> {
+    vec![
+        key(t, "Type"),
+        desc(t, "Filter "),
+        key(t, "Enter"),
+        desc(t, "Confirm "),
+        key(t, "Esc"),
+        desc(t, "Clear/Cancel "),
+        key(t, "Backspace"),
+        desc(t, "Delete"),
     ]
 }
 

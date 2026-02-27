@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 use crate::animation::AnimationState;
 use crate::animation::transitions::smooth_signals;
 use crate::config::Config;
-use crate::event::Event;
+use crate::event::{Event, NetworkCommand};
 use crate::network::types::*;
 use crate::ui::theme::Theme;
 
@@ -25,14 +25,49 @@ pub enum AppMode {
     Hidden,
     /// Help overlay
     Help,
+    /// Inline search / filter mode
+    Search,
     /// Error dialog
     Error(String),
+}
+
+/// Sort ordering for the network list
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortMode {
+    Signal,
+    Alphabetical,
+    Security,
+    Band,
+}
+
+impl SortMode {
+    /// Cycle to the next sort mode
+    pub fn next(self) -> Self {
+        match self {
+            Self::Signal => Self::Alphabetical,
+            Self::Alphabetical => Self::Security,
+            Self::Security => Self::Band,
+            Self::Band => Self::Signal,
+        }
+    }
+
+    /// Human-readable label for the title bar
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Signal => "↓Signal",
+            Self::Alphabetical => "↓A-Z",
+            Self::Security => "↓Security",
+            Self::Band => "↓Band",
+        }
+    }
 }
 
 /// Main application state
 pub struct App {
     pub mode: AppMode,
     pub networks: Vec<WiFiNetwork>,
+    /// Filtered view indices into `networks`
+    pub filtered_indices: Vec<usize>,
     pub selected_index: usize,
     pub connection_status: ConnectionStatus,
     pub password_input: String,
@@ -46,6 +81,8 @@ pub struct App {
     pub config: Config,
     pub theme: Theme,
     pub interface_name: String,
+    pub sort_mode: SortMode,
+    pub search_query: String,
     event_tx: mpsc::UnboundedSender<Event>,
 }
 
@@ -60,6 +97,7 @@ impl App {
         Self {
             mode: AppMode::Normal,
             networks: Vec::new(),
+            filtered_indices: Vec::new(),
             selected_index: 0,
             connection_status: ConnectionStatus::default(),
             password_input: String::new(),
@@ -73,7 +111,75 @@ impl App {
             config,
             theme,
             interface_name,
+            sort_mode: SortMode::Signal,
+            search_query: String::new(),
             event_tx,
+        }
+    }
+
+    /// Get the list of networks to display (filtered view).
+    /// Returns references via index.
+    pub fn visible_networks(&self) -> Vec<&WiFiNetwork> {
+        self.filtered_indices
+            .iter()
+            .filter_map(|&i| self.networks.get(i))
+            .collect()
+    }
+
+    /// Get the currently selected network (accounting for filter)
+    pub fn selected_network(&self) -> Option<&WiFiNetwork> {
+        self.filtered_indices
+            .get(self.selected_index)
+            .and_then(|&i| self.networks.get(i))
+    }
+
+    /// Rebuild the filtered indices based on search query
+    fn rebuild_filter(&mut self) {
+        let query = self.search_query.to_lowercase();
+        self.filtered_indices = self
+            .networks
+            .iter()
+            .enumerate()
+            .filter(|(_, net)| {
+                if query.is_empty() {
+                    return true;
+                }
+                net.ssid.to_lowercase().contains(&query)
+            })
+            .map(|(i, _)| i)
+            .collect();
+
+        // Clamp selection
+        if self.filtered_indices.is_empty() {
+            self.selected_index = 0;
+        } else {
+            self.selected_index = self.selected_index.min(self.filtered_indices.len() - 1);
+        }
+    }
+
+    // ─── Key Matching Helpers ───────────────────────────────────────
+
+    /// Check if a key event matches a config-defined keybinding.
+    /// Supports single-char keys and special key names.
+    fn key_matches(&self, key: &KeyEvent, binding: &str) -> bool {
+        match binding {
+            "enter" => key.code == KeyCode::Enter,
+            "esc" => key.code == KeyCode::Esc,
+            "tab" => key.code == KeyCode::Tab,
+            "backtab" => key.code == KeyCode::BackTab,
+            "up" => key.code == KeyCode::Up,
+            "down" => key.code == KeyCode::Down,
+            "left" => key.code == KeyCode::Left,
+            "right" => key.code == KeyCode::Right,
+            "home" => key.code == KeyCode::Home,
+            "end" => key.code == KeyCode::End,
+            "backspace" => key.code == KeyCode::Backspace,
+            "delete" => key.code == KeyCode::Delete,
+            s if s.len() == 1 => {
+                let ch = s.chars().next().unwrap();
+                key.code == KeyCode::Char(ch)
+            }
+            _ => false,
         }
     }
 
@@ -84,6 +190,7 @@ impl App {
             AppMode::PasswordInput { .. } => self.handle_key_password(key),
             AppMode::Hidden => self.handle_key_hidden(key),
             AppMode::Help => self.handle_key_help(key),
+            AppMode::Search => self.handle_key_search(key),
             AppMode::Error(_) => self.handle_key_error(key),
             AppMode::Connecting | AppMode::Disconnecting => {
                 // Only allow quit during busy states
@@ -94,38 +201,97 @@ impl App {
         }
     }
 
-    /// Handle keys in normal/scanning mode
+    /// Handle keys in normal/scanning mode — uses config keybindings
     fn handle_key_normal(&mut self, key: KeyEvent) {
+        let keys = self.config.keys.clone();
+
+        // Hard-coded navigation (vim + arrows)
         match key.code {
-            // Navigation
-            KeyCode::Up | KeyCode::Char('k') => self.select_prev(),
-            KeyCode::Down | KeyCode::Char('j') => self.select_next(),
-            KeyCode::Char('g') => self.select_first(),
-            KeyCode::Char('G') => self.select_last(),
-            KeyCode::Home => self.select_first(),
-            KeyCode::End => self.select_last(),
-
-            // Actions
-            KeyCode::Enter => self.action_connect(),
-            KeyCode::Char('d') => self.action_disconnect(),
-            KeyCode::Char('s') => self.action_scan(),
-            KeyCode::Char('f') => self.action_forget(),
-            KeyCode::Char('h') => self.action_hidden(),
-            KeyCode::Char('r') => self.action_refresh(),
-            KeyCode::Char('i') => {
-                self.detail_visible = !self.detail_visible;
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.select_prev();
+                return;
             }
-
-            // Help
-            KeyCode::Char('?') | KeyCode::Char('/') => {
-                self.mode = AppMode::Help;
-                self.animation.start_dialog_slide();
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.select_next();
+                return;
             }
+            KeyCode::Char('g') if !key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.select_first();
+                return;
+            }
+            KeyCode::Char('G') => {
+                self.select_last();
+                return;
+            }
+            KeyCode::Home => {
+                self.select_first();
+                return;
+            }
+            KeyCode::End => {
+                self.select_last();
+                return;
+            }
+            _ => {}
+        }
 
-            // Quit
-            KeyCode::Char('q') => self.should_quit = true,
-            KeyCode::Esc => self.should_quit = true,
+        // Config-driven action keys
+        if self.key_matches(&key, &keys.connect) {
+            self.action_connect();
+        } else if self.key_matches(&key, &keys.disconnect) {
+            self.action_disconnect();
+        } else if self.key_matches(&key, &keys.scan) {
+            self.action_scan();
+        } else if self.key_matches(&key, &keys.forget) {
+            self.action_forget();
+        } else if self.key_matches(&key, &keys.hidden) {
+            self.action_hidden();
+        } else if self.key_matches(&key, &keys.refresh) {
+            self.action_refresh();
+        } else if self.key_matches(&key, &keys.details) {
+            self.detail_visible = !self.detail_visible;
+        } else if self.key_matches(&key, &keys.help) {
+            self.mode = AppMode::Help;
+            self.animation.start_dialog_slide();
+        } else if self.key_matches(&key, &keys.sort) {
+            self.sort_mode = self.sort_mode.next();
+            self.apply_sort();
+            self.rebuild_filter();
+        } else if self.key_matches(&key, &keys.search) {
+            self.search_query.clear();
+            self.mode = AppMode::Search;
+        } else if self.key_matches(&key, &keys.quit) {
+            self.should_quit = true;
+        } else if key.code == KeyCode::Esc {
+            // Clear filter if active, otherwise quit
+            if !self.search_query.is_empty() {
+                self.search_query.clear();
+                self.rebuild_filter();
+            } else {
+                self.should_quit = true;
+            }
+        }
+    }
 
+    /// Handle keys in search/filter mode
+    fn handle_key_search(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                // Keep the current query but exit search mode
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Enter => {
+                self.mode = AppMode::Normal;
+            }
+            KeyCode::Backspace => {
+                self.search_query.pop();
+                self.rebuild_filter();
+            }
+            KeyCode::Char(c) => {
+                self.search_query.push(c);
+                self.rebuild_filter();
+            }
+            KeyCode::Up => self.select_prev(),
+            KeyCode::Down => self.select_next(),
             _ => {}
         }
     }
@@ -141,13 +307,11 @@ impl App {
                     self.connection_status = ConnectionStatus::Connecting(ssid.clone());
                     self.animation.start_spinner();
 
-                    let _tx = self.event_tx.clone();
                     let pwd = if password.is_empty() {
                         None
                     } else {
                         Some(password)
                     };
-                    // Fire connect in background
                     self.dispatch_connect(ssid, pwd);
                 }
             }
@@ -240,14 +404,14 @@ impl App {
     // ─── Navigation ─────────────────────────────────────────────────
 
     fn select_prev(&mut self) {
-        if !self.networks.is_empty() {
+        if !self.filtered_indices.is_empty() {
             self.selected_index = self.selected_index.saturating_sub(1);
         }
     }
 
     fn select_next(&mut self) {
-        if !self.networks.is_empty() {
-            self.selected_index = (self.selected_index + 1).min(self.networks.len() - 1);
+        if !self.filtered_indices.is_empty() {
+            self.selected_index = (self.selected_index + 1).min(self.filtered_indices.len() - 1);
         }
     }
 
@@ -256,19 +420,56 @@ impl App {
     }
 
     fn select_last(&mut self) {
-        if !self.networks.is_empty() {
-            self.selected_index = self.networks.len() - 1;
+        if !self.filtered_indices.is_empty() {
+            self.selected_index = self.filtered_indices.len() - 1;
+        }
+    }
+
+    // ─── Sorting ────────────────────────────────────────────────────
+
+    /// Apply the current sort mode to `self.networks`
+    fn apply_sort(&mut self) {
+        match self.sort_mode {
+            SortMode::Signal => {
+                self.networks.sort_by(|a, b| {
+                    b.is_active
+                        .cmp(&a.is_active)
+                        .then(b.signal_strength.cmp(&a.signal_strength))
+                });
+            }
+            SortMode::Alphabetical => {
+                self.networks.sort_by(|a, b| {
+                    b.is_active
+                        .cmp(&a.is_active)
+                        .then(a.ssid.to_lowercase().cmp(&b.ssid.to_lowercase()))
+                });
+            }
+            SortMode::Security => {
+                self.networks.sort_by(|a, b| {
+                    b.is_active
+                        .cmp(&a.is_active)
+                        .then(security_rank(&b.security).cmp(&security_rank(&a.security)))
+                        .then(b.signal_strength.cmp(&a.signal_strength))
+                });
+            }
+            SortMode::Band => {
+                self.networks.sort_by(|a, b| {
+                    b.is_active
+                        .cmp(&a.is_active)
+                        .then(b.frequency.cmp(&a.frequency))
+                        .then(b.signal_strength.cmp(&a.signal_strength))
+                });
+            }
         }
     }
 
     // ─── Actions ────────────────────────────────────────────────────
 
     fn action_connect(&mut self) {
-        if self.networks.is_empty() {
-            return;
-        }
-
-        let net = &self.networks[self.selected_index];
+        let net = match self.selected_network() {
+            Some(n) => n,
+            None => return,
+        };
 
         // Already connected
         if net.is_active {
@@ -276,15 +477,12 @@ impl App {
         }
 
         if net.security.needs_password() && !net.is_saved {
-            // Need password — open dialog
+            let ssid = net.ssid.clone();
             self.password_input.clear();
             self.password_visible = false;
-            self.mode = AppMode::PasswordInput {
-                ssid: net.ssid.clone(),
-            };
+            self.mode = AppMode::PasswordInput { ssid };
             self.animation.start_dialog_slide();
         } else {
-            // Open network or saved network — connect directly
             let ssid = net.ssid.clone();
             self.mode = AppMode::Connecting;
             self.connection_status = ConnectionStatus::Connecting(ssid.clone());
@@ -297,15 +495,12 @@ impl App {
         if !self.connection_status.is_connected() || self.connection_status.is_busy() {
             return;
         }
-        let _active_ssid = self.connection_status.ssid().map(|s| s.to_string());
         self.mode = AppMode::Disconnecting;
         self.connection_status = ConnectionStatus::Disconnecting;
         self.animation.start_spinner();
-
-        let tx = self.event_tx.clone();
-        tokio::spawn(async move {
-            let _ = tx.send(Event::Error("DISCONNECT:".to_string()));
-        });
+        let _ = self
+            .event_tx
+            .send(Event::Command(NetworkCommand::Disconnect));
     }
 
     fn action_scan(&mut self) {
@@ -314,30 +509,23 @@ impl App {
         }
         self.mode = AppMode::Scanning;
         self.animation.start_spinner();
-
-        let tx = self.event_tx.clone();
-        tokio::spawn(async move {
-            // Signal the main loop to perform a scan
-            let _ = tx.send(Event::NetworkEvent(NetworkEvent::ScanComplete(Vec::new())));
-        });
+        let _ = self.event_tx.send(Event::Command(NetworkCommand::Scan));
     }
 
     fn action_forget(&mut self) {
-        if self.networks.is_empty() {
-            return;
-        }
-        let net = &self.networks[self.selected_index];
+        let net = match self.selected_network() {
+            Some(n) => n,
+            None => return,
+        };
         if !net.is_saved {
             self.mode = AppMode::Error("Network is not saved".to_string());
             self.animation.start_dialog_slide();
             return;
         }
-
-        let tx = self.event_tx.clone();
         let ssid = net.ssid.clone();
-        tokio::spawn(async move {
-            let _ = tx.send(Event::Error(format!("FORGET:{}", ssid)));
-        });
+        let _ = self
+            .event_tx
+            .send(Event::Command(NetworkCommand::Forget { ssid }));
     }
 
     fn action_hidden(&mut self) {
@@ -350,34 +538,24 @@ impl App {
     }
 
     fn action_refresh(&mut self) {
-        let tx = self.event_tx.clone();
-        tokio::spawn(async move {
-            let _ = tx.send(Event::NetworkEvent(NetworkEvent::ConnectionChanged(
-                ConnectionStatus::Disconnected,
-            )));
-        });
+        let _ = self
+            .event_tx
+            .send(Event::Command(NetworkCommand::RefreshConnection));
     }
 
     fn dispatch_connect(&mut self, ssid: String, password: Option<String>) {
-        let tx = self.event_tx.clone();
-        tokio::spawn(async move {
-            let _ = tx.send(Event::Error(format!(
-                "CONNECT:{}:{}",
-                ssid,
-                password.unwrap_or_default()
-            )));
-        });
+        let _ = self
+            .event_tx
+            .send(Event::Command(NetworkCommand::Connect { ssid, password }));
     }
 
     fn dispatch_connect_hidden(&mut self, ssid: String, password: Option<String>) {
-        let tx = self.event_tx.clone();
-        tokio::spawn(async move {
-            let _ = tx.send(Event::Error(format!(
-                "CONNECT_HIDDEN:{}:{}",
+        let _ = self
+            .event_tx
+            .send(Event::Command(NetworkCommand::ConnectHidden {
                 ssid,
-                password.unwrap_or_default()
-            )));
-        });
+                password,
+            }));
     }
 
     // ─── Tick / Animation Updates ───────────────────────────────────
@@ -405,12 +583,10 @@ impl App {
 
         self.networks = networks;
 
-        // Clamp selected index
-        if !self.networks.is_empty() {
-            self.selected_index = self.selected_index.min(self.networks.len() - 1);
-        } else {
-            self.selected_index = 0;
-        }
+        // Apply current sort
+        self.apply_sort();
+        // Rebuild filter
+        self.rebuild_filter();
 
         // Return to normal mode if we were scanning
         if matches!(self.mode, AppMode::Scanning) {
@@ -428,5 +604,18 @@ impl App {
             self.mode = AppMode::Normal;
             self.animation.stop_spinner();
         }
+    }
+}
+
+/// Rank security types for sorting (higher = more secure)
+fn security_rank(sec: &SecurityType) -> u8 {
+    match sec {
+        SecurityType::Open => 0,
+        SecurityType::Wep => 1,
+        SecurityType::Wpa => 2,
+        SecurityType::WPA2 => 3,
+        SecurityType::WPA2Enterprise => 4,
+        SecurityType::WPA3 => 5,
+        SecurityType::Unknown => 0,
     }
 }

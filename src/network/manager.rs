@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use eyre::{Context, Result, bail};
-use tokio::sync::mpsc;
 use tracing::{debug, info};
 use zbus::Connection;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
@@ -15,7 +14,6 @@ pub struct NmBackend {
     conn: Connection,
     wifi_device_path: OwnedObjectPath,
     interface: String,
-    event_tx: mpsc::UnboundedSender<NetworkEvent>,
 }
 
 impl NmBackend {
@@ -51,13 +49,10 @@ impl NmBackend {
 
         info!("Using WiFi interface: {} ({})", iface_name, device_path);
 
-        let (event_tx, _event_rx) = mpsc::unbounded_channel();
-
         Ok(Self {
             conn,
             wifi_device_path: device_path,
             interface: iface_name,
-            event_tx,
         })
     }
 
@@ -69,11 +64,6 @@ impl NmBackend {
     /// Get the WiFi device path
     pub fn device_path(&self) -> OwnedObjectPath {
         self.wifi_device_path.clone()
-    }
-
-    /// Get the event sender (for signal handlers to forward events)
-    pub fn event_sender(&self) -> mpsc::UnboundedSender<NetworkEvent> {
-        self.event_tx.clone()
     }
 
     /// Call a method on the NetworkManager D-Bus interface
@@ -170,9 +160,10 @@ impl NmBackend {
 
             // If user specified an interface, only match that one
             if let Some(preferred) = preferred_interface
-                && iface != preferred {
-                    continue;
-                }
+                && iface != preferred
+            {
+                continue;
+            }
 
             return Ok((device_path.clone(), iface));
         }
@@ -234,12 +225,13 @@ impl NmBackend {
             // Get the SSID
             if let Some(wireless) = settings.get("802-11-wireless")
                 && let Some(ssid_val) = wireless.get("ssid")
-                    && let Ok(ssid_bytes) = <Vec<u8>>::try_from(ssid_val.clone()) {
-                        let ssid = String::from_utf8_lossy(&ssid_bytes).to_string();
-                        if !ssid.is_empty() {
-                            ssids.push(ssid);
-                        }
-                    }
+                && let Ok(ssid_bytes) = <Vec<u8>>::try_from(ssid_val.clone())
+            {
+                let ssid = String::from_utf8_lossy(&ssid_bytes).to_string();
+                if !ssid.is_empty() {
+                    ssids.push(ssid);
+                }
+            }
         }
 
         Ok(ssids)
@@ -367,12 +359,13 @@ impl NmBackend {
 
             if let Some(wireless) = settings.get("802-11-wireless")
                 && let Some(ssid_val) = wireless.get("ssid")
-                    && let Ok(ssid_bytes) = <Vec<u8>>::try_from(ssid_val.clone()) {
-                        let profile_ssid = String::from_utf8_lossy(&ssid_bytes);
-                        if profile_ssid == ssid {
-                            return Ok(Some(conn_path.clone()));
-                        }
-                    }
+                && let Ok(ssid_bytes) = <Vec<u8>>::try_from(ssid_val.clone())
+            {
+                let profile_ssid = String::from_utf8_lossy(&ssid_bytes);
+                if profile_ssid == ssid {
+                    return Ok(Some(conn_path.clone()));
+                }
+            }
         }
 
         Ok(None)

@@ -7,6 +7,7 @@ mod ui;
 
 use std::io;
 use std::panic;
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
@@ -21,7 +22,7 @@ use tracing::info;
 
 use app::{App, AppMode};
 use config::CliArgs;
-use event::{Event, EventHandler};
+use event::{Event, EventHandler, NetworkCommand};
 use network::NetworkBackend;
 use network::manager::NmBackend;
 use network::types::*;
@@ -79,9 +80,9 @@ async fn main() -> Result<()> {
         original_hook(panic_info);
     }));
 
-    // Initialize network backend
+    // Initialize network backend (shared via Arc — no more re-creating per operation)
     let nm_backend = match NmBackend::new(config.interface()).await {
-        Ok(b) => b,
+        Ok(b) => Arc::new(b),
         Err(e) => {
             eprintln!("Error: {}", e);
             eprintln!("\nNexus requires NetworkManager to be running.");
@@ -93,12 +94,15 @@ async fn main() -> Result<()> {
 
     let interface_name = nm_backend.interface_name().to_string();
 
-    // Start D-Bus signal listeners
+    // Set up event handler (tick rate from config FPS)
+    let mut events = EventHandler::new(config.tick_rate_ms());
+    let event_tx = events.sender();
+
+    // Start D-Bus signal listeners — now sends events directly via event_tx
     let signal_conn = nm_backend.connection().clone();
     let signal_device = nm_backend.device_path();
-    let signal_tx = nm_backend.event_sender();
 
-    network::signals::start_signal_listener(signal_conn, signal_device, signal_tx).await;
+    network::signals::start_signal_listener(signal_conn, signal_device, event_tx.clone()).await;
 
     // Set up terminal
     enable_raw_mode()?;
@@ -109,10 +113,6 @@ async fn main() -> Result<()> {
     terminal.clear()?;
     terminal.hide_cursor()?;
 
-    // Set up event handler (tick rate from config FPS)
-    let mut events = EventHandler::new(config.tick_rate_ms());
-    let event_tx = events.sender();
-
     // Create app state
     let mut app = App::new(config, theme, interface_name, event_tx.clone());
 
@@ -120,41 +120,39 @@ async fn main() -> Result<()> {
     app.mode = AppMode::Scanning;
     app.animation.start_spinner();
 
-    let scan_iface = nm_backend.interface_name().to_string();
-    let scan_tx = event_tx.clone();
-
-    tokio::spawn(async move {
-        if let Ok(backend) = NmBackend::new(Some(&scan_iface)).await {
-            match backend.scan().await {
+    {
+        let nm = Arc::clone(&nm_backend);
+        let tx = event_tx.clone();
+        tokio::spawn(async move {
+            match nm.scan().await {
                 Ok(networks) => {
-                    let _ = scan_tx.send(Event::NetworkScan(networks));
+                    let _ = tx.send(Event::NetworkScan(networks));
                 }
                 Err(e) => {
-                    let _ = scan_tx.send(Event::Error(format!("Scan failed: {}", e)));
+                    let _ = tx.send(Event::Error(format!("Scan failed: {}", e)));
                 }
             }
-        }
-    });
+        });
+    }
 
     // Also fetch current connection
-    let conn_tx = event_tx.clone();
-    let conn_iface = nm_backend.interface_name().to_string();
-    tokio::spawn(async move {
-        if let Ok(backend) = NmBackend::new(Some(&conn_iface)).await {
-            match backend.current_connection().await {
+    {
+        let nm = Arc::clone(&nm_backend);
+        let tx = event_tx.clone();
+        tokio::spawn(async move {
+            match nm.current_connection().await {
                 Ok(Some(info)) => {
-                    let _ =
-                        conn_tx.send(Event::ConnectionChanged(ConnectionStatus::Connected(info)));
+                    let _ = tx.send(Event::ConnectionChanged(ConnectionStatus::Connected(info)));
                 }
                 Ok(None) => {
-                    let _ = conn_tx.send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
+                    let _ = tx.send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
                 }
                 Err(e) => {
                     tracing::warn!("Failed to get connection info: {}", e);
                 }
             }
-        }
-    });
+        });
+    }
 
     // ─── Main Event Loop ────────────────────────────────────────────
     info!("Entering main event loop");
@@ -186,12 +184,13 @@ async fn main() -> Result<()> {
                     app.update_connection_status(status);
                 }
 
-                Event::NetworkEvent(net_event) => {
-                    handle_network_event(&mut app, &nm_backend, net_event, &event_tx).await;
+                Event::Command(cmd) => {
+                    handle_command(&nm_backend, cmd, &event_tx);
                 }
 
                 Event::Error(msg) => {
-                    handle_error_event(&mut app, &nm_backend, &msg, &event_tx).await;
+                    app.mode = AppMode::Error(msg);
+                    app.animation.start_dialog_slide();
                 }
             }
         }
@@ -206,7 +205,7 @@ async fn main() -> Result<()> {
 
     // Stop background event tasks first so they release stdin
     events.stop();
-    // Give tasks a moment to exit (they poll every ~33ms)
+    // Give tasks a moment to exit
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Restore terminal state
@@ -221,191 +220,146 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Handle network events from D-Bus signals
-async fn handle_network_event(
-    _app: &mut App,
-    nm: &NmBackend,
-    event: NetworkEvent,
+/// Handle typed network commands dispatched from the UI.
+/// Each command spawns an async task that reuses the shared Arc<NmBackend>.
+fn handle_command(
+    nm: &Arc<NmBackend>,
+    cmd: NetworkCommand,
     tx: &tokio::sync::mpsc::UnboundedSender<Event>,
 ) {
-    match event {
-        NetworkEvent::ScanComplete(networks) => {
-            if !networks.is_empty() {
-                let _ = tx.send(Event::NetworkScan(networks));
-                return;
-            }
-            // If empty, trigger a fresh scan
-            let iface = nm.interface_name().to_string();
-            let scan_tx = tx.clone();
+    match cmd {
+        NetworkCommand::Scan => {
+            let nm = Arc::clone(nm);
+            let tx = tx.clone();
             tokio::spawn(async move {
-                if let Ok(backend) = NmBackend::new(Some(&iface)).await {
-                    match backend.scan().await {
-                        Ok(networks) => {
-                            let _ = scan_tx.send(Event::NetworkScan(networks));
-                        }
-                        Err(e) => {
-                            let _ = scan_tx.send(Event::Error(format!("Scan failed: {}", e)));
-                        }
+                match nm.scan().await {
+                    Ok(networks) => {
+                        let _ = tx.send(Event::NetworkScan(networks));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Event::Error(format!("Scan failed: {}", e)));
                     }
                 }
             });
         }
-        NetworkEvent::ConnectionChanged(status) => {
-            let _ = tx.send(Event::ConnectionChanged(status));
-            // Also refresh full connection info
-            let iface = nm.interface_name().to_string();
-            let conn_tx = tx.clone();
+
+        NetworkCommand::Connect { ssid, password } => {
+            let nm = Arc::clone(nm);
+            let tx = tx.clone();
             tokio::spawn(async move {
-                if let Ok(backend) = NmBackend::new(Some(&iface)).await {
-                    match backend.current_connection().await {
-                        Ok(Some(info)) => {
-                            let _ = conn_tx
-                                .send(Event::ConnectionChanged(ConnectionStatus::Connected(info)));
-                        }
-                        Ok(None) => {
-                            let _ = conn_tx
-                                .send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
-                        }
-                        _ => {}
-                    }
-                }
-            });
-        }
-    }
-}
-
-/// Handle custom error/command events (connect, forget, disconnect)
-async fn handle_error_event(
-    app: &mut App,
-    nm: &NmBackend,
-    msg: &str,
-    tx: &tokio::sync::mpsc::UnboundedSender<Event>,
-) {
-    if let Some(rest) = msg.strip_prefix("CONNECT:") {
-        let parts: Vec<&str> = rest.splitn(2, ':').collect();
-        let ssid = parts[0].to_string();
-        let password = parts.get(1).and_then(|p| {
-            if p.is_empty() {
-                None
-            } else {
-                Some(p.to_string())
-            }
-        });
-
-        let iface = nm.interface_name().to_string();
-        let connect_tx = tx.clone();
-        tokio::spawn(async move {
-            if let Ok(backend) = NmBackend::new(Some(&iface)).await {
-                match backend.connect(&ssid, password.as_deref()).await {
+                match nm.connect(&ssid, password.as_deref()).await {
                     Ok(()) => {
                         tokio::time::sleep(Duration::from_secs(3)).await;
-                        match backend.current_connection().await {
+                        match nm.current_connection().await {
                             Ok(Some(info)) => {
-                                let _ = connect_tx.send(Event::ConnectionChanged(
+                                let _ = tx.send(Event::ConnectionChanged(
                                     ConnectionStatus::Connected(info),
                                 ));
                             }
                             _ => {
-                                let _ = connect_tx
+                                let _ = tx
                                     .send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
                             }
                         }
-                        if let Ok(networks) = backend.scan().await {
-                            let _ = connect_tx.send(Event::NetworkScan(networks));
+                        if let Ok(networks) = nm.scan().await {
+                            let _ = tx.send(Event::NetworkScan(networks));
                         }
                     }
                     Err(e) => {
-                        let _ = connect_tx.send(Event::ConnectionChanged(
-                            ConnectionStatus::Failed(format!("{}", e)),
-                        ));
-                    }
-                }
-            }
-        });
-    } else if let Some(rest) = msg.strip_prefix("CONNECT_HIDDEN:") {
-        let parts: Vec<&str> = rest.splitn(2, ':').collect();
-        let ssid = parts[0].to_string();
-        let password = parts.get(1).and_then(|p| {
-            if p.is_empty() {
-                None
-            } else {
-                Some(p.to_string())
-            }
-        });
-
-        let iface = nm.interface_name().to_string();
-        let connect_tx = tx.clone();
-        tokio::spawn(async move {
-            if let Ok(backend) = NmBackend::new(Some(&iface)).await {
-                match backend.connect_hidden(&ssid, password.as_deref()).await {
-                    Ok(()) => {
-                        tokio::time::sleep(Duration::from_secs(3)).await;
-                        match backend.current_connection().await {
-                            Ok(Some(info)) => {
-                                let _ = connect_tx.send(Event::ConnectionChanged(
-                                    ConnectionStatus::Connected(info),
-                                ));
-                            }
-                            _ => {
-                                let _ = connect_tx
-                                    .send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
-                            }
-                        }
-                        if let Ok(networks) = backend.scan().await {
-                            let _ = connect_tx.send(Event::NetworkScan(networks));
-                        }
-                    }
-                    Err(e) => {
-                        let _ = connect_tx.send(Event::ConnectionChanged(
-                            ConnectionStatus::Failed(format!("{}", e)),
-                        ));
-                    }
-                }
-            }
-        });
-    } else if let Some(ssid) = msg.strip_prefix("FORGET:") {
-        let ssid = ssid.to_string();
-        let iface = nm.interface_name().to_string();
-        let forget_tx = tx.clone();
-        tokio::spawn(async move {
-            if let Ok(backend) = NmBackend::new(Some(&iface)).await {
-                match backend.forget_network(&ssid).await {
-                    Ok(()) => {
-                        if let Ok(networks) = backend.scan().await {
-                            let _ = forget_tx.send(Event::NetworkScan(networks));
-                        }
-                    }
-                    Err(e) => {
-                        let _ = forget_tx.send(Event::Error(format!("Failed to forget: {}", e)));
-                    }
-                }
-            }
-        });
-    } else if msg.starts_with("DISCONNECT:") {
-        let iface = nm.interface_name().to_string();
-        let dc_tx = tx.clone();
-        tokio::spawn(async move {
-            if let Ok(backend) = NmBackend::new(Some(&iface)).await {
-                match backend.disconnect().await {
-                    Ok(()) => {
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                        let _ =
-                            dc_tx.send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
-                        if let Ok(networks) = backend.scan().await {
-                            let _ = dc_tx.send(Event::NetworkScan(networks));
-                        }
-                    }
-                    Err(e) => {
-                        let _ = dc_tx.send(Event::ConnectionChanged(ConnectionStatus::Failed(
+                        let _ = tx.send(Event::ConnectionChanged(ConnectionStatus::Failed(
                             format!("{}", e),
                         )));
                     }
                 }
-            }
-        });
-    } else {
-        // Generic error — display it
-        app.mode = AppMode::Error(msg.to_string());
-        app.animation.start_dialog_slide();
+            });
+        }
+
+        NetworkCommand::ConnectHidden { ssid, password } => {
+            let nm = Arc::clone(nm);
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                match nm.connect_hidden(&ssid, password.as_deref()).await {
+                    Ok(()) => {
+                        tokio::time::sleep(Duration::from_secs(3)).await;
+                        match nm.current_connection().await {
+                            Ok(Some(info)) => {
+                                let _ = tx.send(Event::ConnectionChanged(
+                                    ConnectionStatus::Connected(info),
+                                ));
+                            }
+                            _ => {
+                                let _ = tx
+                                    .send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
+                            }
+                        }
+                        if let Ok(networks) = nm.scan().await {
+                            let _ = tx.send(Event::NetworkScan(networks));
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Event::ConnectionChanged(ConnectionStatus::Failed(
+                            format!("{}", e),
+                        )));
+                    }
+                }
+            });
+        }
+
+        NetworkCommand::Disconnect => {
+            let nm = Arc::clone(nm);
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                match nm.disconnect().await {
+                    Ok(()) => {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        let _ = tx.send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
+                        if let Ok(networks) = nm.scan().await {
+                            let _ = tx.send(Event::NetworkScan(networks));
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Event::ConnectionChanged(ConnectionStatus::Failed(
+                            format!("{}", e),
+                        )));
+                    }
+                }
+            });
+        }
+
+        NetworkCommand::Forget { ssid } => {
+            let nm = Arc::clone(nm);
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                match nm.forget_network(&ssid).await {
+                    Ok(()) => {
+                        if let Ok(networks) = nm.scan().await {
+                            let _ = tx.send(Event::NetworkScan(networks));
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Event::Error(format!("Failed to forget: {}", e)));
+                    }
+                }
+            });
+        }
+
+        NetworkCommand::RefreshConnection => {
+            let nm = Arc::clone(nm);
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                match nm.current_connection().await {
+                    Ok(Some(info)) => {
+                        let _ =
+                            tx.send(Event::ConnectionChanged(ConnectionStatus::Connected(info)));
+                    }
+                    Ok(None) => {
+                        let _ = tx.send(Event::ConnectionChanged(ConnectionStatus::Disconnected));
+                    }
+                    Err(e) => {
+                        tracing::warn!("Refresh failed: {}", e);
+                    }
+                }
+            });
+        }
     }
 }

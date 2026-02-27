@@ -210,6 +210,8 @@ pub struct KeysConfig {
     pub refresh: String,
     pub help: String,
     pub quit: String,
+    pub sort: String,
+    pub search: String,
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────
@@ -237,7 +239,7 @@ impl Default for AppearanceConfig {
         Self {
             nerd_fonts: true,
             animations: true,
-            fps: 30,
+            fps: 60,
             show_details: true,
             border_style: "rounded".into(),
         }
@@ -293,8 +295,10 @@ impl Default for KeysConfig {
             hidden: "h".into(),
             details: "i".into(),
             refresh: "r".into(),
-            help: "/".into(),
+            help: "?".into(),
             quit: "q".into(),
+            sort: "S".into(),
+            search: "/".into(),
         }
     }
 }
@@ -353,7 +357,7 @@ fn default_scan_interval() -> u64 {
     5
 }
 fn default_fps() -> u16 {
-    30
+    60
 }
 fn default_border_style() -> String {
     "rounded".into()

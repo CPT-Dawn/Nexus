@@ -18,10 +18,12 @@ const KEYBINDINGS: &[(&str, &str)] = &[
     ("h", "Connect to hidden network"),
     ("i", "Toggle detail panel"),
     ("r", "Refresh connection info"),
+    ("/", "Search / filter networks"),
+    ("S", "Cycle sort mode"),
     ("Ctrl+H", "Show/hide password"),
     ("Tab", "Switch fields (in dialogs)"),
     ("Esc", "Close dialog / cancel"),
-    ("/ or ?", "Toggle this help"),
+    ("?", "Toggle this help"),
     ("q", "Quit Nexus"),
 ];
 

@@ -33,7 +33,17 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    let selected = &app.networks[app.selected_index.min(app.networks.len().saturating_sub(1))];
+    let selected = match app.selected_network() {
+        Some(net) => net,
+        None => {
+            let para = Paragraph::new("No network selected")
+                .block(block)
+                .style(t.style_dim())
+                .alignment(Alignment::Center);
+            frame.render_widget(para, area);
+            return;
+        }
+    };
 
     let mut lines: Vec<Line> = vec![
         Line::from(""),

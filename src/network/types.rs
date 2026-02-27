@@ -4,8 +4,8 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum SecurityType {
     Open,
-    WEP,
-    WPA,
+    Wep,
+    Wpa,
     WPA2,
     WPA3,
     WPA2Enterprise,
@@ -16,8 +16,8 @@ impl fmt::Display for SecurityType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Open => write!(f, "Open"),
-            Self::WEP => write!(f, "WEP"),
-            Self::WPA => write!(f, "WPA"),
+            Self::Wep => write!(f, "WEP"),
+            Self::Wpa => write!(f, "WPA"),
             Self::WPA2 => write!(f, "WPA2"),
             Self::WPA3 => write!(f, "WPA3"),
             Self::WPA2Enterprise => write!(f, "WPA2-EAP"),
@@ -47,36 +47,13 @@ impl SecurityType {
             if wpa_flags & 0x200 != 0 {
                 return Self::WPA2Enterprise;
             }
-            return Self::WPA;
+            return Self::Wpa;
         }
         // NM80211ApFlags: Privacy = 0x1
         if flags & 0x1 != 0 {
-            return Self::WEP;
+            return Self::Wep;
         }
         Self::Open
-    }
-}
-
-/// Signal strength level for display
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum SignalLevel {
-    None,
-    Weak,
-    Fair,
-    Good,
-    Excellent,
-}
-
-impl SignalLevel {
-    pub fn from_percentage(pct: u8) -> Self {
-        match pct {
-            0..=19 => Self::None,
-            20..=39 => Self::Weak,
-            40..=59 => Self::Fair,
-            60..=79 => Self::Good,
-            80..=100 => Self::Excellent,
-            _ => Self::Excellent,
-        }
     }
 }
 
@@ -162,10 +139,6 @@ impl WiFiNetwork {
     pub fn band(&self) -> FrequencyBand {
         FrequencyBand::from_mhz(self.frequency)
     }
-
-    pub fn signal_level(&self) -> SignalLevel {
-        SignalLevel::from_percentage(self.signal_strength)
-    }
 }
 
 /// Information about the current active connection
@@ -203,19 +176,4 @@ impl ConnectionStatus {
     pub fn is_busy(&self) -> bool {
         matches!(self, Self::Connecting(_) | Self::Disconnecting)
     }
-
-    pub fn ssid(&self) -> Option<&str> {
-        match self {
-            Self::Connected(info) => Some(&info.ssid),
-            Self::Connecting(ssid) => Some(ssid),
-            _ => None,
-        }
-    }
-}
-
-/// Events from the network backend
-#[derive(Debug, Clone)]
-pub enum NetworkEvent {
-    ScanComplete(Vec<WiFiNetwork>),
-    ConnectionChanged(ConnectionStatus),
 }
