@@ -63,8 +63,7 @@ border_style = "rounded"
 
 # Background for all UI elements.
 # "reset" = use terminal default (transparency-friendly).
-# The Cosmic Dawn default uses a deep void-purple.
-bg = "#0D0B14"
+bg = "reset"
 
 # Primary foreground text color.
 fg = "#E0DEE6"
