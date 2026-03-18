@@ -398,9 +398,9 @@ impl Config {
             .join("config.toml")
     }
 
-    /// Log directory: ~/.local/share/nexus/
+    /// Log directory: ~/.local/state/nexus/
     pub fn log_dir() -> PathBuf {
-        let data_dir = dirs::data_local_dir()
+        let data_dir = dirs::state_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("nexus");
         std::fs::create_dir_all(&data_dir).ok();
