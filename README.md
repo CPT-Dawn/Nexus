@@ -58,6 +58,14 @@ Built in safe, modern Rust (2024 edition) with `zbus` for type-safe, pure-Rust D
 
 ## Installation
 
+### Arch Linux (AUR)
+
+```bash
+paru -S nexus-nm
+# Or
+yay -S nexus-nm
+```
+
 ### Building from Source
 
 ```bash
@@ -73,15 +81,6 @@ sudo install -Dm755 target/release/nexus /usr/local/bin/nexus
 ```
 
 The release profile ships with `opt-level = 3`, full LTO, symbol stripping, and single codegen unit for a minimal binary.
-
-### Arch Linux (AUR)
-
-```bash
-yay -S nexus
-```
-
-> [!NOTE]
-> The AUR package name is a placeholder and will be updated once the package is published.
 
 ### Uninstall
 
