@@ -69,19 +69,19 @@ bg = "reset"
 fg = "#E0DEE6"
 
 # Dimmed text (labels, inactive elements, descriptions).
-fg_dim = "#4A4458"
+fg_dim = "#ffffff"
 
 # Accent color — selected items, active borders, keybinding hints.
 accent = "#00FFFF"
 
 # Secondary accent — section headers in the detail panel.
-accent_secondary = "#FF4500"
+accent_secondary = "#ff0000"
 
 # Inactive border color.
-border = "#2A2438"
+border = "#088a8a"
 
 # Focused/active panel border color.
-border_focused = "#00FFFF"
+border_focused = "#088a8a"
 
 # ─── Semantic Colors ────────────────────────────────────────────────────
 [theme.semantic]
@@ -93,10 +93,10 @@ connected = "#00FF9F"
 warning = "#FFB347"
 
 # Error text and indicators.
-error = "#FF4500"
+error = "#ff0000"
 
 # Background color of the currently selected list item.
-selected_bg = "#1E1A2E"
+selected_bg = "#265f75"
 
 # ─── Signal Strength Colors ────────────────────────────────────────────
 # Gradient from strongest to weakest signal.
