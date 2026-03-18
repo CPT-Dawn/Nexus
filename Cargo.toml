@@ -2,7 +2,7 @@
 name = "nexus"
 version = "1.0.0"
 edition = "2024"
-authors = ["Swastik Patel"]
+authors = ["CPT-Dawn"]
 description = "A beautiful modern TUI WiFi manager for Arch Linux"
 license = "MIT"
 repository = "https://github.com/CPT-Dawn/Nexus"
