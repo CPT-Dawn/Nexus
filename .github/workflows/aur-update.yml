@@ -41,8 +41,30 @@ jobs:
               run: |
                   set -euo pipefail
                   mkdir -p "$HOME/.ssh"
-                  printf '%s\n' "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > "$HOME/.ssh/aur"
+
+                  # Accept either raw private key or base64-encoded private key.
+                  # Also normalize CRLF in case the secret was pasted from Windows.
+                  key_raw='${{ secrets.AUR_SSH_PRIVATE_KEY }}'
+                  if [[ -z "$key_raw" ]]; then
+                    echo "AUR_SSH_PRIVATE_KEY is empty." >&2
+                    exit 1
+                  fi
+
+                  if grep -q "BEGIN .*PRIVATE KEY" <<< "$key_raw"; then
+                    printf '%s\n' "$key_raw" | tr -d '\r' > "$HOME/.ssh/aur"
+                  else
+                    printf '%s' "$key_raw" | tr -d '\r\n' | base64 -d > "$HOME/.ssh/aur"
+                  fi
+
                   chmod 600 "$HOME/.ssh/aur"
+
+                  # Fail early with a clear message if key parsing fails.
+                  if ! ssh-keygen -y -f "$HOME/.ssh/aur" >/dev/null 2>&1; then
+                    echo "Invalid private key in AUR_SSH_PRIVATE_KEY." >&2
+                    echo "Store the full key including BEGIN/END lines, or base64-encode it first." >&2
+                    exit 1
+                  fi
+
                   ssh-keyscan -t rsa,ed25519 aur.archlinux.org >> "$HOME/.ssh/known_hosts"
 
                   cat > "$HOME/.ssh/config" << 'EOF'
