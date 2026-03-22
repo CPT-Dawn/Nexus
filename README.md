@@ -66,6 +66,25 @@ paru -S nexus-nm
 yay -S nexus-nm
 ```
 
+### AUR Auto-Update on GitHub Release
+
+This repository includes a workflow at `.github/workflows/aur-update.yml` that updates the AUR package automatically when you publish a GitHub release.
+
+Requirements:
+
+- Add a repository secret named `AUR_SSH_PRIVATE_KEY`.
+- The key must be the private SSH key for your AUR account (the matching public key must be registered in your AUR profile).
+- Release tags must follow the format `vX.Y.Z` (example: `v1.0.1`).
+
+What it does:
+
+- Clones `ssh://aur@aur.archlinux.org/nexus-nm.git`
+- Regenerates `PKGBUILD` and `.SRCINFO`
+- Downloads the GitHub release tarball and computes `sha256sums`
+- Commits and pushes to AUR automatically
+
+You can also run it manually from the Actions tab using `workflow_dispatch` and passing a tag.
+
 ### Building from Source
 
 ```bash
