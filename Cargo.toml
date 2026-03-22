@@ -1,6 +1,6 @@
 [package]
 name = "nexus"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 authors = ["CPT-Dawn"]
 description = "A beautiful modern TUI WiFi manager for Arch Linux"
