@@ -224,6 +224,24 @@ fn airplane_mode_switches_every_radio_and_back() {
 }
 
 #[test]
+fn airplane_mode_turns_bluetooth_off_and_back_to_what_it_was() {
+    let mut world = World::builder(NEXUS).bluez(true).start();
+    world.nm.add_wifi_device("wlan0");
+    let mut wire = world.wire();
+    assert!(world.bluez().powered());
+    wire.call(json!({"op": "airplane", "on": true}));
+    assert!(!world.bluez().powered(), "Bluetooth stayed on");
+    wire.call(json!({"op": "airplane", "on": false}));
+    assert!(world.bluez().powered(), "Bluetooth was not restored");
+
+    // Off before airplane mode: stays off after it.
+    world.bluez().set_powered(false);
+    wire.call(json!({"op": "airplane", "on": true}));
+    wire.call(json!({"op": "airplane", "on": false}));
+    assert!(!world.bluez().powered(), "airplane mode switched Bluetooth on");
+}
+
+#[test]
 fn a_hardware_block_is_told_apart_from_a_software_one() {
     let (world, _) = online_world();
     let mut wire = world.wire();

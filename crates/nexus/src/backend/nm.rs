@@ -165,6 +165,9 @@ pub struct NetworkManager {
     /// yet. Lives outside `changed()` so that cancelling it mid-wait loses
     /// nothing.
     burst: std::sync::atomic::AtomicBool,
+    /// The Bluetooth adapters that were powered when airplane mode went on,
+    /// to power again when it goes off.
+    bt_before: std::sync::Mutex<Option<Vec<OwnedObjectPath>>>,
     /// logind's `PrepareForSleep`, for noticing a resume.
     sleep_watch: Mutex<Option<Signals>>,
 }
@@ -182,6 +185,7 @@ impl NetworkManager {
             conn: Mutex::default(),
             watch: Mutex::default(),
             burst: std::sync::atomic::AtomicBool::new(false),
+            bt_before: std::sync::Mutex::default(),
             sleep_watch: Mutex::default(),
         }
     }
@@ -638,9 +642,28 @@ impl Backend for NetworkManager {
     }
 
     async fn airplane(&self, on: bool) -> Result<Radios, BackendError> {
-        self.with_bus(|c| async move { Self::set_radios(&c, !on, Some(!on)).await })
+        let radios = self
+            .with_bus(|c| async move { Self::set_radios(&c, !on, Some(!on)).await })
             .await?
-            .map_err(BackendError::Refused)
+            .map_err(BackendError::Refused)?;
+        // Bluetooth follows, through BlueZ: off on entering, and back to what
+        // it was on leaving. NetworkManager does not own that radio.
+        let conn = self.connection().await.ok();
+        if let Some(conn) = conn {
+            let before = self.bt_before.lock().expect("bt lock").take();
+            if on {
+                let mut was_on = super::tether::airplane_adapters(&conn, false, None).await;
+                if let Some(mut earlier) = before {
+                    // Entering twice must not forget what the first time found.
+                    earlier.retain(|p| !was_on.contains(p));
+                    was_on.extend(earlier);
+                }
+                *self.bt_before.lock().expect("bt lock") = Some(was_on);
+            } else {
+                super::tether::airplane_adapters(&conn, true, before).await;
+            }
+        }
+        Ok(radios)
     }
 
     async fn arm(&self) {

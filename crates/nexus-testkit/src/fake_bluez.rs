@@ -21,6 +21,11 @@ impl Adapter {
     fn powered(&self) -> bool {
         *self.0.lock().unwrap()
     }
+
+    #[zbus(property)]
+    fn set_powered(&mut self, on: bool) {
+        *self.0.lock().unwrap() = on;
+    }
 }
 
 /// Handle on the fake BlueZ. Methods are synchronous, like [`crate::FakeNm`].
@@ -62,6 +67,11 @@ impl FakeBluez {
                 let _ = i.get().await.powered_changed(i.signal_emitter()).await;
             }
         });
+    }
+
+    /// Whether the adapter is powered right now (the Daemon may have changed it).
+    pub fn powered(&self) -> bool {
+        *self.powered.lock().unwrap()
     }
 
     /// The Bluetooth service going away: the name is released.

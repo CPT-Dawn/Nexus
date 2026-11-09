@@ -146,6 +146,88 @@ async fn bluetooth(conn: &Connection) -> Bluetooth {
     }
 }
 
+/// Powers BlueZ adapters for airplane mode. Leaving (`on`) restores the
+/// adapters in `before` (those that were powered when it was entered), or
+/// every adapter when nothing is remembered; entering powers all off and
+/// returns the ones that were on. Best effort: a machine without Bluetooth,
+/// or a refusing adapter, is not an error.
+pub async fn airplane_adapters(
+    conn: &Connection,
+    on: bool,
+    before: Option<Vec<OwnedObjectPath>>,
+) -> Vec<OwnedObjectPath> {
+    use zbus::fdo::{DBusProxy, ObjectManagerProxy};
+    let Ok(bus) = DBusProxy::new(conn).await else {
+        return Vec::new();
+    };
+    let Ok(name) = zbus::names::BusName::try_from(BLUEZ) else {
+        return Vec::new();
+    };
+    // Never start the Bluetooth service by D-Bus activation.
+    if !bus.name_has_owner(name).await.unwrap_or(false) {
+        return Vec::new();
+    }
+    let managed = async {
+        ObjectManagerProxy::builder(conn)
+            .destination(BLUEZ)
+            .path("/")
+            .cache_properties(CacheProperties::No)
+            .build()
+            .await?
+            .get_managed_objects()
+            .await
+    }
+    .await;
+    let Ok(objects) = managed else {
+        return Vec::new();
+    };
+    let mut was_on = Vec::new();
+    for (path, interfaces) in objects {
+        let Some(props) = interfaces.get("org.bluez.Adapter1") else {
+            continue;
+        };
+        let powered = props
+            .get("Powered")
+            .and_then(|v| bool::try_from(v.try_clone().ok()?).ok())
+            .unwrap_or(false);
+        let want = if on {
+            before.as_ref().is_none_or(|b| b.contains(&path))
+        } else {
+            false
+        };
+        if !on && powered {
+            was_on.push(path.clone());
+        }
+        if powered == want {
+            continue;
+        }
+        let Ok(adapter) = no_cache_adapter(conn, path.as_str()).await else {
+            continue;
+        };
+        if let Err(e) = adapter.set_powered(want).await {
+            tracing::debug!("Bluetooth adapter refused airplane mode: {e}");
+        }
+    }
+    was_on
+}
+
+async fn no_cache_adapter(
+    conn: &Connection,
+    path: &str,
+) -> zbus::Result<AdapterProxy<'static>> {
+    AdapterProxy::builder(conn)
+        .path(path.to_owned())
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await
+}
+
+#[zbus::proxy(interface = "org.bluez.Adapter1", default_service = "org.bluez")]
+trait Adapter {
+    #[zbus(property)]
+    fn set_powered(&self, on: bool) -> zbus::Result<()>;
+}
+
 async fn phones(conn: &Connection) -> zbus::Result<Vec<Found>> {
     let nm = super::nm::NetworkManagerProxy::builder(conn)
         .cache_properties(CacheProperties::No)
