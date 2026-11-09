@@ -283,8 +283,12 @@ impl EapForm {
             }
             Row::Phase2 => {
                 let inner = self.method.inner();
-                let at = inner.iter().position(|p| Some(*p) == self.phase2).unwrap_or(0);
-                self.phase2 = Some(inner[(at + if forward { 1 } else { inner.len() - 1 }) % inner.len()]);
+                let at = inner
+                    .iter()
+                    .position(|p| Some(*p) == self.phase2)
+                    .unwrap_or(0);
+                self.phase2 =
+                    Some(inner[(at + if forward { 1 } else { inner.len() - 1 }) % inner.len()]);
             }
             Row::SkipCheck => self.skip_check = !self.skip_check,
             _ => {}
@@ -303,10 +307,7 @@ impl EapForm {
         for row in &rows {
             self.see(*row);
         }
-        if let Some(at) = rows
-            .iter()
-            .position(|r| r.field() == Some(errors[0].field))
-        {
+        if let Some(at) = rows.iter().position(|r| r.field() == Some(errors[0].field)) {
             self.focus = at;
         }
         None

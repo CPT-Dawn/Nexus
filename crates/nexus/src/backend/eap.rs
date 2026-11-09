@@ -59,7 +59,11 @@ pub fn setting(eap: &Eap) -> HashMap<String, OwnedVariant> {
     }
     // Server checking: the given CA, else the system's CAs pinned by name,
     // else (only when asked for) nothing.
-    let ca = eap.ca_cert.as_deref().map(str::trim).filter(|c| !c.is_empty());
+    let ca = eap
+        .ca_cert
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty());
     if !eap.no_ca_validation {
         match ca {
             Some(path) => {

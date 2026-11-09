@@ -48,17 +48,18 @@ pub(super) fn draw(f: &mut Frame, form: &EapForm, body: Rect, look: &Look, sym: 
         }
         let pointer = if here { sym.pointer() } else { "  " };
         let label_style = if here { look.accent() } else { look.muted() };
-        let (open, close) = if ascii { ("< ", " >") } else { ("‹ ", " ›") };
+        let (open, close) = if ascii {
+            ("< ", " >")
+        } else {
+            ("‹ ", " ›")
+        };
         let value: Vec<Span> = match row {
             Row::Method => vec![Span::styled(
                 format!("{open}{}{close}", form.method().label()),
                 look.text(),
             )],
             Row::Phase2 => vec![Span::styled(
-                format!(
-                    "{open}{}{close}",
-                    form.phase2().map_or("-", |p| p.label())
-                ),
+                format!("{open}{}{close}", form.phase2().map_or("-", |p| p.label())),
                 look.text(),
             )],
             Row::SkipCheck => {
@@ -67,7 +68,11 @@ pub(super) fn draw(f: &mut Frame, form: &EapForm, body: Rect, look: &Look, sym: 
                 } else {
                     ("[ ] ", "check the server (recommended)")
                 };
-                let style = if form.skips_check() { look.warn() } else { look.text() };
+                let style = if form.skips_check() {
+                    look.warn()
+                } else {
+                    look.text()
+                };
                 vec![Span::styled(format!("{mark}{text}"), style)]
             }
             _ => {
@@ -78,7 +83,10 @@ pub(super) fn draw(f: &mut Frame, form: &EapForm, body: Rect, look: &Look, sym: 
                     text.to_owned()
                 };
                 // Keep the end of a long value in view.
-                let skip = shown.chars().count().saturating_sub(value_room.saturating_sub(1));
+                let skip = shown
+                    .chars()
+                    .count()
+                    .saturating_sub(value_room.saturating_sub(1));
                 let shown: String = shown.chars().skip(skip).collect();
                 let mut spans = Vec::new();
                 if shown.is_empty() && !here {
@@ -141,7 +149,10 @@ trait SplitRow {
 impl SplitRow for Rect {
     fn split_at_row(self, row: u16) -> (Rect, Rect) {
         (
-            Rect { height: row, ..self },
+            Rect {
+                height: row,
+                ..self
+            },
             Rect {
                 y: self.y + row,
                 height: self.height - row,

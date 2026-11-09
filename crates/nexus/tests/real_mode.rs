@@ -191,3 +191,100 @@ fn cancelling_the_first_prompt_reads_as_needing_a_password() {
     let resp = join.join().unwrap();
     assert_eq!(resp["err"]["code"], "password_required", "{resp}");
 }
+
+// ---- WPA-Enterprise (ticket #16): hostapd's built-in EAP server ----------------
+
+const EAP: &str = "NexusEap";
+const EAP_USER: &str = "student";
+const EAP_PASSWORD: &str = "correct-horse-4";
+/// Where `rig/inner.sh` puts the throwaway CA and the "student" certificate.
+const PKI: &str = "/run/nexus-rig/pki";
+
+fn eap_world() -> Option<RealWorld> {
+    let world = RealWorld::start(NEXUS)?;
+    let _ = world.wire().call(json!({"op": "wifi_scan"}));
+    eventually("NexusEap in range", || row(&list(&world), EAP));
+    let _ = world.wire().call(json!({"op": "wifi_disconnect"}));
+    let _ = world
+        .wire()
+        .call(json!({"op": "wifi_forget", "network": id(EAP)}));
+    Some(world)
+}
+
+fn join_eap(world: &RealWorld, eap: Value) -> Value {
+    world
+        .wire()
+        .call(json!({"op": "wifi_join_eap", "network": id(EAP), "eap": eap}))
+}
+
+fn peap(password: &str) -> Value {
+    json!({
+        "method": "peap",
+        "phase2": "mschapv2",
+        "identity": EAP_USER,
+        "password": password,
+        "ca_cert": format!("{PKI}/ca.pem"),
+        "domain_suffix": "nexus.test",
+    })
+}
+
+#[test]
+fn peap_joins_the_enterprise_network_and_forget_removes_it() {
+    let Some(world) = eap_world() else { return };
+    let resp = join_eap(&world, peap(EAP_PASSWORD));
+    assert_eq!(resp["ok"]["ssid"], EAP, "{resp}\n{}", world.daemon_log());
+    let r = row(&list(&world), EAP).expect("still listed");
+    assert_eq!(r["joined"], true, "{r}");
+    assert_eq!(r["security"], "enterprise", "{r}");
+    let gone = world
+        .wire()
+        .call(json!({"op": "wifi_forget", "network": id(EAP)}));
+    assert_eq!(gone["ok"]["ssid"], EAP, "{gone}");
+}
+
+#[test]
+fn a_wrong_enterprise_password_is_a_refused_sign_in_with_no_profile() {
+    let Some(world) = eap_world() else { return };
+    let resp = join_eap(&world, peap("not-the-password"));
+    assert_eq!(
+        resp["err"]["code"],
+        "wrong_password",
+        "{resp}\n{}",
+        world.daemon_log()
+    );
+    assert!(resp["err"]["message"].as_str().unwrap().contains("sign-in"));
+    let r = row(&list(&world), EAP).expect("still listed");
+    assert!(
+        r.get("profile").is_none(),
+        "a failed join must not linger: {r}"
+    );
+}
+
+#[test]
+fn the_server_certificate_is_really_checked() {
+    let Some(world) = eap_world() else { return };
+    // The right password, but the system's CAs do not know the rig's CA.
+    let mut eap = peap(EAP_PASSWORD);
+    eap.as_object_mut().unwrap().remove("ca_cert");
+    let resp = join_eap(&world, eap);
+    assert!(resp.get("err").is_some(), "{resp}\n{}", world.daemon_log());
+    let r = row(&list(&world), EAP).expect("still listed");
+    assert!(r.get("profile").is_none(), "{r}");
+}
+
+#[test]
+fn tls_joins_with_a_client_certificate() {
+    let Some(world) = eap_world() else { return };
+    let resp = join_eap(
+        &world,
+        json!({
+            "method": "tls",
+            "identity": EAP_USER,
+            "ca_cert": format!("{PKI}/ca.pem"),
+            "domain_suffix": "nexus.test",
+            "client_cert": format!("{PKI}/student.pem"),
+            "private_key": format!("{PKI}/student.key"),
+        }),
+    );
+    assert_eq!(resp["ok"]["ssid"], EAP, "{resp}\n{}", world.daemon_log());
+}

@@ -13,8 +13,8 @@ use nexus_ipc::{
 };
 
 use super::caps::Caps;
-use super::theme::{Look, Theme};
 use super::eap_form::{EapForm, Typed};
+use super::theme::{Look, Theme};
 use super::wifi::{Cmd, Confirm, Done, Entry, PasswordField, Runner, SWEEP_FRAME, Toast, WifiTab};
 
 /// How long a toast stays when nobody answers it.

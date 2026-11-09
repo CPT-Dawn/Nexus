@@ -56,8 +56,14 @@ fn peap_joins_eduroam_and_sends_networkmanager_the_whole_setting() {
     assert_eq!(got("eap").as_deref(), Some("peap"));
     assert_eq!(got("phase2-auth").as_deref(), Some("mschapv2"));
     assert_eq!(got("identity").as_deref(), Some("alice@uni.example"));
-    assert_eq!(got("anonymous-identity").as_deref(), Some("anonymous@uni.example"));
-    assert_eq!(got("domain-suffix-match").as_deref(), Some("radius.uni.example"));
+    assert_eq!(
+        got("anonymous-identity").as_deref(),
+        Some("anonymous@uni.example")
+    );
+    assert_eq!(
+        got("domain-suffix-match").as_deref(),
+        Some("radius.uni.example")
+    );
     assert_eq!(got("system-ca-certs").as_deref(), Some("true"));
     assert_eq!(got("ca-cert"), None);
 }
@@ -71,7 +77,10 @@ fn a_refused_sign_in_is_a_wrong_password_and_leaves_no_profile() {
     let resp = join_eap(&world, "eduroam", peap());
     assert_eq!(resp["err"]["code"], "wrong_password", "{resp}");
     let message = resp["err"]["message"].as_str().unwrap();
-    assert!(message.contains("eduroam") && message.contains("sign-in"), "{message}");
+    assert!(
+        message.contains("eduroam") && message.contains("sign-in"),
+        "{message}"
+    );
     assert!(!message.contains("hunter2"));
     assert_eq!(world.nm.profile_count(), 0);
 }
@@ -85,7 +94,10 @@ fn settings_that_fail_validation_never_reach_networkmanager() {
     let resp = join_eap(&world, "eduroam", eap);
     assert_eq!(resp["err"]["code"], "invalid_settings", "{resp}");
     let message = resp["err"]["message"].as_str().unwrap();
-    assert!(message.contains("identity") && message.contains("server name"), "{message}");
+    assert!(
+        message.contains("identity") && message.contains("server name"),
+        "{message}"
+    );
     assert_eq!(world.nm.profile_count(), 0);
 }
 
@@ -98,7 +110,10 @@ fn skipping_validation_must_be_said_out_loud_and_then_works() {
     let resp = join_eap(&world, "eduroam", eap);
     assert_eq!(resp["ok"]["ssid"], "eduroam", "{resp}");
     assert_eq!(
-        world.nm.eap_setting("eduroam", "system-ca-certs").as_deref(),
+        world
+            .nm
+            .eap_setting("eduroam", "system-ca-certs")
+            .as_deref(),
         Some("false")
     );
     assert_eq!(world.nm.eap_setting("eduroam", "domain-suffix-match"), None);
@@ -179,7 +194,11 @@ fn the_cli_joins_with_flags_and_reads_the_password_from_stdin() {
         .unwrap();
     child.stdin.take().unwrap().write_all(b"hunter2\n").unwrap();
     let out = child.wait_with_output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert_eq!(world.nm.joined_ssid(wlan0).as_deref(), Some("eduroam"));
 }
 
@@ -188,7 +207,15 @@ fn the_cli_explains_a_bad_form_and_exits_13() {
     let (world, _) = world();
     let out = world
         .nexus()
-        .args(["wifi", "join", "eduroam", "--eap", "peap", "--password", "x"])
+        .args([
+            "wifi",
+            "join",
+            "eduroam",
+            "--eap",
+            "peap",
+            "--password",
+            "x",
+        ])
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(13));

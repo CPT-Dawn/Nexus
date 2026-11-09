@@ -266,7 +266,9 @@ pub fn invalid_eap(ssid: &str, errors: &[nexus_ipc::EapError]) -> Failure {
 pub fn not_enterprise(ssid: &str, what: &str) -> Failure {
     fail(
         ErrorCode::InvalidSettings,
-        format!("{ssid} is not an enterprise Network (it uses {what}), so it has no sign-in settings."),
+        format!(
+            "{ssid} is not an enterprise Network (it uses {what}), so it has no sign-in settings."
+        ),
     )
 }
 

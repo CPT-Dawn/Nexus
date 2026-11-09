@@ -159,11 +159,7 @@ impl Eap {
             (None, false) => bad(EapField::Phase2, "Pick the inner method."),
             (Some(p), false) if !inner.contains(&p) => bad(
                 EapField::Phase2,
-                &format!(
-                    "{} cannot run inside {}.",
-                    p.label(),
-                    self.method.label()
-                ),
+                &format!("{} cannot run inside {}.", p.label(), self.method.label()),
             ),
             (Some(_), true) => bad(EapField::Phase2, "TLS has no inner method."),
             _ => {}
@@ -194,7 +190,11 @@ impl Eap {
         }
         if self.method == EapMethod::Tls {
             for (field, path, what) in [
-                (EapField::ClientCert, &self.client_cert, "client certificate"),
+                (
+                    EapField::ClientCert,
+                    &self.client_cert,
+                    "client certificate",
+                ),
                 (EapField::PrivateKey, &self.private_key, "private key"),
             ] {
                 match path.as_deref().filter(|p| !p.trim().is_empty()) {

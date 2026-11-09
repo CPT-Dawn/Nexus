@@ -15,8 +15,8 @@ use serde_json::Value;
 
 mod doctor;
 mod eap;
-pub use eap::{Eap, EapError, EapField, EapMethod, Phase2};
 pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
+pub use eap::{Eap, EapError, EapField, EapMethod, Phase2};
 
 /// The protocol version this crate speaks.
 pub const PROTOCOL: u32 = 1;

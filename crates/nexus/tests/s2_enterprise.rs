@@ -278,7 +278,10 @@ fn enter_with_a_bad_form_stays_open_and_shows_every_error() {
     for want in ["Enter your identity", "Enter your password", "server name"] {
         assert!(frame.contains(want), "{want}:\n{frame}");
     }
-    assert_eq!(rig.world.nm.joined_ssid(rig.dev()).as_deref(), Some("Home-5G"));
+    assert_eq!(
+        rig.world.nm.joined_ssid(rig.dev()).as_deref(),
+        Some("Home-5G")
+    );
 }
 
 #[test]
@@ -327,7 +330,9 @@ fn a_filled_form_joins_and_the_password_never_shows() {
     rig.ctrl('r');
     assert!(rig.text(STANDARD).contains("correct-horse"));
     rig.key(KeyCode::Enter);
-    rig.pump_until("the join", |a| a.eap_form().is_none() && a.toast().is_some());
+    rig.pump_until("the join", |a| {
+        a.eap_form().is_none() && a.toast().is_some()
+    });
     assert_eq!(rig.toast(), "Joined eduroam.");
     assert_eq!(
         rig.world.nm.joined_ssid(rig.dev()).as_deref(),

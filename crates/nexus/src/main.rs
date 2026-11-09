@@ -214,7 +214,10 @@ impl JoinArgs {
         eap.no_ca_validation = self.no_ca_validation;
         eap.client_cert.clone_from(&self.client_cert);
         eap.private_key.clone_from(&self.private_key);
-        eap.private_key_password = self.private_key_password.clone().map(nexus_ipc::Secret::new);
+        eap.private_key_password = self
+            .private_key_password
+            .clone()
+            .map(nexus_ipc::Secret::new);
         Some(eap)
     }
 }

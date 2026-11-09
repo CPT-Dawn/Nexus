@@ -373,8 +373,15 @@ impl Manager {
             && connection.contains_key("802-11-wireless-security")
             && text("802-11-wireless-security", "psk").is_none();
         if let Some(eap) = eap {
-            let shown = eap.iter().map(|(k, v)| (k.clone(), show_variant(v))).collect();
-            self.0.lock().unwrap().eap_settings.insert(ssid.clone(), shown);
+            let shown = eap
+                .iter()
+                .map(|(k, v)| (k.clone(), show_variant(v)))
+                .collect();
+            self.0
+                .lock()
+                .unwrap()
+                .eap_settings
+                .insert(ssid.clone(), shown);
         }
         let n = {
             let mut m = self.0.lock().unwrap();
