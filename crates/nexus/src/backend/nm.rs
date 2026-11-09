@@ -390,6 +390,42 @@ impl Backend for NetworkManager {
             .map_err(BackendError::Refused)
     }
 
+    async fn profile_get(&self, network: String) -> Result<nexus_ipc::ProfileView, BackendError> {
+        self.with_bus(|c| async move { super::wifi::profile::get(&c, &network).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn profile_update(
+        &self,
+        network: String,
+        version: u64,
+        settings: nexus_ipc::ProfileSettings,
+        rollback_secs: u32,
+    ) -> Result<super::ProfileChanged, BackendError> {
+        let changed = self
+            .with_bus(|c| async move {
+                super::wifi::profile::update(&c, &network, version, &settings, rollback_secs).await
+            })
+            .await?
+            .map_err(BackendError::Refused)?;
+        Ok(super::ProfileChanged {
+            ssid: changed.ssid,
+            version: changed.version,
+            checkpoint: changed.checkpoint,
+        })
+    }
+
+    async fn checkpoint_confirm(&self, checkpoint: String) -> Result<(), BackendError> {
+        self.with_bus(|c| async move { super::wifi::profile::confirm(&c, &checkpoint).await })
+            .await
+    }
+
+    async fn checkpoint_rollback(&self, checkpoint: String) -> Result<(), BackendError> {
+        self.with_bus(|c| async move { super::wifi::profile::rollback(&c, &checkpoint).await })
+            .await
+    }
+
     async fn wifi_power(&self, on: bool) -> Result<Radios, BackendError> {
         self.with_bus(|c| async move { Self::set_radios(&c, on, None).await })
             .await?

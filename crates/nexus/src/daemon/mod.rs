@@ -1,6 +1,7 @@
 //! The Daemon: owns the socket and the Backend, answers Front ends.
 
 mod activity;
+mod profile;
 mod socket;
 mod traffic;
 
@@ -86,7 +87,7 @@ async fn serve() -> std::io::Result<()> {
                 let broker = broker.clone();
                 tokio::spawn(async move {
                     let subscribe = || broker.subscribe();
-                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, &live, req)).await {
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| dispatch(&backend, &settings, &broker, &live, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -167,6 +168,7 @@ struct Live {
     traffic: traffic::Sampler,
     activity: activity::Log,
     doctor: crate::doctor::Memory,
+    profile: Arc<profile::Gate>,
 }
 
 impl Live {
@@ -174,6 +176,7 @@ impl Live {
         Self {
             traffic: traffic::Sampler::default(),
             activity: activity::Log::default(),
+            profile: Arc::new(profile::Gate::new(events.clone())),
             doctor: crate::doctor::Memory::new(events),
         }
     }
@@ -206,6 +209,22 @@ async fn watch_backend<B: Backend>(
         {
             tracing::debug!("no scan after resume: {e}");
         }
+    }
+}
+
+/// Routes a request: Profile settings ops need the shared Backend handle
+/// (their timers outlive the request), everything else is [`answer`].
+async fn dispatch<B: Backend>(
+    backend: &Arc<B>,
+    settings: &Settings,
+    broker: &Broker,
+    live: &Live,
+    req: Request,
+) -> Response {
+    if profile::handles(&req.op) {
+        profile::answer(backend, &live.profile, req).await
+    } else {
+        answer(&**backend, settings, broker, live, req).await
     }
 }
 

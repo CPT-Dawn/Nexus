@@ -8,7 +8,8 @@ mod wifi;
 use std::future::Future;
 
 use nexus_ipc::{
-    AutoconnectSet, Disconnected, Forgotten, Joined, Radios, ScanOutcome, Secret, Status, WifiList,
+    AutoconnectSet, Disconnected, Forgotten, Joined, ProfileSettings, ProfileView, Radios,
+    ScanOutcome, Secret, Status, WifiList,
 };
 
 use crate::text::Failure;
@@ -145,4 +146,43 @@ pub trait Backend: Send + Sync + 'static {
     /// Resolves after the Backend changed, once per burst: a storm of
     /// property changes is coalesced into a single tick. Cancel-safe.
     fn changed(&self) -> impl Future<Output = ()> + Send;
+
+    /// The settings of a Network's saved Profile and its version.
+    fn profile_get(
+        &self,
+        network: String,
+    ) -> impl Future<Output = Result<ProfileView, BackendError>> + Send;
+
+    /// Writes `settings` if the Profile is still at `version` (else a
+    /// `conflict`). A Profile carrying the current Link is changed under a
+    /// checkpoint that rolls back after `rollback_secs` unless confirmed.
+    fn profile_update(
+        &self,
+        network: String,
+        version: u64,
+        settings: ProfileSettings,
+        rollback_secs: u32,
+    ) -> impl Future<Output = Result<ProfileChanged, BackendError>> + Send;
+
+    /// Keeps a checkpointed change. Fails when the checkpoint is gone.
+    fn checkpoint_confirm(
+        &self,
+        checkpoint: String,
+    ) -> impl Future<Output = Result<(), BackendError>> + Send;
+
+    /// Reverts a checkpointed change now. Fails when the checkpoint is gone.
+    fn checkpoint_rollback(
+        &self,
+        checkpoint: String,
+    ) -> impl Future<Output = Result<(), BackendError>> + Send;
+}
+
+/// What `profile_update` did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileChanged {
+    pub ssid: String,
+    /// The Profile's version after the change.
+    pub version: u64,
+    /// Set when the change waits for [`Backend::checkpoint_confirm`].
+    pub checkpoint: Option<String>,
 }

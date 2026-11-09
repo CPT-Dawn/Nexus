@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod daemon;
 mod doctor;
+mod profile_cli;
 mod secrets;
 mod text;
 mod wifi_view;
@@ -40,6 +41,11 @@ enum Command {
     Wifi {
         #[command(subcommand)]
         action: WifiAction,
+    },
+    /// Show or change the settings of a saved Network's Profile.
+    Profile {
+        #[command(subcommand)]
+        action: ProfileAction,
     },
     /// Explain why the machine is or is not online, and how to fix it.
     Doctor {
@@ -119,6 +125,20 @@ enum WifiAction {
     },
 }
 
+#[derive(Subcommand)]
+enum ProfileAction {
+    /// Show a Profile's IP, DNS, MAC, metered and priority settings.
+    Show {
+        /// The Network's name (SSID).
+        ssid: String,
+        /// Print the Profile as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Change some of a Profile's settings; what you leave out stays.
+    Set(profile_cli::SetArgs),
+}
+
 #[derive(Clone, Copy, clap::ValueEnum)]
 enum Switch {
     On,
@@ -195,6 +215,12 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Forget { ssid, json },
         } => cli::wifi_forget(&ssid, json),
+        Command::Profile {
+            action: ProfileAction::Show { ssid, json },
+        } => profile_cli::show(&ssid, json),
+        Command::Profile {
+            action: ProfileAction::Set(args),
+        } => profile_cli::set(args),
         Command::Doctor { json, fix } => cli::doctor(json, fix),
         Command::Config {
             action: ConfigAction::Get { key },
