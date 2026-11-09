@@ -4,7 +4,7 @@ expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
 ╭ Wi-Fi ─────╭ Sign in to eduroam ────────────────────────────────────────────────────╮────────────╮
-│   ● Home-5G│ eduroam refused the sign-in. Check your identity and password, and     │            │
+│     Home-5G│ eduroam refused the sign-in. Check your identity and password, and     │            │
 │ ▸   eduroam│ that the server name or CA certificate is the right one.               │            │
 │     Work-Se│                                                                        │            │
 │     Cafe Gu│   Method         ‹ PEAP ›                                              │            │

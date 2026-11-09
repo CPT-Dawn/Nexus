@@ -44,11 +44,26 @@ impl Rig {
         let wlan0 = wifi_enterprise(&world);
         let mut rig = Rig::start(world, Some(wlan0), caps);
         rig.key(KeyCode::Char('2'));
-        // Settled: the scenario's join is visible, so no late list moves a frame.
-        rig.pump_until("the Wi-Fi list", |a| {
-            a.wifi().len() == 9 && a.wifi().rows()[0].joined()
-        });
+        // The join's signals can arrive as several lists, and a frame between
+        // them shows Home-5G without its joined marker (or a row missing):
+        // wait for the joined list, let the Daemon go quiet, check again.
+        loop {
+            rig.pump_until("the Wi-Fi list", |a| {
+                a.wifi().len() == 9 && a.wifi().rows()[0].joined()
+            });
+            rig.settle();
+            if rig.app.wifi().len() == 9 && rig.app.wifi().rows()[0].joined() {
+                break;
+            }
+        }
         rig
+    }
+
+    /// Drains messages until the Daemon has been quiet for 400 ms.
+    fn settle(&mut self) {
+        while let Ok(msg) = self.rx.recv_timeout(std::time::Duration::from_millis(400)) {
+            self.app.update(msg);
+        }
     }
 
     fn start(world: World, wlan0: Option<DeviceId>, caps: Caps) -> Rig {
@@ -331,6 +346,7 @@ fn a_refused_sign_in_reopens_the_form_with_everything_typed() {
     rig.pump_until("the form to come back", |a| {
         a.eap_form().is_some_and(|f| f.banner.is_some())
     });
+    rig.settle();
     let frame = rig.text(STANDARD);
     assert!(frame.contains("refused the sign-in"), "{frame}");
     assert!(
