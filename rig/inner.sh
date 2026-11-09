@@ -92,6 +92,19 @@ wifi.scan-rand-mac-address=no
 [logging]
 level=${NEXUS_RIG_NM_LOG:-DEBUG}
 EOF
+# NetworkManager leaves a device unmanaged until udev has initialised it, and
+# the host's udev never saw this namespace's devices: run a private udevd.
+udevd=""
+for c in /usr/lib/systemd/systemd-udevd /lib/systemd/systemd-udevd "$(command -v udevd || true)"; do
+    [[ -n "$c" && -x "$c" ]] && { udevd="$c"; break; }
+done
+[[ -n "$udevd" ]] || die "systemd-udevd not found"
+mkdir -p /run/udev
+"$udevd" >"$bus_dir/udevd.log" 2>&1 &
+for _ in $(seq 100); do [[ -S /run/udev/control ]] && break; sleep 0.05; done
+udevadm trigger --action=add --subsystem-match=net --subsystem-match=ieee80211
+udevadm settle --timeout=20
+
 nm_up() {
     dbus-send --bus="$DBUS_SYSTEM_BUS_ADDRESS" --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
         org.freedesktop.DBus.NameHasOwner string:org.freedesktop.NetworkManager 2>/dev/null | grep -q 'boolean true'

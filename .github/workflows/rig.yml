@@ -40,7 +40,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            network-manager wpasupplicant hostapd dnsmasq-base iw dbus
+            network-manager wpasupplicant hostapd dnsmasq-base iw dbus udev
           # Not every kernel flavour ships a separate extra-modules package.
           sudo apt-get install -y --no-install-recommends "linux-modules-extra-$(uname -r)" || true
           uname -r; modinfo mac80211_hwsim | head -3 || true
