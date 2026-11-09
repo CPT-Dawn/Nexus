@@ -4,9 +4,9 @@ expression: bottom
 ---
  Nexus  Overview ▾  1/6                           ● Offline
 ╭ All keys (j/k scroll) ───────────────────────────────────╮
-│  Wi-Fi: a             Toggle autoconnect                 │
-│  Wi-Fi: e             Edit the Profile's settings        │
-│  Wi-Fi: s             Share as a QR code (asks first)    │
+│  Ethernet: x          Drop the port's Link               │
+│  Ethernet: s          Sign in to an 802.1X port          │
+│  Ethernet: e          Edit the port's Profile settings   │
 │  VPN: Enter           Bring the VPN up or down           │
 │  VPN: i               Import a WireGuard .conf           │
 │  VPN: c               Create a WireGuard VPN with new ke │

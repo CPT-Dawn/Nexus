@@ -105,9 +105,18 @@ impl EthernetPort {
     }
 }
 
+/// What to tell a person whose port has no cable: shared by the Daemon's
+/// refusals and the Front ends' port details, so every surface says the same.
+pub fn unplugged_message(port: &str) -> String {
+    format!(
+        "No cable detected on {port}. Plug one in, and check that the other end is \
+         connected to a switch or router that is on."
+    )
+}
+
 /// `1000` is `1 Gbps`, `2500` is `2.5 Gbps`, `100` is `100 Mbps`.
 pub fn speed_text(mbps: u32) -> String {
-    if mbps >= 1000 && mbps % 1000 == 0 {
+    if mbps >= 1000 && mbps.is_multiple_of(1000) {
         format!("{} Gbps", mbps / 1000)
     } else if mbps >= 1000 {
         format!("{} Gbps", f64::from(mbps) / 1000.0)

@@ -159,3 +159,40 @@ pub fn tether_world(bin: impl Into<std::path::PathBuf>, powered: bool) -> World 
     }
     world
 }
+
+/// Two Ethernet ports. `enp3s0` has its cable in and a saved Profile
+/// ("Office wall socket"), but the port wants 802.1X, so the network gave it
+/// no address: it reads as plugged in and misconfigured. The login that gets
+/// past it is `alice@office.example` / `hunter2`, server name
+/// `radius.office.example`. `enp4s0` has no cable. Shared by the S2 tests and
+/// `demo ethernet`. Returns the two Devices.
+pub fn ethernet_busy(world: &World) -> (DeviceId, DeviceId) {
+    let nm = &world.nm;
+    let enp3s0 = nm.add_ethernet_device("enp3s0");
+    let enp4s0 = nm.add_ethernet_device("enp4s0");
+    nm.set_port_eap(enp3s0, "alice@office.example", "hunter2");
+    nm.set_lease(
+        enp3s0,
+        crate::Lease {
+            address: "10.20.30.41".into(),
+            prefix: 24,
+            gateway: "10.20.30.1".into(),
+            dns: vec!["10.20.30.2".into(), "10.20.30.3".into()],
+        },
+    );
+    nm.add_ethernet_profile(
+        "55555555-5555-4555-8555-555555555555",
+        "Office wall socket",
+        "enp3s0",
+    );
+    nm.set_carrier(enp4s0, false);
+    // The first try fails, as it would on the real thing: no sign-in, no address.
+    let tried = world
+        .wire()
+        .call(json!({"op": "ethernet_connect", "port": "enp3s0"}));
+    assert!(
+        tried.get("err").is_some(),
+        "joining without a sign-in: {tried}"
+    );
+    (enp3s0, enp4s0)
+}

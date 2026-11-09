@@ -25,6 +25,10 @@ _Avoid_: active connection, session
 **Enterprise Network**:
 A Network that makes each person sign in with their own identity and a password or certificate, such as eduroam or an office Wi-Fi or Ethernet port. Joined through a guided sign-in form.
 _Avoid_: WPA-Enterprise, 802.1X, EAP (in the UI; fine in code and the CLI flags)
+**Unplugged / Misconfigured**:
+The two ways an Ethernet Device can fail to carry a Network. Unplugged: no cable, or nothing alive at its other end; nothing can be joined. Misconfigured: a cable is in but joining did not work, because the network gave no address or the port wants a sign-in (802.1X) it did not get. Every Front end tells them apart, since the cures differ.
+_Avoid_: down, no link, broken
+
 **Pending change**:
 An edit to the Profile carrying the current Link that has been applied but not yet kept. It reverts by itself unless the person confirms within the countdown (ADR-0004).
 _Avoid_: draft, transaction, trial

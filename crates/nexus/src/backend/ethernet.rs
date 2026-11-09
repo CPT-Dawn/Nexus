@@ -241,7 +241,7 @@ pub(super) fn classify(
         ),
         // After a failed attempt NetworkManager rests at "disconnected"
         // and remembers why.
-        _ if is_failure_reason(reason) && state <= STATE_DISCONNECTED && state >= 20 => (
+        _ if is_failure_reason(reason) && (20..=STATE_DISCONNECTED).contains(&state) => (
             EthernetState::Misconfigured,
             Some(text::trouble(name, reason, enterprise)),
         ),

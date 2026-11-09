@@ -117,6 +117,7 @@ impl ProfileKey {
 /// The `profile_get` result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProfileView {
+    /// The Network's name; a wired Profile's own name.
     pub ssid: String,
     pub uuid: String,
     /// Pass it back in `profile_update`: the update fails with `conflict`

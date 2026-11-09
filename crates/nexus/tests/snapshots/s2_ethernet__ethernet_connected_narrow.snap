@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_ethernet.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Ethernet ▾  3/6                           ● Offline
+    ╭ enp3s0 ──────────────────────────────────────────────╮
+    │ ● Connected                                          │
+    │                                                      │
+    │ Speed     1 Gbps                                     │
+    │ Address   10.20.30.41/24                             │
+    │ Gateway   10.20.30.1                                 │
+    │ DNS       10.20.30.2                                 │
+    │           10.20.30.3                                 │
+    │ MAC       52:54:00:00:00:00                          │
+    │ Profile   Office wall socket  (802.1X)               │
+    │                                                      │
+    │ x drops the Link. s signs in (802.1X). e changes the │
+    │ Profile settings.                                    │
+    │                                                      │
+    │                         ╭ Done ────────────────────╮ │
+    │                         │ Signed in. enp3s0 is up. │ │
+    │                         ╰──────────────────────────╯ │
+    ╰──────────────────────────────────────────────────────╯
+ esc back  x disconnect  s sign in  e settings  ? help

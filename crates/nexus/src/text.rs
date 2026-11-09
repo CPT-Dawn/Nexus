@@ -624,10 +624,7 @@ pub fn unplugged(port: &str) -> Failure {
 
 /// The sentence for a port with no cable.
 pub fn unplugged_sentence(port: &str) -> String {
-    format!(
-        "No cable detected on {port}. Plug one in, and check that the other end is \
-         connected to a switch or router that is on."
-    )
+    nexus_ipc::unplugged_message(port)
 }
 
 /// Which port the person meant, when they did not say or said wrong.

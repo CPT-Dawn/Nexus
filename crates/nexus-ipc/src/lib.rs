@@ -20,7 +20,7 @@ pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
 pub use eap::{Eap, EapError, EapField, EapMethod, Phase2};
 pub use ethernet::{
     EthernetDropped, EthernetJoined, EthernetList, EthernetPort, EthernetProblem, EthernetProfile,
-    EthernetState, EthernetTrouble, speed_text,
+    EthernetState, EthernetTrouble, speed_text, unplugged_message,
 };
 
 pub mod profile;

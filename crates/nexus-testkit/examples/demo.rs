@@ -45,6 +45,13 @@
 //!   countdown, `y` keeps, `n` or waiting reverts) or `G` `k` `e` on Parents
 //!   House (saved at once). In the form: `tab` next row, `space` or arrows
 //!   change a choice, type into address rows, `enter` apply, `esc` cancel.
+//! - `ethernet`: two Ethernet ports. enp3s0 has a cable and a Profile but sits
+//!   behind an 802.1X switch, so it reads as plugged in and misconfigured (no
+//!   address); enp4s0 has no cable. Press `3` for the Ethernet tab; `enter` tries
+//!   again, `s` opens the sign-in form (login `alice@office.example` /
+//!   `hunter2`, server name `radius.office.example`), `x` drops the Link, `e`
+//!   edits the Profile (settings of the Link in use run under the 15 s
+//!   countdown). Press `1` to see the Overview card.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -91,6 +98,9 @@ fn main() {
             world.nm.set_state(NmState::ConnectedGlobal);
         }
         "vpn" => nexus_testkit::scenarios::vpn_busy(&world),
+        "ethernet" => {
+            nexus_testkit::scenarios::ethernet_busy(&world);
+        }
         "portal" => {
             // No browser: the stand-in records the URL, which also plays "signed in".
             world.install_tool(

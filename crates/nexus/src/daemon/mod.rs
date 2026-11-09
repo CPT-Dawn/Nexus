@@ -338,7 +338,8 @@ async fn watch_backend<B: Backend>(
         status,
         wifi,
         tethers,
-        ethernet: None,
+        // What a Front end reads on connecting; only changes from it are pushed.
+        ethernet: backend.ethernet_list().await.ok(),
         portal,
         vpns,
     };

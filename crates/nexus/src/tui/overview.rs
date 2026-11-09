@@ -317,11 +317,46 @@ pub fn card(app: &App, row: usize) -> (&'static str, String, bool) {
         ),
         _ => ("Hotspot", &[], "Not started"),
     };
+    if row == 1
+        && let Some(port) = app.ethernet().headline()
+    {
+        return ethernet_card(name, port);
+    }
     match link {
         Some(l) if kinds.contains(&l.kind) => (name, l.name.clone(), true),
         _ if app.status().is_none() => (name, "-".into(), false),
         _ => (name, idle.into(), false),
     }
+}
+
+/// The Ethernet card: the port's Link details, or why there is none.
+fn ethernet_card(
+    name: &'static str,
+    port: &nexus_ipc::EthernetPort,
+) -> (&'static str, String, bool) {
+    use nexus_ipc::{EthernetProblem, EthernetState};
+    // The card is narrow: the Link's speed and address, or the one thing wrong.
+    // The Ethernet tab names the port.
+    let value = match port.state {
+        EthernetState::Connected => {
+            let mut parts: Vec<String> = port.speed_text().into_iter().collect();
+            parts.extend(port.addresses.first().map(|a| a.address.clone()));
+            if parts.is_empty() {
+                "Connected".to_owned()
+            } else {
+                parts.join(", ")
+            }
+        }
+        EthernetState::Connecting => "Connecting".to_owned(),
+        EthernetState::Unplugged => "Cable unplugged".to_owned(),
+        EthernetState::Misconfigured => match port.trouble.as_ref().map(|t| t.kind) {
+            Some(EthernetProblem::NoAddress) => "No address".to_owned(),
+            Some(EthernetProblem::SignIn) => "Needs sign-in".to_owned(),
+            _ => "Not working".to_owned(),
+        },
+        _ => "Not connected".to_owned(),
+    };
+    (name, value, port.state == EthernetState::Connected)
 }
 
 /// The four cards as a selectable list. `roomy` gives each two lines.
