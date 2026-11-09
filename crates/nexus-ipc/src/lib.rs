@@ -44,6 +44,22 @@ pub enum Op {
     /// Ask the Backend to refresh the Wi-Fi list. Results arrive as
     /// `networks_changed` events; the response only says what was done.
     WifiScan,
+    /// Join a Wi-Fi Network, waiting until it is up or has failed. `network`
+    /// is a `WifiNetwork.id`. A Profile is saved only if the join succeeds.
+    /// Result: [`Joined`]. Failures carry a human sentence and one of the
+    /// codes `wrong_password`, `out_of_range`, `no_address`, `join_failed`,
+    /// `password_required`.
+    WifiJoin {
+        network: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password: Option<Secret>,
+    },
+    /// Drop the current Wi-Fi Link, keeping its Profile. Result: [`Disconnected`];
+    /// `not_connected` when there is nothing to drop.
+    WifiDisconnect,
+    /// Forget (delete the Profile of) a Wi-Fi Network by `WifiNetwork.id`.
+    /// Result: [`Forgotten`]; `unknown_network` when nothing is saved for it.
+    WifiForget { network: String },
     /// Start receiving event lines on this connection. Answered with
     /// `{"ok": {}}`; events follow, interleaved with later responses.
     Subscribe,
@@ -57,6 +73,48 @@ pub enum Op {
     /// Set one value by dotted key, editing `config.toml` in place so the
     /// user's comments and ordering survive. The result is as for `config_get`.
     ConfigSet { key: String, value: Value },
+}
+
+/// A password or other secret. It serializes as the plain string (the wire
+/// needs it) but never shows in `Debug` output, so logs cannot leak it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Secret(String);
+
+impl Secret {
+    pub fn new(text: impl Into<String>) -> Self {
+        Self(text.into())
+    }
+
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Secret(<redacted>)")
+    }
+}
+
+/// The `WifiNetwork.id` of an SSID: its bytes in lowercase hex.
+pub fn network_id(ssid: &[u8]) -> String {
+    use std::fmt::Write as _;
+    ssid.iter().fold(String::new(), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    })
+}
+
+/// The SSID bytes behind a `WifiNetwork.id`, if it is one.
+pub fn parse_network_id(id: &str) -> Option<Vec<u8>> {
+    if !id.len().is_multiple_of(2) || !id.is_ascii() {
+        return None;
+    }
+    (0..id.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&id[i..i + 2], 16).ok())
+        .collect()
 }
 
 /// One response line: `ok` or `err`, never both.
@@ -93,6 +151,20 @@ pub enum ErrorCode {
     Internal,
     /// The Backend (NetworkManager) is not running or not reachable.
     BackendUnavailable,
+    /// The password was rejected.
+    WrongPassword,
+    /// The Network is not (or no longer) in range.
+    OutOfRange,
+    /// Joined the Network but never got an address.
+    NoAddress,
+    /// The join failed for another reason; the message says which.
+    JoinFailed,
+    /// The Network needs a password and none was given.
+    PasswordRequired,
+    /// No Network by that name is saved or nearby.
+    UnknownNetwork,
+    /// There is no Wi-Fi Link to disconnect.
+    NotConnected,
     #[serde(other)]
     Unknown,
 }
@@ -342,6 +414,9 @@ pub struct WifiNetwork {
     pub band: Band,
     /// How many access points broadcast it.
     pub access_points: u32,
+    /// True while a Device is associated with it.
+    #[serde(default)]
+    pub joined: bool,
     /// The Device that hears the strongest access point.
     pub device: String,
     /// UUID of the saved Profile for it, if any.
@@ -378,6 +453,26 @@ pub struct ScanOutcome {
     /// Age of the freshest scan in milliseconds, if any Device ever scanned.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_scan_ms_ago: Option<u64>,
+}
+
+/// The `wifi_join` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Joined {
+    pub ssid: String,
+    /// UUID of the Profile now saved for it.
+    pub profile: String,
+}
+
+/// The `wifi_disconnect` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Disconnected {
+    pub ssid: String,
+}
+
+/// The `wifi_forget` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Forgotten {
+    pub ssid: String,
 }
 
 /// Encodes a value as one line, newline included.

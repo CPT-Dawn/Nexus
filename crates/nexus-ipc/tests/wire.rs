@@ -119,6 +119,35 @@ fn wifi_ops_and_unknown_wifi_enums() {
 }
 
 #[test]
+fn join_ops_round_trip_and_the_password_stays_out_of_debug() {
+    let line =
+        r#"{"v":1,"id":3,"op":"wifi_join","network":"486f6d65","password":"hunter2hunter2"}"#;
+    let req = parse(line).unwrap();
+    assert!(!format!("{req:?}").contains("hunter2"));
+    match req.op {
+        Op::WifiJoin { network, password } => {
+            assert_eq!(network, "486f6d65");
+            assert_eq!(password.unwrap().expose(), "hunter2hunter2");
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(
+        parse(r#"{"v":1,"id":1,"op":"wifi_disconnect"}"#)
+            .unwrap()
+            .op,
+        Op::WifiDisconnect
+    ));
+}
+
+#[test]
+fn network_ids_are_hex_ssid_bytes() {
+    assert_eq!(nexus_ipc::network_id(b"Home"), "486f6d65");
+    assert_eq!(nexus_ipc::parse_network_id("486f6d65").unwrap(), b"Home");
+    assert_eq!(nexus_ipc::parse_network_id("abc"), None);
+    assert_eq!(nexus_ipc::parse_network_id("zz"), None);
+}
+
+#[test]
 fn status_event_line() {
     let line = EventLine {
         v: 1,
