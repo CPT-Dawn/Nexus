@@ -84,7 +84,7 @@ issue student "/CN=student" $'extendedKeyUsage=clientAuth'
 cat >"$pki/eap.users" <<'EOF2'
 # phase 1 methods, then the inner ones
 *          PEAP,TTLS,TLS
-"student"  MSCHAPV2,PAP  "correct-horse-4"  [2]
+"student"  MSCHAPV2,TTLS-PAP  "correct-horse-4"  [2]
 EOF2
 chmod 0644 "$pki"/*
 
