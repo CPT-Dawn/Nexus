@@ -1,0 +1,54 @@
+name: Real-mode rig
+
+# S1 against real NetworkManager, virtual radios and hostapd (rig/run.sh).
+on:
+  push:
+    paths:
+      - "rig/**"
+      - "crates/**"
+      - "Cargo.lock"
+      - ".github/workflows/rig.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rig-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  rig:
+    name: real mode
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Packages must not start their services: NetworkManager would grab the
+      # runner's own network.
+      - name: Forbid service starts
+        run: |
+          printf '#!/bin/sh\nexit 101\n' | sudo tee /usr/sbin/policy-rc.d >/dev/null
+          sudo chmod +x /usr/sbin/policy-rc.d
+      - name: Install the rig's tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            network-manager wpasupplicant hostapd dnsmasq-base iw dbus udev
+          # Not every kernel flavour ships a separate extra-modules package.
+          sudo apt-get install -y --no-install-recommends "linux-modules-extra-$(uname -r)" || true
+          uname -r; modinfo mac80211_hwsim | head -3 || true
+      - name: Can this runner load virtual radios?
+        run: |
+          sudo modprobe mac80211_hwsim radios=2
+          iw dev
+          sudo rmmod mac80211_hwsim
+      - run: rig/run.sh
+        env:
+          NEXUS_RIG_ALLOW_HOST_NM: "1"

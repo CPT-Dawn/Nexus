@@ -12,6 +12,7 @@
 mod bus;
 mod fake_nm;
 mod fake_systemd;
+mod real;
 pub mod scenarios;
 mod world;
 
@@ -21,4 +22,5 @@ pub use fake_nm::{
     boottime_ms,
 };
 pub use fake_systemd::{FakeSystemd, Unit};
+pub use real::RealWorld;
 pub use world::{PATIENCE, Wire, World, WorldBuilder};

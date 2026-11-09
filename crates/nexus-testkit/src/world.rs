@@ -274,17 +274,25 @@ impl Drop for World {
 pub struct Wire {
     reader: BufReader<UnixStream>,
     next_id: u64,
+    patience: Duration,
     /// Event lines that arrived while [`Wire::call`] waited for its response.
     events: std::collections::VecDeque<Value>,
 }
 
 impl Wire {
     pub fn connect(socket: &Path) -> Wire {
+        Self::connect_patiently(socket, PATIENCE)
+    }
+
+    /// Like [`Wire::connect`], waiting up to `patience` for each reply (a
+    /// real join, with a wrong password, takes tens of seconds).
+    pub fn connect_patiently(socket: &Path, patience: Duration) -> Wire {
         let stream = UnixStream::connect(socket).expect("connect to the daemon socket");
-        stream.set_read_timeout(Some(PATIENCE)).expect("timeout");
+        stream.set_read_timeout(Some(patience)).expect("timeout");
         Wire {
             reader: BufReader::new(stream),
             next_id: 1,
+            patience,
             events: std::collections::VecDeque::new(),
         }
     }
@@ -316,7 +324,7 @@ impl Wire {
         let got = matches!(self.reader.read_line(&mut buf), Ok(n) if n > 0);
         self.reader
             .get_ref()
-            .set_read_timeout(Some(PATIENCE))
+            .set_read_timeout(Some(self.patience))
             .expect("timeout");
         got.then(|| serde_json::from_str(&buf).expect("daemon speaks JSON"))
     }
