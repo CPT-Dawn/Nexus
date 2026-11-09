@@ -13,7 +13,7 @@ expression: top
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █                  │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
 │                  │  Esc                  Back out; never quits                █                  │
-│                  │  o                    Open a Portal's login page           █                  │
+│                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │──────────────────╯
 │                  │  ?                    Show or hide this help               │──────────────────╮
 │                  │  q                    Quit (Ctrl-C works anywhere)         │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
@@ -24,9 +24,9 @@ expression: top
 │                  │  Wi-Fi: a             Toggle autoconnect                   │──────────────────╮
 │                  │  Wi-Fi: e             Edit the Profile's settings          │s show up here.   │
 │                  │  Wi-Fi: s             Share as a QR code (asks first)      │                  │
-│                  │  VPN: Enter           Bring the VPN up or down             │                  │
-│                  │  VPN: i               Import a WireGuard .conf             │                  │
-│                  │  VPN: c               Create a WireGuard VPN with new keys │                  │
-│                  │  VPN: p               Show a VPN's public key              │                  │
+│                  │  Ethernet: Enter      Join the selected port               │                  │
+│                  │  Ethernet: x          Drop the port's Link                 │                  │
+│                  │  Ethernet: s          Sign in to an 802.1X port            │                  │
+│                  │  Ethernet: e          Edit the port's Profile settings     │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

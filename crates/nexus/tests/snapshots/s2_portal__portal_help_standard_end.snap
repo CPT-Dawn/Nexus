@@ -1,17 +1,16 @@
 ---
 source: crates/nexus/tests/s2_portal.rs
-assertion_line: 181
 expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Portal
 ╭ Connections ─────╭ All keys (j/k scroll) ─────────────────────────────────────╮──────────────────╮
-│ ▸ ● Wi-Fi        │  Wi-Fi: Enter         Join the selected Network            │   ░░             │
-│     CafeGuest    │  Wi-Fi: r             Rescan                               │░░░██░░           │
-│   ○ Ethernet     │  Wi-Fi: x             Disconnect                           │█░░██░░           │
-│     Not connected│  Wi-Fi: f             Forget (asks first)                  │█░░██░░           │
-│   ○ VPN          │  Wi-Fi: a             Toggle autoconnect                   │█░░██░░░░░░       │
-│     Not connected│  Wi-Fi: e             Edit the Profile's settings          ██░░████████░░     │
-│   ○ Hotspot      │  Wi-Fi: s             Share as a QR code (asks first)      █░  ░░░░░░░░       │
+│ ▸ ● Wi-Fi        │  Wi-Fi: a             Toggle autoconnect                   │   ░░             │
+│     CafeGuest    │  Wi-Fi: e             Edit the Profile's settings          │░░░██░░           │
+│   ○ Ethernet     │  Wi-Fi: s             Share as a QR code (asks first)      │█░░██░░           │
+│     Not connected│  Ethernet: Enter      Join the selected port               │█░░██░░           │
+│   ○ VPN          │  Ethernet: x          Drop the port's Link                 │█░░██░░░░░░       │
+│     Not connected│  Ethernet: s          Sign in to an 802.1X port            │█░░████████░░     │
+│   ○ Hotspot      │  Ethernet: e          Edit the port's Profile settings     █░  ░░░░░░░░       │
 │     Not started  │  VPN: Enter           Bring the VPN up or down             █                  │
 │                  │  VPN: i               Import a WireGuard .conf             █n-in page is      │
 │                  │  VPN: c               Create a WireGuard VPN with new keys █                  │

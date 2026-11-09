@@ -53,7 +53,7 @@ pub struct Verb {
 }
 
 /// Every table of Verbs, in the order the help overlay lists them.
-pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, VPN, HOTSPOT, TETHER, UNDO];
+pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, ETHERNET, VPN, HOTSPOT, TETHER, UNDO];
 
 pub fn all() -> impl Iterator<Item = &'static Verb> {
     TABLES.iter().flat_map(|t| t.iter())
@@ -455,6 +455,104 @@ static TETHER: &[Verb] = &[
             } else {
                 Err("Not tethered to that phone.")
             }
+        },
+    ),
+];
+
+// ---- Ethernet -------------------------------------------------------------------
+
+fn port(app: &App) -> Result<&nexus_ipc::EthernetPort, &'static str> {
+    if app.tab() != Tab::Ethernet {
+        return Err("Open the Ethernet tab and pick a port first.");
+    }
+    app.ethernet()
+        .selected()
+        .ok_or("No Ethernet port is selected.")
+}
+
+const fn wired(
+    verb: &'static str,
+    words: &'static str,
+    key: &'static str,
+    help: &'static str,
+    code: KeyCode,
+    ready: fn(&App) -> Result<(), &'static str>,
+) -> Verb {
+    Verb {
+        verb,
+        words,
+        key,
+        help,
+        scope: Scope::Tab(Tab::Ethernet),
+        run: Run::Key(Tab::Ethernet, code),
+        ready,
+    }
+}
+
+static ETHERNET: &[Verb] = &[
+    wired(
+        "Connect Ethernet",
+        "wired cable port join retry",
+        "Enter",
+        "Join the selected port",
+        KeyCode::Enter,
+        |app| {
+            use nexus_ipc::EthernetState::{Connected, Connecting, Unplugged};
+            let p = port(app)?;
+            if p.state == Unplugged {
+                Err("No cable is plugged in.")
+            } else if matches!(p.state, Connected | Connecting) {
+                Err("That port is already up.")
+            } else if app.ethernet().busy.is_some() {
+                Err("A port is already coming up.")
+            } else {
+                Ok(())
+            }
+        },
+    ),
+    wired(
+        "Disconnect Ethernet",
+        "wired cable port drop stop",
+        "x",
+        "Drop the port's Link",
+        KeyCode::Char('x'),
+        |app| {
+            use nexus_ipc::EthernetState::{Connected, Connecting};
+            if matches!(port(app)?.state, Connected | Connecting) {
+                Ok(())
+            } else {
+                Err("That port is not connected.")
+            }
+        },
+    ),
+    wired(
+        "Sign in to Ethernet",
+        "wired 802.1x enterprise office campus identity password certificate",
+        "s",
+        "Sign in to an 802.1X port",
+        KeyCode::Char('s'),
+        |app| {
+            if port(app)?.state == nexus_ipc::EthernetState::Unplugged {
+                Err("No cable is plugged in.")
+            } else if app.ethernet().busy.is_some() {
+                Err("A port is already coming up.")
+            } else {
+                Ok(())
+            }
+        },
+    ),
+    wired(
+        "Ethernet settings",
+        "wired profile ip address dns mac static metered",
+        "e",
+        "Edit the port's Profile settings",
+        KeyCode::Char('e'),
+        |app| {
+            port(app)?
+                .profile
+                .as_ref()
+                .map(|_| ())
+                .ok_or("That port has no saved Profile yet. Connect it first.")
         },
     ),
 ];

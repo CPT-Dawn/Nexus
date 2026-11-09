@@ -37,6 +37,8 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::UnknownVpn => 21,
         ErrorCode::InvalidConfig => 22,
         ErrorCode::VpnFailed => 23,
+        ErrorCode::Unplugged => 27,
+        ErrorCode::UnknownPort => 28,
         ErrorCode::MissingPlugin => 24,
         ErrorCode::KeyringUnavailable => 25,
         ErrorCode::HotspotUnsupported => 26,
@@ -461,6 +463,42 @@ pub fn tether_disconnect(json: bool) -> ExitCode {
     })
 }
 
+/// `nexus ethernet list [--json]`.
+pub fn ethernet_list(json: bool) -> ExitCode {
+    wifi_call(Op::EthernetList, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::EthernetList>(value) {
+            Ok(list) => print!("{}", crate::ethernet_view::table(&list)),
+            Err(e) => eprintln!("nexus: undecodable list: {e}"),
+        }
+    })
+}
+
+/// `nexus ethernet connect [port]`.
+pub fn ethernet_connect(port: Option<String>, json: bool) -> ExitCode {
+    wifi_call(Op::EthernetConnect { port }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(j) = serde_json::from_value::<nexus_ipc::EthernetJoined>(value) {
+            println!("{}", crate::text::ethernet_joined(&j.port));
+        }
+    })
+}
+
+/// `nexus ethernet disconnect [port]`.
+pub fn ethernet_disconnect(port: Option<String>, json: bool) -> ExitCode {
+    wifi_call(Op::EthernetDisconnect { port }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(d) = serde_json::from_value::<nexus_ipc::EthernetDropped>(value) {
+            println!("{}", crate::text::ethernet_dropped(&d.port));
+        }
+    })
+}
+
 /// `nexus hotspot status [--json]`.
 pub fn hotspot_status(json: bool) -> ExitCode {
     wifi_call(Op::Hotspot, |value| {
@@ -650,6 +688,8 @@ mod tests {
             ErrorCode::UnknownVpn,
             ErrorCode::InvalidConfig,
             ErrorCode::VpnFailed,
+            ErrorCode::Unplugged,
+            ErrorCode::UnknownPort,
             ErrorCode::MissingPlugin,
             ErrorCode::HotspotUnsupported,
             ErrorCode::BluetoothOff,

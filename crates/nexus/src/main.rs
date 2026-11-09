@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod daemon;
 mod doctor;
+mod ethernet_view;
 mod keyring;
 mod profile_cli;
 mod secrets;
@@ -50,6 +51,11 @@ enum Command {
     Vpn {
         #[command(subcommand)]
         action: VpnAction,
+    },
+    /// Ethernet ports: Link details, plug state, bring up and down.
+    Ethernet {
+        #[command(subcommand)]
+        action: EthernetAction,
     },
     /// Get online through a paired phone over Bluetooth.
     Tether {
@@ -238,6 +244,32 @@ enum VpnAction {
         qr: bool,
         /// Print the result, private key included, as JSON.
         #[arg(long, conflicts_with = "qr")]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum EthernetAction {
+    /// List the Ethernet ports: whether a cable is in, the speed, addresses, and what is wrong.
+    List {
+        /// Print the list as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Bring a port up with its Profile (a plain DHCP one is made if it has none).
+    Connect {
+        /// The port, e.g. enp3s0 (not needed when there is only one).
+        port: Option<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Drop a port's Link; its Profile stays.
+    Disconnect {
+        /// The port, e.g. enp3s0 (not needed when there is only one).
+        port: Option<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
         json: bool,
     },
 }
@@ -521,6 +553,11 @@ fn main() -> ExitCode {
             }),
             VpnAction::Key { name, json } => vpn_cli::key(&name, json),
             VpnAction::Share { name, qr, json } => vpn_cli::share(&name, qr, json),
+        },
+        Command::Ethernet { action } => match action {
+            EthernetAction::List { json } => cli::ethernet_list(json),
+            EthernetAction::Connect { port, json } => cli::ethernet_connect(port, json),
+            EthernetAction::Disconnect { port, json } => cli::ethernet_disconnect(port, json),
         },
         Command::Hotspot {
             action: HotspotAction::Status { json },

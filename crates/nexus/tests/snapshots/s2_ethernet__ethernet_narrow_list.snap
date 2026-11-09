@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_ethernet.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Ethernet ▾  3/6                           ● Offline
+╭ Ethernet ────────────────────────────────────────────────╮
+│ ▸ ! enp3s0                                       problem │
+│   ○ enp4s0                                     unplugged │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ enter connect  s sign in  e settings  d details  : palette
