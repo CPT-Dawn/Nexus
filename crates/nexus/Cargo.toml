@@ -9,13 +9,19 @@ repository.workspace = true
 authors.workspace = true
 publish = false
 
+[lib]
+name = "nexus_tui"
+path = "src/lib.rs"
+
 [dependencies]
+crossterm = "0.29"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 clap_mangen = "0.2"
 listenfd = "1"
 nexus-ipc.workspace = true
 futures-util = { version = "0.3", default-features = false }
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
 rustix = { version = "1", features = ["event", "fs", "process", "rand", "time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -27,6 +33,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 zbus = { version = "6", default-features = false, features = ["tokio", "proxy"] }
 
 [dev-dependencies]
+insta = "1"
 nexus-testkit = { path = "../nexus-testkit" }
 serde_json = "1"
 

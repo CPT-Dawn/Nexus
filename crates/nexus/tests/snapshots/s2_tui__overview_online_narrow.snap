@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_tui.rs
+expression: frame
+---
+ Nexus  Overview ▾  1/6                            ● Online
+╭ Overview ────────────────────────────────────────────────╮
+│ ▸ Wi-Fi     Home-5G                                      │
+│   Ethernet  Idle                                         │
+│   VPN       Idle                                         │
+│   Hotspot   Off                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ j/k move  enter open  h/l tab  ? help  q quit

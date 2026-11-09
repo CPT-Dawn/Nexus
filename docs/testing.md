@@ -25,4 +25,20 @@ let out = world.run_nexus(&["status", "--json"]);             // the real CLI
 
 Needs `dbus-daemon` installed. Optional tools, tests skip with a message without them: `systemd-socket-activate` (socket activation), and for the peer-credential test `socat`, passwordless `sudo -u <user>` and `NEXUS_TEST_INTRUDER=<user>` (CI creates user `intruder`).
 
+## S2: the TUI on top of S1
+
+`crates/nexus/tests/s2_tui.rs`. The TUI is a library (`nexus_tui::tui`, lib target of the `nexus` crate) so tests drive it without a terminal: a `Rig` starts a `World`, spawns the real `Client` (the Daemon link thread) and feeds its `Msg`s into an `App`.
+
+```rust
+let mut rig = Rig::online();                       // world + client + App, status received
+rig.key(KeyCode::Char('?'));                        // keystrokes in
+insta::assert_snapshot!("help_overlay", rig.text(STANDARD));   // frame out
+rig.pump_until("the offline status", |a| ...);     // after changing the fake NM
+```
+
+- Widths: `NARROW` 60x20, `STANDARD` 100x28, `WIDE` 140x32 (plus a 30x6 "too small"). Colour tiers: `styled_of(&buffer)` snapshots the text plus a table of every distinct style, so truecolor/256/16/none/ASCII all have a frame.
+- `tui::render(&app, w, h)` returns the `Buffer`; `App::update(Msg)` returns whether a redraw is needed, which is how the zero-idle-frames test counts: it runs `tui::event_loop` on a `TestBackend` thread and asserts no frame is drawn over a quiet period.
+- New snapshot: write the test, run `INSTA_UPDATE=always cargo test -p nexus --test s2_tui`, read the `.snap` file in `crates/nexus/tests/snapshots/`, commit it. CI never updates snapshots.
+- Eyeball it for real: `cargo build -p nexus && cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal] [--ascii|--nerd-font]` runs the TUI on your terminal against a private fake NetworkManager and Daemon.
+
 Run: `cargo test --workspace`.

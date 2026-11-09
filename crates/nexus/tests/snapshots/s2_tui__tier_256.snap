@@ -1,0 +1,43 @@
+---
+source: crates/nexus/tests/s2_tui.rs
+expression: styled_of(&rig.buffer(STANDARD))
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
+╭ Overview ──────────────────╮╭ Wi-Fi ─────────────────────────────────────────────────────────────╮
+│ ▸ Wi-Fi     Home-5G        ││                                                                    │
+│   Ethernet  Idle           ││ ● Online                                                           │
+│   VPN       Idle           ││                                                                    │
+│   Hotspot   Off            ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │
+│                            ││                                                                    │
+│                            ││ Wi-Fi         Home-5G                                              │
+│                            ││ Primary link  Home-5G                                              │
+│                            ││ Internet      full                                                 │
+│                            ││ Backend       networkmanager 1.58.1                                │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  h/l tab  ? help  q quit
+
+ 2202 cells  fg=- bg=- mods=[]
+  106 cells  fg=idx116 bg=- mods=[]
+    7 cells  fg=idx116 bg=- mods=[bold]
+  135 cells  fg=idx145 bg=- mods=[]
+    1 cells  fg=idx149 bg=- mods=[]
+    8 cells  fg=idx149 bg=- mods=[bold]
+  181 cells  fg=idx237 bg=- mods=[]
+  107 cells  fg=idx254 bg=- mods=[]
+   17 cells  fg=idx254 bg=- mods=[bold]
+   36 cells  fg=idx254 bg=idx235 mods=[bold]

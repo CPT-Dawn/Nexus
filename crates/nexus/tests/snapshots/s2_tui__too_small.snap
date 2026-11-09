@@ -1,0 +1,6 @@
+---
+source: crates/nexus/tests/s2_tui.rs
+expression: "rig.text((30, 6))"
+---
+      Terminal too small
+       Nexus needs 40x10

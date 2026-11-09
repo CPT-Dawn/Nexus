@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_tui.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
+╭ Settings ──────────────────╮╭ Settings ──────────────────────────────────────────────────────────╮
+│ Nothing to list yet.       ││ Settings arrives in a later release.                               │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ h/l tab  ? help  q quit

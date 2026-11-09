@@ -147,6 +147,15 @@ impl World {
         self.adopt_daemon(child);
     }
 
+    /// Kills the Daemon, as a crash or restart would. A later
+    /// [`World::start_daemon`] brings a fresh one up on the same socket.
+    pub fn stop_daemon(&mut self) {
+        if let Some(mut d) = self.daemon.take() {
+            let _ = d.kill();
+            let _ = d.wait();
+        }
+    }
+
     /// Takes over a Daemon started by the test (e.g. under
     /// `systemd-socket-activate`) and waits until its socket accepts.
     pub fn adopt_daemon(&mut self, mut child: Child) {
