@@ -302,6 +302,8 @@ fn join(conn: &mut Connection, launcher: Launcher, n: &WifiNetwork) -> Result<()
         let op = Op::WifiJoin {
             network: n.id.clone(),
             password: password.as_ref().map(|p| Secret::new(p.as_str())),
+            device: None,
+            hidden: None,
         };
         match conn.call(op) {
             Err(e) => return Err(unreachable(&e)),
