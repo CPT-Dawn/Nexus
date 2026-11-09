@@ -1,0 +1,16 @@
+[package]
+name = "nexus"
+description = "A Wi-Fi manager for the terminal."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+nexus-ipc.workspace = true
+
+[lints]
+workspace = true

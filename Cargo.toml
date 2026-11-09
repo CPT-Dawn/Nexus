@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "2.0.0-dev"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+repository = "https://github.com/CPT-Dawn/Nexus"
+authors = ["CPT Dawn <ping@cptdawn.dev>"]
+
+[workspace.dependencies]
+nexus-ipc = { path = "crates/nexus-ipc" }
+
+# >= 0.3.20: RUSTSEC-2025-0055 (ANSI escape injection in logs).
+tracing-subscriber = "0.3.20"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
