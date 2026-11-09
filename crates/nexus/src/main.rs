@@ -1,15 +1,18 @@
 mod backend;
+mod bar_cli;
 mod cli;
 mod config;
 mod daemon;
 mod doctor;
 mod ethernet_view;
 mod keyring;
+mod menu;
 mod profile_cli;
 mod secrets;
 mod tether_view;
 mod text;
 mod vpn_cli;
+mod waybar;
 mod wifi_view;
 mod wireguard;
 
@@ -39,9 +42,17 @@ enum Command {
     /// Show the overall network state and the primary Link.
     Status {
         /// Print the status object as JSON.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "waybar")]
         json: bool,
+        /// Print Waybar custom-module JSON (text, tooltip, class, alt).
+        #[arg(long)]
+        waybar: bool,
+        /// With --waybar: keep running and print a line whenever it changes.
+        #[arg(long, requires = "waybar")]
+        follow: bool,
     },
+    /// Pick a Network or VPN in your launcher (fuzzel, walker, rofi, tofi).
+    Menu,
     /// Nearby Wi-Fi Networks and scanning.
     Wifi {
         #[command(subcommand)]
@@ -476,7 +487,14 @@ fn main() -> ExitCode {
         };
     };
     match command {
-        Command::Status { json } => cli::status(json),
+        Command::Status {
+            waybar: true,
+            follow: true,
+            ..
+        } => bar_cli::follow(),
+        Command::Status { waybar: true, .. } => bar_cli::once(),
+        Command::Status { json, .. } => cli::status(json),
+        Command::Menu => menu::run(),
         Command::Wifi {
             action: WifiAction::List { json },
         } => cli::wifi_list(json),
