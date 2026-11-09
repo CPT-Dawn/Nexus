@@ -4,22 +4,22 @@ expression: bottom
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
 ╭ Connections ─────────────────────────╭ All keys (j/k scroll) ─────────────────────────────────────╮──────────────────────────────────────╮
-│ ▸ ○ Wi-Fi                            │  1 - 6                Jump to a tab                        │░  ░░░░░░░░                           │
-│     Not connected                    │  Enter                Open the selected card's tab         │█░░████████░░                         │
-│   ○ Ethernet                         │  d                    Details sheet (small windows)        ██░░██░░░░░░                           │
-│     Not connected                    │  Esc                  Back out; never quits                ██░░██████░░                           │
-│   ○ VPN                              │  o                    Open a Portal's login page           ██░░██░░░░░░                           │
-│     Not connected                    │  f                    Overview: run the fix (asks first)   ██░░████████░░                         │
-│   ○ Hotspot                          │  ?                    Show or hide this help               █░  ░░░░░░░░                           │
-│     Not started                      │  q                    Quit (Ctrl-C works anywhere)         █                                      │
-│                                      │  Wi-Fi: Enter         Join the selected Network            █                                      │
-│                                      │  Wi-Fi: r             Rescan                               █                                      │
-│                                      │  Wi-Fi: x             Disconnect                           █──────────────────────────────────────╯
-│                                      │  Wi-Fi: f             Forget (asks first)                  █ecent activity ───────────────────────╮
-│                                      │  Wi-Fi: a             Toggle autoconnect                   █othing yet. Joins, losses, VPNs and   │
+│ ▸ ○ Wi-Fi                            │  Esc                  Back out; never quits                │░  ░░░░░░░░                           │
+│     Not connected                    │  o                    Open a Portal's login page           │█░░████████░░                         │
+│   ○ Ethernet                         │  f                    Overview: run the fix (asks first)   │█░░██░░░░░░                           │
+│     Not connected                    │  ?                    Show or hide this help               │█░░██████░░                           │
+│   ○ VPN                              │  q                    Quit (Ctrl-C works anywhere)         ██░░██░░░░░░                           │
+│     Not connected                    │  Wi-Fi: Enter         Join the selected Network            ██░░████████░░                         │
+│   ○ Hotspot                          │  Wi-Fi: r             Rescan                               █░  ░░░░░░░░                           │
+│     Not started                      │  Wi-Fi: x             Disconnect                           █                                      │
+│                                      │  Wi-Fi: f             Forget (asks first)                  █                                      │
+│                                      │  Wi-Fi: a             Toggle autoconnect                   █                                      │
+│                                      │  Wi-Fi: n             Join a hidden Network by name        █──────────────────────────────────────╯
+│                                      │  Wi-Fi: i             Access point details of the Network  █ecent activity ───────────────────────╮
+│                                      │  Wi-Fi: c             Pick the Wi-Fi card joins use        █othing yet. Joins, losses, VPNs and   │
 │                                      │  Wi-Fi: e             Edit the Profile's settings          █ign-in pages show up here.            │
 │                                      │  Wi-Fi: s             Share as a QR code (asks first)      █                                      │
-│                                      │  VPN: Enter           Bring the VPN up or down             │                                      │
+│                                      │  VPN: Enter           Bring the VPN up or down             █                                      │
 │                                      │  VPN: i               Import a WireGuard .conf             │                                      │
 │                                      │  VPN: c               Create a WireGuard VPN with new keys │                                      │
 │                                      │  VPN: p               Show a VPN's public key              │                                      │

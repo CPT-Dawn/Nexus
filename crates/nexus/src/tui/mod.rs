@@ -5,6 +5,7 @@
 //! says the screen changed. With nothing happening it is asleep.
 
 mod app;
+mod aps;
 mod bigtype;
 mod caps;
 mod client;
@@ -13,6 +14,7 @@ mod eap_form;
 mod eap_ui;
 mod fx;
 mod graph;
+mod hidden;
 mod hits;
 mod layout;
 mod overlays;

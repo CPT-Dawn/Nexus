@@ -11,9 +11,9 @@ mod wifi;
 use std::future::Future;
 
 use nexus_ipc::{
-    ApList, AutoconnectSet, Disconnected, Forgotten, Joined, NewTunnel, ProfileSettings, ProfileView,
-    Radios, ScanOutcome, Secret, Security, Status, Tethered, Tethers, Untethered, VpnAdded, VpnKey, VpnList,
-    VpnShare, VpnToggled, WifiList, WifiShare,
+    ApList, AutoconnectSet, Disconnected, Forgotten, Joined, NewTunnel, ProfileSettings,
+    ProfileView, Radios, ScanOutcome, Secret, Security, Status, Tethered, Tethers, Untethered,
+    VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
 };
 
 use crate::text::Failure;

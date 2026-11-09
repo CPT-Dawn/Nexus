@@ -227,6 +227,47 @@ static WIFI: &[Verb] = &[
         },
     ),
     wifi(
+        "Join hidden network",
+        "other name ssid connect wifi wi-fi",
+        "n",
+        "Join a hidden Network by name",
+        KeyCode::Char('n'),
+        |app| {
+            if app.tab() == Tab::WiFi {
+                Ok(())
+            } else {
+                Err("Open the Wi-Fi tab first.")
+            }
+        },
+    ),
+    wifi(
+        "Show access points",
+        "details info bssid channel frequency band rate",
+        "i",
+        "Access point details of the Network",
+        KeyCode::Char('i'),
+        |app| match picked(app)? {
+            Entry::Net(_) => Ok(()),
+            Entry::Saved(_) => Err("That Network is out of range."),
+        },
+    ),
+    wifi(
+        "Choose Wi-Fi card",
+        "adapter device interface radio",
+        "c",
+        "Pick the Wi-Fi card joins use",
+        KeyCode::Char('c'),
+        |app| {
+            if app.tab() != Tab::WiFi {
+                Err("Open the Wi-Fi tab first.")
+            } else if app.wifi().cards().is_empty() {
+                Err("There is only one Wi-Fi card.")
+            } else {
+                Ok(())
+            }
+        },
+    ),
+    wifi(
         "Edit network settings",
         "profile ip dns address mac metered priority",
         "e",

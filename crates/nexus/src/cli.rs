@@ -422,16 +422,13 @@ pub fn wifi_forget(ssid: &str, hex: bool, json: bool) -> ExitCode {
         Ok(n) => n,
         Err(code) => return code,
     };
-    wifi_call(
-        Op::WifiForget { network },
-        |value| {
-            if json {
-                println!("{value}");
-            } else if let Ok(f) = serde_json::from_value::<nexus_ipc::Forgotten>(value) {
-                println!("{}", crate::text::forgot(&f.ssid));
-            }
-        },
-    )
+    wifi_call(Op::WifiForget { network }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(f) = serde_json::from_value::<nexus_ipc::Forgotten>(value) {
+            println!("{}", crate::text::forgot(&f.ssid));
+        }
+    })
 }
 
 /// `nexus wifi share <ssid> [--qr] [--json]`: asking is the explicit reveal.

@@ -145,7 +145,12 @@ fn row_line(entry: &Entry, busy: bool, avail: usize, look: &Look, sym: &Sym) -> 
 
 pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     let wifi = app.wifi();
-    let block = sym.block(look, "Wi-Fi", true);
+    // With several cards, say which one joins are pinned to.
+    let title = match wifi.card_name() {
+        Some(card) => format!("Wi-Fi · {card}"),
+        None => "Wi-Fi".to_owned(),
+    };
+    let block = sym.block(look, &title, true);
     let inner = block.inner(area);
     f.render_widget(block, area);
     sweep(f, app, area, look, sym);
@@ -280,6 +285,10 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
             lines.push(row("Access points", text(n.access_points.to_string())));
             if let Some(name) = wifi.adapter_name(&n.device) {
                 lines.push(row("Adapter", text(name.into())));
+            }
+            if !wifi.cards().is_empty() {
+                let via = wifi.card_name().map_or("any (press c)", |c| c);
+                lines.push(row("Joins via", text(via.into())));
             }
             if let Some(auto) = n.autoconnect {
                 lines.push(row(

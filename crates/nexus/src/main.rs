@@ -110,7 +110,7 @@ enum WifiAction {
         json: bool,
     },
     /// Join a Network. The Profile is saved only if the join works.
-    Join(JoinArgs),
+    Join(Box<JoinArgs>),
     /// Show the access points behind a Network: address, channel, frequency,
     /// band and link rate.
     Aps {
@@ -459,6 +459,7 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Join(a),
         } => {
+            let a = *a;
             let eap = a.eap();
             let source = match (a.password, a.password_stdin) {
                 (Some(p), _) => cli::PasswordSource::Flag(p),

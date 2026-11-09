@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_wifi_edge.rs
+expression: frame
+---
+ Nexus  Wi-Fi ▾  2/6                              ● Offline
+╭ Wi-Fi ───────────────────────────────────────────────────╮
+│ ▸   Mesh-Home                           ▂▄▆█ wpa2     5G │
+│     Mixed-Mode                          ▂▄▆█ wpa2/3   5G │
+│     Airport Free                        ▂▄▆█ owe    2.4G │
+╭ Access points of Mesh-Home ──────────────────────────────╮
+│   Address            Ch   MHz Band       Rate  Sig       │
+│   AA:00:00:00:10:02  36  5180 5G     866 Mb/s  82%       │
+│   AA:00:00:00:10:02  36  5180 5G     866 Mb/s  60%       │
+│   AA:00:00:00:10:01   6  2437 2.4G   144 Mb/s  48%       │
+│   AA:00:00:00:10:03  37  6135 6G    2402 Mb/s  31%       │
+│                                                          │
+│                                                          │
+│ ● connected   esc close                                  │
+╰──────────────────────────────────────────────────────────╯
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ esc close

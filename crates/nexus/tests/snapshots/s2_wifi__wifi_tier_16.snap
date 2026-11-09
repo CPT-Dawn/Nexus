@@ -29,19 +29,19 @@ expression: frame
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter join  r scan  h/l tab  : palette  ? help  q quit
+ j/k move  enter join  r scan  n other  h/l tab  : palette  ? help  q quit
 
- 2090 cells  fg=- bg=- mods=[]
+ 2081 cells  fg=- bg=- mods=[]
    21 cells  fg=- bg=- mods=[bold]
    22 cells  fg=- bg=- mods=[reversed]
   174 cells  fg=cyan bg=- mods=[]
   104 cells  fg=darkgray bg=- mods=[]
     2 cells  fg=darkgray bg=- mods=[reversed]
-  230 cells  fg=gray bg=- mods=[]
+  238 cells  fg=gray bg=- mods=[]
     9 cells  fg=gray bg=- mods=[bold]
     7 cells  fg=gray bg=- mods=[reversed]
    11 cells  fg=green bg=- mods=[]
-  116 cells  fg=lightcyan bg=- mods=[]
+  117 cells  fg=lightcyan bg=- mods=[]
     7 cells  fg=lightcyan bg=- mods=[bold]
     3 cells  fg=lightred bg=- mods=[bold]
     2 cells  fg=yellow bg=- mods=[]

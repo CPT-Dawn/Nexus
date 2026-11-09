@@ -12,9 +12,9 @@ use std::time::Duration;
 use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
-    ApList, AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind,
-    NewTunnel, Radio, Radios, ScanOutcome, Secret, State, Status, Tethered, Tethers, Untethered,
-    VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
+    ApList, AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link,
+    LinkKind, NewTunnel, Radio, Radios, ScanOutcome, Secret, State, Status, Tethered, Tethers,
+    Untethered, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
 };
 use std::pin::Pin;
 

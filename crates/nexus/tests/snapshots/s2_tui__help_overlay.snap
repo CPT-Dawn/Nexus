@@ -22,11 +22,11 @@ expression: rig.text(STANDARD)
 │                  │  Wi-Fi: x             Disconnect                           │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
 │                  │  Wi-Fi: f             Forget (asks first)                  │──────────────────╯
 │                  │  Wi-Fi: a             Toggle autoconnect                   │──────────────────╮
+│                  │  Wi-Fi: n             Join a hidden Network by name        │                  │
+│                  │  Wi-Fi: i             Access point details of the Network  │                  │
+│                  │  Wi-Fi: c             Pick the Wi-Fi card joins use        │                  │
 │                  │  Wi-Fi: e             Edit the Profile's settings          │                  │
 │                  │  Wi-Fi: s             Share as a QR code (asks first)      │                  │
 │                  │  VPN: Enter           Bring the VPN up or down             │                  │
-│                  │  VPN: i               Import a WireGuard .conf             │                  │
-│                  │  VPN: c               Create a WireGuard VPN with new keys │                  │
-│                  │  VPN: p               Show a VPN's public key              │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

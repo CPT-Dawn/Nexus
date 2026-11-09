@@ -110,9 +110,10 @@ fn a_hidden_join_needs_a_security_nexus_can_make_a_profile_for() {
 fn an_open_hidden_network_joins_without_a_password() {
     let world = World::start(NEXUS);
     let wlan0 = world.nm.add_wifi_device("wlan0");
-    world
-        .nm
-        .add_ap(wlan0, Ap::open("QuietCafe", "AA:00:00:00:00:0a", 50).hidden());
+    world.nm.add_ap(
+        wlan0,
+        Ap::open("QuietCafe", "AA:00:00:00:00:0a", 50).hidden(),
+    );
     let resp = join(&world, b"QuietCafe", json!({"hidden": "open"}));
     assert!(resp.get("ok").is_some(), "{resp}");
     assert_eq!(world.nm.added_setting(b"QuietCafe", KEY_MGMT), None);
@@ -122,9 +123,10 @@ fn an_open_hidden_network_joins_without_a_password() {
 fn the_cli_joins_a_hidden_network() {
     let world = World::start(NEXUS);
     let wlan0 = world.nm.add_wifi_device("wlan0");
-    world
-        .nm
-        .add_ap(wlan0, Ap::open("QuietCafe", "AA:00:00:00:00:0a", 50).hidden());
+    world.nm.add_ap(
+        wlan0,
+        Ap::open("QuietCafe", "AA:00:00:00:00:0a", 50).hidden(),
+    );
     let out = world.run_nexus(&["wifi", "join", "QuietCafe", "--hidden", "open"]);
     assert!(out.status.success(), "{out:?}");
     assert_eq!(String::from_utf8_lossy(&out.stdout), "Joined QuietCafe.\n");
@@ -241,7 +243,15 @@ fn the_cli_chooses_the_card_and_an_unknown_one_has_its_own_exit_code() {
     let (world, _, wlan1) = two_cards();
     let out = world.run_nexus(&["wifi", "join", "Only0", "--device", "wlan9"]);
     assert_eq!(out.status.code(), Some(40), "{out:?}");
-    let out = world.run_nexus(&["wifi", "join", "Home", "--device", "wlan1", "--password", "long-enough-pw"]);
+    let out = world.run_nexus(&[
+        "wifi",
+        "join",
+        "Home",
+        "--device",
+        "wlan1",
+        "--password",
+        "long-enough-pw",
+    ]);
     // No password is set on the fake: the join works on the chosen card.
     assert!(out.status.success(), "{out:?}");
     assert_eq!(world.nm.joined_ssid(wlan1).as_deref(), Some("Home"));
@@ -284,7 +294,11 @@ fn a_transition_network_is_wpa2_3_and_joins_with_its_passphrase() {
         .add_ap(wlan0, Ap::transition("Mixed", "AA:00:00:00:00:0d", 70));
     world.nm.set_psk("Mixed", "correct-horse-battery");
     assert_eq!(list(&world)["networks"][0]["security"], "wpa3_transition");
-    let resp = join(&world, b"Mixed", json!({"password": "correct-horse-battery"}));
+    let resp = join(
+        &world,
+        b"Mixed",
+        json!({"password": "correct-horse-battery"}),
+    );
     assert!(resp.get("ok").is_some(), "{resp}");
     // WPA2 clients and WPA3 clients both read a passphrase profile.
     assert_eq!(

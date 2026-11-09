@@ -11,13 +11,15 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
-    ActivityEntry, ActivityKind, Connectivity, Event, Finding, Op, PromptClosed, PromptKind,
-    Secret, State, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
+    ActivityEntry, ActivityKind, ApList, Connectivity, Event, Finding, Op, PromptClosed,
+    PromptKind, Secret, State, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
 };
 
+use super::aps::{Aps, Stage as ApsStage};
 use super::caps::Caps;
 use super::eap_form::{EapForm, Typed};
 use super::fx::{self, Fx};
+use super::hidden::{HiddenForm, Typed as HiddenTyped};
 use super::hits::Hit;
 use super::profile::{Action, Editor, ProfileMsg};
 use super::share::{Share, Stage};
@@ -57,6 +59,8 @@ pub enum Msg {
     Done(Done),
     /// The Daemon answered a reveal for the share view.
     Shared(Result<WifiShare, String>),
+    /// The Daemon answered for the access point details.
+    Aps(Result<ApList, String>),
     /// A traffic sample, asked for only while the graphs are visible.
     Traffic(Traffic),
     /// The Daemon's whole activity log (on connect), newest first.
@@ -207,6 +211,10 @@ pub struct App {
     confirm: Option<Confirm>,
     /// The 802.1X sign-in form: while open it has the keys.
     eap: Option<EapForm>,
+    /// The hidden-network form: while open it has the keys.
+    hidden: Option<HiddenForm>,
+    /// The access point details of a Network, while open.
+    aps: Option<Aps>,
     /// The Profile settings editor, while open: it has the keys.
     editor: Option<Editor>,
     /// The share view (QR code) of a saved Network.
@@ -249,6 +257,8 @@ impl App {
             field: None,
             confirm: None,
             eap: None,
+            hidden: None,
+            aps: None,
             editor: None,
             share: None,
             toast: None,
@@ -312,6 +322,14 @@ impl App {
 
     pub fn eap_form(&self) -> Option<&EapForm> {
         self.eap.as_ref()
+    }
+
+    pub fn hidden_form(&self) -> Option<&HiddenForm> {
+        self.hidden.as_ref()
+    }
+
+    pub(super) fn aps(&self) -> Option<&Aps> {
+        self.aps.as_ref()
     }
 
     pub fn editor(&self) -> Option<&Editor> {
@@ -614,6 +632,16 @@ impl App {
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
             Msg::Profile(m) => self.profile_msg(m),
+            Msg::Aps(result) => match self.aps.as_mut() {
+                Some(aps) if matches!(aps.stage, ApsStage::Loading) => {
+                    aps.stage = match result {
+                        Ok(list) => ApsStage::Shown(list),
+                        Err(message) => ApsStage::Failed(message),
+                    };
+                    true
+                }
+                _ => false, // closed meanwhile
+            },
             Msg::Shared(result) => match self.share.as_mut() {
                 Some(share) if matches!(share.stage, Stage::Reading) => {
                     share.arrived(result);
@@ -740,6 +768,32 @@ impl App {
                 }
             }
             (
+                Cmd::JoinHidden {
+                    ssid,
+                    security,
+                    password,
+                    ..
+                },
+                result,
+            ) => {
+                self.wifi.busy = None;
+                match result {
+                    Ok(_) => {
+                        self.say(format!("Joined {ssid}."), false, None);
+                        self.bloom();
+                    }
+                    // Back to the form, nothing typed lost, to try again.
+                    Err(message) => {
+                        self.hidden = Some(HiddenForm::reopened(
+                            ssid.clone(),
+                            *security,
+                            password.as_ref(),
+                            message,
+                        ));
+                    }
+                }
+            }
+            (
                 Cmd::JoinEap {
                     network, ssid, eap, ..
                 },
@@ -766,6 +820,7 @@ impl App {
                 let undo = Cmd::Join {
                     network: network.clone(),
                     ssid: ssid.clone(),
+                    device: None,
                 };
                 self.say(format!("Disconnected from {ssid}."), false, Some(undo));
             }
@@ -840,6 +895,36 @@ impl App {
                 }
             }
             return true;
+        }
+        if let Some(form) = self.hidden.as_mut() {
+            match form.key(key) {
+                HiddenTyped::Editing => {}
+                HiddenTyped::Cancel => self.hidden = None,
+                HiddenTyped::Submit {
+                    name,
+                    security,
+                    password,
+                } => {
+                    self.hidden = None;
+                    let device = self.wifi.card().map(str::to_owned);
+                    self.run_wifi(Cmd::JoinHidden {
+                        ssid: name,
+                        security,
+                        password,
+                        device,
+                    });
+                }
+            }
+            return true;
+        }
+        if self.aps.is_some() {
+            return match key.code {
+                KeyCode::Esc | KeyCode::Char('i' | 'q') | KeyCode::Enter => {
+                    self.aps = None;
+                    true
+                }
+                _ => false,
+            };
         }
         if self.field.is_some() {
             return self.field_key(key);
@@ -1103,6 +1188,12 @@ impl App {
                 }
                 None => false,
             },
+            KeyCode::Char('n') => {
+                self.toast = None;
+                self.hidden = Some(HiddenForm::new());
+                true
+            }
+            KeyCode::Char('c') => self.wifi.cycle_card(),
             _ => {
                 let Some(entry) = self.wifi.selected().cloned() else {
                     return false;
@@ -1116,7 +1207,26 @@ impl App {
                         true
                     }
                     KeyCode::Enter if !entry.joined() && self.wifi.busy.is_none() => {
-                        self.run_wifi(Cmd::Join { network, ssid });
+                        let device = self.wifi.card().map(str::to_owned);
+                        self.run_wifi(Cmd::Join {
+                            network,
+                            ssid,
+                            device,
+                        });
+                        true
+                    }
+                    KeyCode::Char('i') if matches!(entry, Entry::Net(_)) => {
+                        self.toast = None;
+                        self.aps = Some(Aps::loading(ssid));
+                        if let Some(runner) = &self.runner {
+                            runner.call(Op::WifiAps { network }, |r| {
+                                Msg::Aps(r.and_then(|v| {
+                                    serde_json::from_value(v).map_err(|_| {
+                                        "The daemon sent details Nexus cannot read.".to_string()
+                                    })
+                                }))
+                            });
+                        }
                         true
                     }
                     KeyCode::Char('x') if entry.joined() => {
@@ -1275,7 +1385,9 @@ impl App {
 
     /// Sends a Wi-Fi command, marking a join as in flight.
     fn run_wifi(&mut self, cmd: Cmd) {
-        if let Cmd::Join { ssid, .. } | Cmd::JoinEap { ssid, .. } = &cmd {
+        if let Cmd::Join { ssid, .. } | Cmd::JoinEap { ssid, .. } | Cmd::JoinHidden { ssid, .. } =
+            &cmd
+        {
             self.wifi.busy = Some(ssid.clone());
         }
         self.toast = None;
@@ -1319,8 +1431,11 @@ impl App {
         if self.palette.is_some() {
             return vec![("enter", "run"), ("esc", "close")];
         }
-        if self.eap.is_some() {
+        if self.eap.is_some() || self.hidden.is_some() {
             return vec![("tab", "next"), ("enter", "join"), ("esc", "cancel")];
+        }
+        if self.aps.is_some() {
+            return vec![("esc", "close")];
         }
         if let Some(field) = &self.field {
             let go = if field.prompt.kind == PromptKind::VpnSecret {
@@ -1434,6 +1549,12 @@ impl App {
             }
             if e.saved() {
                 v.push(("e", "settings"));
+            }
+        }
+        if more {
+            v.push(("n", "other"));
+            if !self.wifi.cards().is_empty() {
+                v.push(("c", "card"));
             }
         }
         if self.toast.as_ref().is_some_and(|t| t.undo.is_some()) {

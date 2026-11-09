@@ -29,10 +29,10 @@ expression: frame
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter join  r scan  h/l tab  : palette  ? help  q quit
+ j/k move  enter join  r scan  n other  h/l tab  : palette  ? help  q quit
 
- 2507 cells  fg=- bg=- mods=[]
-  156 cells  fg=- bg=- mods=[bold]
+ 2506 cells  fg=- bg=- mods=[]
+  157 cells  fg=- bg=- mods=[bold]
     2 cells  fg=- bg=- mods=[dim,reversed]
   104 cells  fg=- bg=- mods=[dim]
    31 cells  fg=- bg=- mods=[reversed]

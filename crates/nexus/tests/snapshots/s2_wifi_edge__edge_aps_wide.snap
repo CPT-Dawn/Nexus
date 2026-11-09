@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_wifi_edge.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
+╭ Wi-Fi ───────────────────────────────╮╭ Mesh-Home ───────────────────────────────────────────────────────────────────────────────────────╮
+│ ▸   Mesh-Home       ▂▄▆█ wpa2     5G ││ Not saved                                                                                        │
+│     Mixed-Mode      ▂▄▆█ wpa2/3   5G ││                                                                                                  │
+│     Airport Free    ▂▄▆█ owe    2.4G ││ Signal         82%  ▂▄▆█                                                                         │
+│     caf� �[2Jwifi   ▂▄▆█ open   2.4G ││ Security      WPA2 personal                                                                      │
+│                                      ││ Band          5 GHz                                                                              │
+│                                      ││ Access points 4                                                                                  │
+│                                      ││ Adapter       wlan0                                                                              │
+│                                      ││ Joins via     any (press c)                                                                      │
+│                                      ││                                                                                                  │
+│                                  ╭ Access points of Mesh-Home ────────────────────────────────────────╮                                  │
+│                                  │   Address            Ch   MHz Band       Rate  Sig  Card           │                                  │
+│                                  │   AA:00:00:00:10:02  36  5180 5G     866 Mb/s  82%  wlan0          │                                  │
+│                                  │   AA:00:00:00:10:02  36  5180 5G     866 Mb/s  60%  wlan1          │                                  │
+│                                  │   AA:00:00:00:10:01   6  2437 2.4G   144 Mb/s  48%  wlan0          │                                  │
+│                                  │   AA:00:00:00:10:03  37  6135 6G    2402 Mb/s  31%  wlan0          │                                  │
+│                                  │                                                                    │                                  │
+│                                  │                                                                    │                                  │
+│                                  │ ● connected   esc close                                            │                                  │
+│                                  ╰────────────────────────────────────────────────────────────────────╯                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ esc close

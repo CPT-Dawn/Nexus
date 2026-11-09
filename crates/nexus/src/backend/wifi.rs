@@ -272,11 +272,7 @@ pub async fn access_points(
     if aps.is_empty() {
         return Ok(Err(text::out_of_range(&name)));
     }
-    aps.sort_by(|a, b| {
-        b.signal
-            .cmp(&a.signal)
-            .then_with(|| a.bssid.cmp(&b.bssid))
-    });
+    aps.sort_by(|a, b| b.signal.cmp(&a.signal).then_with(|| a.bssid.cmp(&b.bssid)));
     Ok(Ok(ApList { ssid: name, aps }))
 }
 
