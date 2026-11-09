@@ -56,7 +56,7 @@ fn bluetooth_line(b: Bluetooth, look: &Look, sym: &Sym) -> Line<'static> {
             Span::styled(sym.hollow(), look.warn()),
             Span::styled(" Bluetooth is off", look.warn()),
         ]),
-        Bluetooth::Absent => Line::from(vec![
+        _ => Line::from(vec![
             Span::styled(sym.hollow(), look.err()),
             Span::styled(" No Bluetooth", look.err()),
         ]),
@@ -153,15 +153,15 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
                  bluetooth) and your paired phones will show here.",
                 look.warn(),
             ),
-            (true, Bluetooth::Absent) => (
-                "No Bluetooth adapter was found, or the Bluetooth service is not running \
-                 (systemctl start bluetooth).",
-                look.err(),
-            ),
             (true, Bluetooth::On) => (
                 "No paired phone offers network access.\n\nPair your phone (bluetoothctl), \
                  then switch on Bluetooth tethering in its settings.",
                 look.dim(),
+            ),
+            (true, _) => (
+                "No Bluetooth adapter was found, or the Bluetooth service is not running \
+                 (systemctl start bluetooth).",
+                look.err(),
             ),
         };
         f.render_widget(
@@ -189,7 +189,7 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
     let (bt, bt_style) = match bluetooth {
         Bluetooth::On => ("on", look.text()),
         Bluetooth::Off => ("off", look.warn()),
-        Bluetooth::Absent => ("missing", look.err()),
+        _ => ("missing", look.err()),
     };
     lines.push(row("Bluetooth", Span::styled(bt, bt_style)));
     lines.push(row(

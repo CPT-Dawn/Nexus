@@ -22,6 +22,25 @@ pub struct Output {
     pub alt: String,
 }
 
+/// The glyph that goes in front of `text` when `waybar.icons` is on: one plain
+/// Unicode symbol per `alt` word (no icon font needed).
+fn glyph(alt: &str) -> &'static str {
+    match alt {
+        "online" => "\u{25cf}",
+        "vpn" => "\u{25c6}",
+        "connecting" | "disconnecting" => "\u{25cc}",
+        "limited" | "portal" => "\u{25d0}",
+        "offline" | "asleep" => "\u{25cb}",
+        _ => "\u{2715}",
+    }
+}
+
+/// `out` with its glyph in front of the text, for `waybar.icons = true`.
+pub fn with_glyph(mut out: Output) -> Output {
+    out.text = format!("{} {}", glyph(&out.alt), out.text);
+    out
+}
+
 /// What the module shows for the Daemon being out of reach.
 pub fn unavailable() -> Output {
     render(&Status::unavailable(), None, None, None)

@@ -562,6 +562,12 @@ async fn answer<B: Backend>(
             backend_reply(req.id, result)
         }
         Op::EthernetList => backend_reply(req.id, backend.ethernet_list().await),
+        Op::ProfileList => {
+            backend_reply(req.id, inventory(backend, nexus_ipc::ProfileList::of).await)
+        }
+        Op::DeviceList => {
+            backend_reply(req.id, inventory(backend, nexus_ipc::DeviceList::of).await)
+        }
         Op::EthernetConnect { port } => backend_reply(req.id, backend.ethernet_connect(port).await),
         Op::EthernetJoinEap { port, eap } => {
             backend_reply(req.id, backend.ethernet_join_eap(port, eap).await)
@@ -706,6 +712,16 @@ async fn open_portal<B: Backend>(
         ),
         Err(message) => Response::err(Some(id), ErrorCode::OpenFailed, message),
     }
+}
+
+/// An answer made from the Wi-Fi and Ethernet lists (`profile_list`, `device_list`).
+async fn inventory<B: Backend, T>(
+    backend: &B,
+    build: fn(&nexus_ipc::WifiList, &nexus_ipc::EthernetList) -> T,
+) -> Result<T, BackendError> {
+    let wifi = backend.wifi_list().await?;
+    let ethernet = backend.ethernet_list().await?;
+    Ok(build(&wifi, &ethernet))
 }
 
 fn backend_reply<T: serde::Serialize>(id: u64, result: Result<T, BackendError>) -> Response {

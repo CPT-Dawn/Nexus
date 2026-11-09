@@ -25,6 +25,7 @@ pub struct Config {
     pub ui: Ui,
     pub connectivity: ConnectivityCheck,
     pub menu: Menu,
+    pub waybar: WaybarConfig,
     pub prompts: Prompts,
     pub doctor: DoctorConfig,
     pub notifications: Notifications,
@@ -153,6 +154,15 @@ pub struct Menu {
     pub launcher: Option<String>,
 }
 
+/// `nexus status --waybar`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WaybarConfig {
+    /// Put a state glyph in front of the bar `text`. Off by default; `alt`
+    /// always carries the state for `format-icons`.
+    pub icons: bool,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -161,6 +171,7 @@ impl Default for Config {
             ui: Ui::default(),
             connectivity: ConnectivityCheck::default(),
             menu: Menu::default(),
+            waybar: WaybarConfig::default(),
             prompts: Prompts::default(),
             doctor: DoctorConfig::default(),
             notifications: Notifications::default(),

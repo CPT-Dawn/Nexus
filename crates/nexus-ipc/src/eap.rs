@@ -9,10 +9,15 @@ use crate::Secret;
 /// The outer method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum EapMethod {
     Peap,
     Ttls,
     Tls,
+    /// A method this build does not know. `Eap::validate` refuses it, so it
+    /// never reaches a Backend.
+    #[serde(other)]
+    Unknown,
 }
 
 impl EapMethod {
@@ -23,6 +28,7 @@ impl EapMethod {
             EapMethod::Peap => "PEAP",
             EapMethod::Ttls => "TTLS",
             EapMethod::Tls => "TLS",
+            EapMethod::Unknown => "Unknown",
         }
     }
 
@@ -31,7 +37,7 @@ impl EapMethod {
         match self {
             EapMethod::Peap => &[Phase2::Mschapv2, Phase2::Gtc, Phase2::Md5],
             EapMethod::Ttls => &[Phase2::Mschapv2, Phase2::Pap, Phase2::Mschap, Phase2::Chap],
-            EapMethod::Tls => &[],
+            EapMethod::Tls | EapMethod::Unknown => &[],
         }
     }
 }
@@ -39,6 +45,7 @@ impl EapMethod {
 /// The inner (phase 2) method of PEAP and TTLS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Phase2 {
     Mschapv2,
     Mschap,
@@ -46,6 +53,9 @@ pub enum Phase2 {
     Chap,
     Gtc,
     Md5,
+    /// An inner method this build does not know; `Eap::validate` refuses it.
+    #[serde(other)]
+    Unknown,
 }
 
 impl Phase2 {
@@ -57,6 +67,7 @@ impl Phase2 {
             Phase2::Chap => "CHAP",
             Phase2::Gtc => "GTC",
             Phase2::Md5 => "MD5",
+            Phase2::Unknown => "Unknown",
         }
     }
 }
@@ -64,6 +75,7 @@ impl Phase2 {
 /// A form field, so a Front end can put an error beside the right input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EapField {
+    Method,
     Phase2,
     Identity,
     Password,
@@ -154,6 +166,14 @@ impl Eap {
                 message: message.into(),
             });
         };
+        if self.method == EapMethod::Unknown {
+            bad(EapField::Method, "That sign-in method is not supported.");
+            return out;
+        }
+        if self.phase2 == Some(Phase2::Unknown) {
+            bad(EapField::Phase2, "That inner method is not supported.");
+            return out;
+        }
         let inner = self.method.inner();
         match (self.phase2, inner.is_empty()) {
             (None, false) => bad(EapField::Phase2, "Pick the inner method."),
