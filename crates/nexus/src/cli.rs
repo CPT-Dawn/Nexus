@@ -869,18 +869,18 @@ pub(crate) fn report(
 }
 
 /// `nexus config get [key]`.
-pub fn config_get(key: Option<String>) -> ExitCode {
-    config_call(Op::ConfigGet { key })
+pub fn config_get(key: Option<String>, json: bool) -> ExitCode {
+    config_call(Op::ConfigGet { key }, json)
 }
 
 /// `nexus config set <key> <value>`. The value is read as JSON (`true`, `3`,
 /// `"text"`) and falls back to plain text, so `nexus config set theme nord` works.
 pub fn config_set(key: String, value: &str) -> ExitCode {
     let value = serde_json::from_str(value).unwrap_or_else(|_| Value::String(value.into()));
-    config_call(Op::ConfigSet { key, value })
+    config_call(Op::ConfigSet { key, value }, false)
 }
 
-fn config_call(op: Op) -> ExitCode {
+fn config_call(op: Op, json: bool) -> ExitCode {
     let mut conn = match Connection::connect() {
         Ok(c) => c,
         Err(e) => return unreachable(&e),
@@ -896,6 +896,7 @@ fn config_call(op: Op) -> ExitCode {
                 eprintln!("nexus: warning: {warning}");
             }
             match &result["value"] {
+                v if json => println!("{v}"),
                 Value::String(s) => println!("{s}"),
                 v @ Value::Object(_) => {
                     println!("{}", serde_json::to_string_pretty(v).expect("serializes"));
@@ -991,6 +992,19 @@ mod tests {
                 code.name(),
                 row.1
             );
+        }
+    }
+
+    #[test]
+    fn docs_publish_the_same_exit_codes() {
+        const DOC: &str = include_str!("../../../docs/ipc.md");
+        for (code, meaning) in EXIT_CODES {
+            let row = format!("| {code} | {meaning} |");
+            assert!(DOC.contains(&row), "docs/ipc.md lacks `{row}`");
+        }
+        for code in ErrorCode::ALL {
+            let row = format!("| `{}` | {} |", code.name(), exit_code(*code));
+            assert!(DOC.contains(&row), "docs/ipc.md lacks `{row}`");
         }
     }
 

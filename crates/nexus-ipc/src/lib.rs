@@ -1,9 +1,4 @@
-//! Request, response and event types for the Nexus daemon's JSON-lines
-//! socket API (ADR-0002), plus a small blocking client.
-//!
-//! One JSON object per `\n`-terminated line. Unknown fields are ignored and
-//! every enum that can grow ends in an `Unknown` variant, so additive changes
-//! keep `v: 1`.
+#![doc = include_str!("../README.md")]
 
 use std::io::{self, BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
@@ -384,9 +379,15 @@ pub struct Failure {
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum ErrorCode {
+    /// The line is not JSON, or not a request this daemon can read (a missing
+    /// or wrongly typed field). The message says what.
     BadRequest,
+    /// The request's `v` is not one the daemon speaks; the message lists them.
     UnsupportedVersion,
+    /// No op has that name.
     UnknownOp,
+    /// The daemon failed in a way that is not the request's fault (a
+    /// NetworkManager read that errored, say); the message says what.
     Internal,
     /// The Backend (NetworkManager) is not running or not reachable.
     BackendUnavailable,
@@ -575,18 +576,14 @@ pub struct EventLine {
 #[serde(tag = "event", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Event {
-    StatusChanged {
-        status: Status,
-    },
+    /// The overall state or the primary Link changed. Carries the whole new
+    /// status (what `status` would answer).
+    StatusChanged { status: Status },
     /// The Wi-Fi list changed. Carries the whole new list; a burst of
     /// Backend changes yields one event per Daemon tick.
-    NetworksChanged {
-        wifi: WifiList,
-    },
+    NetworksChanged { wifi: WifiList },
     /// Something worth a line in the activity strip just happened.
-    Activity {
-        entry: ActivityEntry,
-    },
+    Activity { entry: ActivityEntry },
     /// `config.toml` changed (or was fixed, or broke). `config` is what is now
     /// in force; `warning` says why the file is being ignored, if it is.
     ConfigReloaded {
@@ -597,47 +594,28 @@ pub enum Event {
     /// The Backend needs a secret from the user. Prompts still open when a
     /// Front end subscribes are replayed to it, so one that was not running
     /// when the prompt opened still sees it.
-    SecretPromptOpened {
-        prompt: Prompt,
-    },
+    SecretPromptOpened { prompt: Prompt },
     /// A Secret prompt is gone: answer it no more.
-    SecretPromptClosed {
-        id: u64,
-        reason: PromptClosed,
-    },
+    SecretPromptClosed { id: u64, reason: PromptClosed },
     /// The Doctor's findings changed since it last ran (any Front end asked it
     /// to run). Carries all of them.
-    DoctorFindings {
-        findings: Vec<Finding>,
-    },
+    DoctorFindings { findings: Vec<Finding> },
     /// The VPN list changed (a Profile added, a VPN up or down).
-    VpnsChanged {
-        vpns: VpnList,
-    },
+    VpnsChanged { vpns: VpnList },
     /// The Tethering picture changed (Bluetooth switched, a phone paired,
     /// tethered or dropped). Carries the whole new picture.
-    TethersChanged {
-        tethers: Tethers,
-    },
+    TethersChanged { tethers: Tethers },
     /// The Hotspot started, stopped or its device count changed.
-    HotspotChanged {
-        hotspot: Hotspot,
-    },
+    HotspotChanged { hotspot: Hotspot },
     /// The Network is now behind a Portal (`Some`), or no longer is (`None`:
     /// signed in, or the Link went away).
-    PortalChanged {
-        portal: Option<Portal>,
-    },
+    PortalChanged { portal: Option<Portal> },
     /// The Ethernet picture changed (a cable plugged or pulled, a port joined,
     /// dropped or failed). Carries the whole new picture.
-    EthernetChanged {
-        ethernet: EthernetList,
-    },
+    EthernetChanged { ethernet: EthernetList },
     /// A change to the Profile carrying the Link waits for confirmation:
     /// it rolls back in `rollback_secs` unless somebody confirms it.
-    ProfilePending {
-        change: PendingChange,
-    },
+    ProfilePending { change: PendingChange },
     /// A pending change was confirmed or rolled back.
     ProfileSettled {
         id: u64,
@@ -1645,5 +1623,135 @@ mod wifi_edge_tests {
         assert_eq!(channel_of(5955), 1);
         assert_eq!(channel_of(6135), 37);
         assert_eq!(channel_of(100), 0);
+    }
+}
+
+/// The documented contract (`docs/ipc.md`) names exactly what this crate
+/// knows. The examples there are run against a real Daemon by
+/// `crates/nexus/tests/ipc_conformance.rs`.
+#[cfg(test)]
+mod contract_tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+
+    const DOC: &str = include_str!("../../../docs/ipc.md");
+
+    /// Names that head a section: `#### \`name\`` (ops) or `### \`name\``
+    /// under `## Events`.
+    fn headings(level: &str, within: &str) -> BTreeSet<String> {
+        let start = DOC.find(within).unwrap_or_else(|| panic!("no {within}"));
+        let section = &DOC[start + within.len()..];
+        let end = section.find("\n## ").unwrap_or(section.len());
+        let marker = format!("\n{level} `");
+        section[..end]
+            .match_indices(&marker)
+            .map(|(i, _)| {
+                let rest = &section[i + marker.len()..];
+                rest[..rest.find('`').unwrap()].to_owned()
+            })
+            .collect()
+    }
+
+    /// Every op the crate knows, from the error serde gives for a name that
+    /// is none of them (it lists all variants).
+    fn op_names() -> BTreeSet<String> {
+        let err = serde_json::from_str::<Op>(r#"{"op":"__"}"#)
+            .unwrap_err()
+            .to_string();
+        let list = &err[err.find("expected").expect("serde lists the variants")..];
+        list.split('`')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_owned)
+            .collect()
+    }
+
+    /// Adding an `Event` variant breaks this match: add it here and to the
+    /// list below, then document it.
+    fn event_name(event: &Event) -> &'static str {
+        match event {
+            Event::StatusChanged { .. } => "status_changed",
+            Event::NetworksChanged { .. } => "networks_changed",
+            Event::Activity { .. } => "activity",
+            Event::ConfigReloaded { .. } => "config_reloaded",
+            Event::SecretPromptOpened { .. } => "secret_prompt_opened",
+            Event::SecretPromptClosed { .. } => "secret_prompt_closed",
+            Event::DoctorFindings { .. } => "doctor_findings",
+            Event::VpnsChanged { .. } => "vpns_changed",
+            Event::TethersChanged { .. } => "tethers_changed",
+            Event::HotspotChanged { .. } => "hotspot_changed",
+            Event::PortalChanged { .. } => "portal_changed",
+            Event::EthernetChanged { .. } => "ethernet_changed",
+            Event::ProfilePending { .. } => "profile_pending",
+            Event::ProfileSettled { .. } => "profile_settled",
+            Event::Unknown => "unknown",
+        }
+    }
+
+    const EVENTS: &[&str] = &[
+        "status_changed",
+        "networks_changed",
+        "activity",
+        "config_reloaded",
+        "secret_prompt_opened",
+        "secret_prompt_closed",
+        "doctor_findings",
+        "vpns_changed",
+        "tethers_changed",
+        "hotspot_changed",
+        "portal_changed",
+        "ethernet_changed",
+        "profile_pending",
+        "profile_settled",
+    ];
+
+    #[test]
+    fn every_op_is_documented_and_nothing_else() {
+        let ops = op_names();
+        assert!(ops.len() > 40, "{ops:?}");
+        assert_eq!(headings("####", "\n## Requests"), ops);
+    }
+
+    #[test]
+    fn every_event_is_documented_and_nothing_else() {
+        let known: BTreeSet<String> = EVENTS.iter().map(|e| (*e).to_owned()).collect();
+        assert_eq!(headings("###", "\n## Events"), known);
+        // An event line of each name decodes to the variant of that name.
+        for name in EVENTS {
+            let line = format!(r#"{{"v":1,"event":"{name}"}}"#);
+            let decoded = serde_json::from_str::<EventLine>(&line);
+            // Payload-less lines may fail to decode; they must not decode
+            // as another variant.
+            if let Ok(line) = decoded {
+                assert_ne!(event_name(&line.event), "unknown", "{name}");
+            }
+        }
+        let newer = serde_json::from_str::<EventLine>(r#"{"v":1,"event":"from_the_future"}"#)
+            .expect("an unknown event decodes");
+        assert_eq!(event_name(&newer.event), "unknown");
+    }
+
+    #[test]
+    fn every_error_code_is_documented_and_round_trips() {
+        let mut documented = BTreeSet::new();
+        for line in DOC.lines() {
+            if let Some(rest) = line.strip_prefix("| `")
+                && let Some((name, _)) = rest.split_once("` | ")
+            {
+                documented.insert(name.to_owned());
+            }
+        }
+        let known: BTreeSet<String> = ErrorCode::ALL.iter().map(|c| c.name().to_owned()).collect();
+        assert_eq!(documented, known);
+        for code in ErrorCode::ALL {
+            let wire = serde_json::to_value(code).unwrap();
+            assert_eq!(wire, serde_json::json!(code.name()));
+            assert_eq!(serde_json::from_value::<ErrorCode>(wire).unwrap(), *code);
+        }
+        assert_eq!(
+            serde_json::from_str::<ErrorCode>("\"from_the_future\"").unwrap(),
+            ErrorCode::Unknown
+        );
     }
 }

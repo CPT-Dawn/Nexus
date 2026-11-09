@@ -83,6 +83,10 @@ _Avoid_: server, service (alone), agent
 Any program that shows or changes Nexus state only through the Daemon: the TUI, the CLI, a status-bar module.
 _Avoid_: client, UI
 
+**Contract**:
+The Daemon's socket API as `docs/ipc.md` documents it and `nexus-ipc` types it: frozen at protocol version 1 for 2.0, changed only additively (ADR-0006).
+_Avoid_: public API (alone), protocol (alone)
+
 **Secret prompt**:
 A request from the Backend for something only the user knows, such as a Wi-Fi password or a VPN one-time code, answered through a Front end.
 _Avoid_: password dialog, auth request

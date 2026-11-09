@@ -26,7 +26,10 @@ pub fn write(root: &Command, dir: Option<&Path>) -> std::io::Result<()> {
 
 fn all(command: &Command, name: &str, dir: &Path, top: bool) -> std::io::Result<()> {
     let mut file = std::fs::File::create(dir.join(format!("{name}.1")))?;
-    let command = command.clone().name(name.to_owned()).bin_name(name.replace("-", " "));
+    let command = command
+        .clone()
+        .name(name.to_owned())
+        .bin_name(name.replace("-", " "));
     page(&command, &mut file, top)?;
     for sub in command.get_subcommands().filter(|c| !c.is_hide_set()) {
         let sub_name = format!("{name}-{}", sub.get_name());

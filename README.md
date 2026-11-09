@@ -36,6 +36,17 @@ nexus status
 `nexus status --json` prints the same thing for scripts. If the daemon cannot
 be reached, `nexus` exits with code 3 and says how to start it.
 
+## Scripting
+
+Every read command takes `--json`, every action has a command (`nexus --help`,
+`man nexus`, or `man nexus-wifi-join` for one command), and every failure has
+its own exit code, listed in [docs/ipc.md](docs/ipc.md#exit-codes). Shell
+completions for bash, zsh and fish and the man pages are installed with the
+package. Anything the CLI does not cover, a program can do over the daemon's
+socket: [docs/ipc.md](docs/ipc.md) documents the JSON-lines protocol with
+`socat` and `jq` examples, and the `nexus-ipc` crate
+([README](crates/nexus-ipc/README.md)) is the Rust client.
+
 ## Permissions
 
 Nexus never runs as root. NetworkManager's polkit rules decide what you may
