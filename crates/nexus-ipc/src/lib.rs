@@ -15,13 +15,18 @@ use serde_json::Value;
 
 mod doctor;
 mod eap;
+mod ethernet;
 pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
 pub use eap::{Eap, EapError, EapField, EapMethod, Phase2};
+pub use ethernet::{
+    EthernetDropped, EthernetJoined, EthernetList, EthernetPort, EthernetProblem, EthernetProfile,
+    EthernetState, EthernetTrouble, speed_text,
+};
 
 pub mod profile;
 pub use profile::{
     AddressEntry, Field, FieldError, Ipv4, Ipv4Method, Ipv6, Ipv6Method, MacMode, PendingChange,
-    ProfileApplied, ProfileSettings, ProfileView, Settled,
+    ProfileApplied, ProfileKey, ProfileSettings, ProfileView, Settled,
 };
 
 /// The protocol version this crate speaks.
@@ -127,9 +132,17 @@ pub enum Op {
         #[serde(default)]
         confirm: bool,
     },
-    /// Read the settings of the saved Profile of a Network (`WifiNetwork.id`).
-    /// Result: [`ProfileView`]; `unknown_network` when nothing is saved for it.
-    ProfileGet { network: String },
+    /// Read the settings of a saved Profile: a Wi-Fi Network's (`network` is a
+    /// `WifiNetwork.id`) or, with `profile` (a Profile uuid, e.g.
+    /// `EthernetProfile.uuid`), any Ethernet Profile. `profile` wins when both
+    /// are given. Result: [`ProfileView`]; `unknown_network` when nothing is
+    /// saved for it.
+    ProfileGet {
+        #[serde(default)]
+        network: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<String>,
+    },
     /// Change the settings of a saved Profile. `version` is the one
     /// `profile_get` returned: a Profile that changed since fails with
     /// `conflict`. Invalid settings fail with `invalid_settings` before
@@ -138,7 +151,11 @@ pub enum Op {
     /// `profile_confirm` follows within `rollback_secs` (default 15) the
     /// Backend puts the old settings back. Result: [`ProfileApplied`].
     ProfileUpdate {
+        #[serde(default)]
         network: String,
+        /// A Profile uuid instead of a Wi-Fi `network` (see `profile_get`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<String>,
         version: u64,
         settings: ProfileSettings,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -150,6 +167,33 @@ pub enum Op {
     /// Revert a pending change now instead of waiting. Result `{}`;
     /// `nothing_pending` as for `profile_confirm`.
     ProfileRevert { pending: u64 },
+    /// The Ethernet ports, their Link details and why a plugged-in one does
+    /// not work. Result: [`EthernetList`].
+    EthernetList,
+    /// Bring an Ethernet port up with its saved Profile (a plain DHCP Profile
+    /// is made and saved when it has none), waiting until it is up or has
+    /// failed. `port` may be left out when the machine has one port. Result:
+    /// [`EthernetJoined`]; `unplugged`, `unknown_port`, `wrong_password` (the
+    /// port refused the 802.1X sign-in), `no_address`, `join_failed`.
+    EthernetConnect {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<String>,
+    },
+    /// Drop an Ethernet Link, keeping its Profile. Result: [`EthernetDropped`];
+    /// `not_connected`, `unknown_port`.
+    EthernetDisconnect {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<String>,
+    },
+    /// Sign in to an 802.1X (wired Enterprise Network) port with the settings
+    /// in `eap`: the port's Profile gets them (one is made when there is none)
+    /// and is brought up. Like `ethernet_connect` otherwise;
+    /// `invalid_settings` when `eap` fails its validation.
+    EthernetJoinEap {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<String>,
+        eap: Eap,
+    },
     /// Switch Wi-Fi on or off. Result: [`Radios`]. `hard_blocked` while a
     /// hardware switch holds the radio off.
     WifiPower { on: bool },
@@ -335,6 +379,10 @@ pub enum ErrorCode {
     InvalidConfig,
     /// The VPN did not come up; the message says why.
     VpnFailed,
+    /// No cable is plugged into the Ethernet port.
+    Unplugged,
+    /// No Ethernet port has that name (or several exist and none was named).
+    UnknownPort,
     #[serde(other)]
     Unknown,
 }
@@ -420,6 +468,11 @@ pub enum Event {
     /// signed in, or the Link went away).
     PortalChanged {
         portal: Option<Portal>,
+    },
+    /// The Ethernet picture changed (a cable plugged or pulled, a port joined,
+    /// dropped or failed). Carries the whole new picture.
+    EthernetChanged {
+        ethernet: EthernetList,
     },
     /// A change to the Profile carrying the Link waits for confirmation:
     /// it rolls back in `rollback_secs` unless somebody confirms it.

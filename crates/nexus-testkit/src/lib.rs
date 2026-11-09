@@ -21,8 +21,8 @@ mod world;
 pub use bus::Bus;
 pub use fake_bluez::FakeBluez;
 pub use fake_nm::{
-    ActiveConnection, Ap, ApId, DeviceId, FakeNm, NmConnectivity, NmState, SCAN_RATE_LIMIT_MS,
-    boottime_ms,
+    ActiveConnection, Ap, ApId, DeviceId, FakeNm, Lease, NmConnectivity, NmState,
+    SCAN_RATE_LIMIT_MS, boottime_ms,
 };
 pub use fake_notifications::{FakeNotifications, Notified};
 pub use fake_systemd::{FakeSystemd, Unit};

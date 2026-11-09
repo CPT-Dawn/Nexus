@@ -101,6 +101,7 @@ pub(super) async fn add_and_activate(
             settings: Default::default(),
             version: 1,
             bdaddr: Some(addr),
+            wired: false,
             vpn: None,
         }));
         m.profiles.len() - 1
@@ -182,6 +183,7 @@ impl FakeNm {
                     name: name.into(),
                     caps,
                 }),
+                wired: None,
             });
             m.devices.len() - 1
         };

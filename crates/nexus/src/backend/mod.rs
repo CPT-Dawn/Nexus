@@ -3,6 +3,7 @@
 
 mod agent;
 pub mod eap;
+mod ethernet;
 pub mod nm;
 mod tether;
 mod vpn;
@@ -11,9 +12,10 @@ mod wifi;
 use std::future::Future;
 
 use nexus_ipc::{
-    AutoconnectSet, Disconnected, Forgotten, Joined, NewTunnel, ProfileSettings, ProfileView,
-    Radios, ScanOutcome, Secret, Status, Tethered, Tethers, Untethered, VpnAdded, VpnKey, VpnList,
-    VpnShare, VpnToggled, WifiList, WifiShare,
+    AutoconnectSet, Disconnected, EthernetDropped, EthernetJoined, EthernetList, Forgotten, Joined,
+    NewTunnel, ProfileKey, ProfileSettings, ProfileView, Radios, ScanOutcome, Secret, Status,
+    Tethered, Tethers, Untethered, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList,
+    WifiShare,
 };
 
 use crate::text::Failure;
@@ -189,6 +191,31 @@ pub trait Backend: Send + Sync + 'static {
     /// Drops the Tethering Link, keeping the Profile.
     fn tether_disconnect(&self) -> impl Future<Output = Result<Untethered, BackendError>> + Send;
 
+    /// The Ethernet ports with their Link details and, for a plugged-in port
+    /// that does not work, what is wrong.
+    fn ethernet_list(&self) -> impl Future<Output = Result<EthernetList, BackendError>> + Send;
+
+    /// Brings a port (the only one when `None`) up with its Profile, making a
+    /// plain DHCP one when it has none, and waits for the outcome. Refused
+    /// with `unplugged` when there is no cable.
+    fn ethernet_connect(
+        &self,
+        port: Option<String>,
+    ) -> impl Future<Output = Result<EthernetJoined, BackendError>> + Send;
+
+    /// Like [`Backend::ethernet_connect`], signing in with 802.1X settings.
+    fn ethernet_join_eap(
+        &self,
+        port: Option<String>,
+        eap: nexus_ipc::Eap,
+    ) -> impl Future<Output = Result<EthernetJoined, BackendError>> + Send;
+
+    /// Drops a port's Link, keeping its Profile.
+    fn ethernet_disconnect(
+        &self,
+        port: Option<String>,
+    ) -> impl Future<Output = Result<EthernetDropped, BackendError>> + Send;
+
     /// Switches Wi-Fi on or off. Refused with `hard_blocked` while a hardware
     /// switch holds it off.
     fn wifi_power(&self, on: bool) -> impl Future<Output = Result<Radios, BackendError>> + Send;
@@ -214,10 +241,10 @@ pub trait Backend: Send + Sync + 'static {
     /// property changes is coalesced into a single tick. Cancel-safe.
     fn changed(&self) -> impl Future<Output = ()> + Send;
 
-    /// The settings of a Network's saved Profile and its version.
+    /// The settings of a saved Profile and its version.
     fn profile_get(
         &self,
-        network: String,
+        key: ProfileKey,
     ) -> impl Future<Output = Result<ProfileView, BackendError>> + Send;
 
     /// Writes `settings` if the Profile is still at `version` (else a
@@ -225,7 +252,7 @@ pub trait Backend: Send + Sync + 'static {
     /// checkpoint that rolls back after `rollback_secs` unless confirmed.
     fn profile_update(
         &self,
-        network: String,
+        key: ProfileKey,
         version: u64,
         settings: ProfileSettings,
         rollback_secs: u32,

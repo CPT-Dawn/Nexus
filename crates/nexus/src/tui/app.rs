@@ -1038,10 +1038,16 @@ impl App {
     }
 
     fn open_editor(&mut self, network: String, ssid: String) {
+        self.start_editor(Editor::loading(network, ssid));
+    }
+
+    /// Opens the Profile editor on `editor` and asks the Daemon for its Profile.
+    fn start_editor(&mut self, editor: Editor) {
         self.toast = None;
-        self.editor = Some(Editor::loading(network.clone(), ssid));
+        let op = editor.get_op();
+        self.editor = Some(editor);
         if let Some(runner) = &self.runner {
-            runner.call(Op::ProfileGet { network }, |r| {
+            runner.call(op, |r| {
                 Msg::Profile(ProfileMsg::Loaded(r.and_then(|v| {
                     serde_json::from_value(v)
                         .map_err(|_| "The daemon sent a Profile this nexus cannot read.".into())

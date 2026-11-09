@@ -38,6 +38,9 @@ use zbus::{Connection, connection, interface};
 use zbus::{OwnedVariant, Variant};
 
 mod bt;
+mod wired;
+
+pub use wired::Lease;
 
 const MANAGER_PATH: &str = "/org/freedesktop/NetworkManager";
 const ACTIVE_PATH: &str = "/org/freedesktop/NetworkManager/ActiveConnection/1";
@@ -146,6 +149,8 @@ struct DeviceModel {
     active_ap: Option<u32>,
     /// Set for a paired phone (a Bluetooth Device).
     bt: Option<bt::BtModel>,
+    /// Set for an Ethernet port.
+    wired: Option<wired::WiredModel>,
 }
 
 #[derive(Debug)]
@@ -164,6 +169,8 @@ struct ProfileModel {
     vpn: Option<VpnModel>,
     /// Set for a Bluetooth Profile: the phone's address as six bytes.
     bdaddr: Option<Vec<u8>>,
+    /// An Ethernet Profile (`802-3-ethernet`).
+    wired: bool,
     /// Every setting a client wrote with `Update`/`Update2`, merged over the
     /// basics when read back.
     settings: SettingsDict,
@@ -438,6 +445,16 @@ impl Manager {
             let path = bt::add_and_activate(conn, &self.0, connection, dev, persist_disk).await?;
             return Ok((opath(&path), opath(ACTIVE_PATH), HashMap::new()));
         }
+        if connection.contains_key("802-3-ethernet") {
+            let persist_disk = options
+                .get("persist")
+                .and_then(|v| v.try_clone().ok()?.try_into().ok())
+                .is_some_and(|p: String| p == "disk");
+            let dev = device_index(device.as_str())?;
+            let path =
+                wired::add_and_activate(conn, &self.0, connection, dev, persist_disk).await?;
+            return Ok((opath(&path), opath(ACTIVE_PATH), HashMap::new()));
+        }
         let text = |section: &str, key: &str| -> Option<String> {
             connection
                 .get(section)?
@@ -481,6 +498,7 @@ impl Manager {
                 persisted: persist.as_deref() == Some("disk"),
                 agent_secrets: needs_agent,
                 bdaddr: None,
+                wired: false,
                 settings: SettingsDict::new(),
                 version: 1,
                 secret: text("802-11-wireless-security", "key-mgmt")
@@ -550,6 +568,20 @@ impl Manager {
         if is_vpn {
             start_vpn(conn, &self.0, n).await?;
             return Ok(opath(&vpn_active_path(n)));
+        }
+        let is_wired = self
+            .0
+            .lock()
+            .unwrap()
+            .profiles
+            .get(n)
+            .and_then(|p| p.as_ref())
+            .is_some_and(|p| p.wired);
+        if is_wired {
+            let dev = device_index(device.as_str())?;
+            wired::refuse_unplugged(&self.0, dev)?;
+            wired::start(conn, &self.0, dev, n);
+            return Ok(opath(ACTIVE_PATH));
         }
         let (ssid, is_bt) = self
             .0
@@ -929,12 +961,38 @@ impl Device {
 
     #[zbus(property)]
     fn device_type(&self) -> u32 {
-        // NM_DEVICE_TYPE_BT or NM_DEVICE_TYPE_WIFI
-        if self.0.lock().unwrap().devices[self.1].bt.is_some() {
+        // NM_DEVICE_TYPE_ETHERNET, _BT or _WIFI
+        let m = self.0.lock().unwrap();
+        if m.devices[self.1].wired.is_some() {
+            1
+        } else if m.devices[self.1].bt.is_some() {
             5
         } else {
             2
         }
+    }
+
+    #[zbus(property)]
+    fn active_connection(&self) -> OwnedObjectPath {
+        wired::active_connection(&self.0, self.1)
+    }
+
+    #[zbus(property, name = "Ip4Config")]
+    fn ip4_config(&self) -> OwnedObjectPath {
+        wired::ip4_config(&self.0, self.1)
+    }
+
+    #[zbus(property, name = "Ip6Config")]
+    fn ip6_config(&self) -> OwnedObjectPath {
+        opath("/")
+    }
+
+    /// `(state, reason)` of the last state change.
+    #[zbus(property)]
+    fn state_reason(&self) -> (u32, u32) {
+        let m = self.0.lock().unwrap();
+        let d = &m.devices[self.1];
+        (d.state, d.wired.as_ref().map_or(0, |w| w.reason))
     }
 
     #[zbus(property)]
@@ -947,7 +1005,12 @@ impl Device {
         if state <= 30 {
             return Err(DeviceError::NotActive("Device is not active".into()));
         }
+        if let Some(w) = self.0.lock().unwrap().devices[self.1].wired.as_mut() {
+            w.active = None;
+            w.ip = None;
+        }
         set_device_state(conn, &self.0, self.1, 30, 39).await; // USER_REQUESTED
+        wired::announce(conn, self.1).await;
         Ok(())
     }
 
@@ -975,6 +1038,9 @@ async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u3
         let mut m = model.lock().unwrap();
         let old = m.devices[dev].state;
         m.devices[dev].state = new;
+        if let Some(w) = m.devices[dev].wired.as_mut() {
+            w.reason = reason;
+        }
         let dropped =
             (new == 30 || new == 120) && !m.ap_lag && m.devices[dev].active_ap.take().is_some();
         (old, dropped)
@@ -1422,6 +1488,7 @@ impl Settings {
                 settings: Default::default(),
                 version: 1,
                 bdaddr: None,
+                wired: false,
                 vpn: Some(VpnModel {
                     kind,
                     settings: clone_settings(&connection),
@@ -1560,7 +1627,14 @@ impl Profile {
         let mut connection = HashMap::new();
         connection.insert("id".to_owned(), v(Variant::from(p.id.clone())));
         connection.insert("uuid".to_owned(), v(Variant::from(p.uuid.clone())));
-        connection.insert("type".to_owned(), v(Variant::from("802-11-wireless")));
+        connection.insert(
+            "type".to_owned(),
+            v(Variant::from(if p.wired {
+                "802-3-ethernet"
+            } else {
+                "802-11-wireless"
+            })),
+        );
         connection.insert("autoconnect".to_owned(), v(Variant::from(p.autoconnect)));
         if let Some(addr) = &p.bdaddr {
             connection.insert("type".to_owned(), v(Variant::from("bluetooth")));
@@ -1574,10 +1648,17 @@ impl Profile {
         }
         let mut wireless = HashMap::new();
         wireless.insert("ssid".to_owned(), v(Variant::from(p.ssid.clone())));
-        let mut all: HashMap<String, HashMap<String, OwnedVariant>> = HashMap::from([
-            ("connection".to_owned(), connection),
-            ("802-11-wireless".to_owned(), wireless),
-        ]);
+        let mut all: HashMap<String, HashMap<String, OwnedVariant>> = if p.wired {
+            HashMap::from([
+                ("connection".to_owned(), connection),
+                ("802-3-ethernet".to_owned(), HashMap::new()),
+            ])
+        } else {
+            HashMap::from([
+                ("connection".to_owned(), connection),
+                ("802-11-wireless".to_owned(), wireless),
+            ])
+        };
         // What clients wrote comes back, except the identity they cannot change.
         for (section, values) in &p.settings {
             let into = all.entry(section.clone()).or_default();
@@ -1695,9 +1776,17 @@ impl Profile {
             let gone = m.profiles[self.1].take();
             let told_agent = gone.as_ref().is_some_and(|p| p.agent_secrets);
             let bdaddr = gone.as_ref().and_then(|p| p.bdaddr.clone());
+            let was_wired = gone.as_ref().is_some_and(|p| p.wired);
             let ssid = gone.map(|p| p.ssid).unwrap_or_default();
             let in_use = (0..m.devices.len())
                 .filter(|d| match (&bdaddr, &m.devices[*d].bt) {
+                    _ if was_wired => {
+                        m.devices[*d]
+                            .wired
+                            .as_ref()
+                            .is_some_and(|w| w.active == Some(self.1))
+                            && m.devices[*d].state >= 40
+                    }
                     (Some(addr), Some(b)) => {
                         *addr == bt::bdaddr(&b.address) && m.devices[*d].state >= 40
                     }
@@ -1902,6 +1991,9 @@ impl FakeNm {
             if (40..100).contains(&d.state) {
                 d.state = 30;
                 d.active_ap = None;
+                if let Some(w) = d.wired.as_mut() {
+                    w.active = None;
+                }
             }
         }
     }
@@ -1939,7 +2031,14 @@ impl FakeNm {
                 .serve_at(IP6_PATH, Ip6Config);
             for n in 0..devices {
                 b = b.serve_at(device_path(n), Device(model.clone(), n));
-                if model.lock().unwrap().devices[n].bt.is_some() {
+                if model.lock().unwrap().devices[n].wired.is_some() {
+                    let (active, ip4) = wired::paths(n);
+                    b = b
+                        .serve_at(device_path(n), Statistics(model.clone(), n))
+                        .serve_at(device_path(n), wired::Wired(model.clone(), n))
+                        .serve_at(active, wired::WiredActive(model.clone(), n))
+                        .serve_at(ip4, wired::WiredIp4(model.clone(), n));
+                } else if model.lock().unwrap().devices[n].bt.is_some() {
                     b = b.serve_at(device_path(n), bt::Bluetooth(model.clone(), n));
                 } else {
                     b = b
@@ -2024,6 +2123,7 @@ impl FakeNm {
                 state: 30, // NM_DEVICE_STATE_DISCONNECTED
                 active_ap: None,
                 bt: None,
+                wired: None,
             });
             m.devices.len() - 1
         };
@@ -2173,6 +2273,7 @@ impl FakeNm {
                 secret: None,
                 vpn: None,
                 bdaddr: None,
+                wired: false,
             }));
             m.profiles.len() - 1
         };
@@ -2319,6 +2420,7 @@ impl FakeNm {
                 settings: Default::default(),
                 version: 1,
                 bdaddr: None,
+                wired: false,
                 vpn: Some(VpnModel {
                     kind: "vpn".into(),
                     settings: HashMap::from([("connection".to_owned(), connection)]),
