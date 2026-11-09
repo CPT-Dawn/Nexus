@@ -5,10 +5,12 @@ mod socket;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use nexus_ipc::{ErrorCode, Op, Request, Response};
+use nexus_ipc::{ErrorCode, Event, Op, Request, Response};
+use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 
 use crate::backend::Backend;
+use crate::config::{self, Settings};
 use crate::backend::nm::NetworkManager;
 
 /// `nexus daemon`.
@@ -38,6 +40,9 @@ pub fn run() -> ExitCode {
 
 async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
     let backend = Arc::new(backend);
+    let (events, _) = broadcast::channel::<Event>(64);
+    let settings = Arc::new(Settings::load(config::default_path(), events.clone()));
+    tokio::spawn(config::watch(settings.clone()));
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -50,8 +55,10 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
                     continue; // dropped: silence is the answer
                 }
                 let backend = backend.clone();
+                let settings = settings.clone();
+                let events = events.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = socket::serve_connection(stream, |req| answer(&*backend, req)).await {
+                    if let Err(e) = socket::serve_connection(stream, events, |req| answer(&*backend, &settings, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -65,7 +72,7 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
 }
 
 /// One request in, one response out.
-async fn answer<B: Backend>(backend: &B, req: Request) -> Response {
+async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> Response {
     match req.op {
         Op::Status => match backend.status().await {
             Ok(status) => Response::ok(
@@ -74,7 +81,17 @@ async fn answer<B: Backend>(backend: &B, req: Request) -> Response {
             ),
             Err(e) => Response::err(Some(req.id), ErrorCode::Internal, e.to_string()),
         },
+        Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
+        Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
+        // `Subscribe` is handled by the connection itself.
         // `Op` is non_exhaustive: a newer client op this build cannot serve.
         _ => Response::err(Some(req.id), ErrorCode::UnknownOp, "op not supported"),
+    }
+}
+
+fn reply(id: u64, result: Result<serde_json::Value, nexus_ipc::Failure>) -> Response {
+    match result {
+        Ok(v) => Response::ok(id, v),
+        Err(f) => Response::err(Some(id), f.code, f.message),
     }
 }

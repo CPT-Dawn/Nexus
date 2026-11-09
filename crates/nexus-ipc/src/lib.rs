@@ -39,6 +39,19 @@ pub struct Request {
 pub enum Op {
     /// Overall network state and the primary Link.
     Status,
+    /// Start receiving event lines on this connection. Answered with
+    /// `{"ok": {}}`; events follow, interleaved with later responses.
+    Subscribe,
+    /// Read the effective config, or one value by dotted key (`theme`,
+    /// `connectivity.url`). The result is `{"value": ..., "warning"?: ...}`;
+    /// `warning` is present while the file on disk is being ignored.
+    ConfigGet {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+    },
+    /// Set one value by dotted key, editing `config.toml` in place so the
+    /// user's comments and ordering survive. The result is as for `config_get`.
+    ConfigSet { key: String, value: Value },
 }
 
 /// One response line: `ok` or `err`, never both.
@@ -112,6 +125,13 @@ pub struct EventLine {
 pub enum Event {
     StatusChanged {
         status: Status,
+    },
+    /// `config.toml` changed (or was fixed, or broke). `config` is what is now
+    /// in force; `warning` says why the file is being ignored, if it is.
+    ConfigReloaded {
+        config: Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        warning: Option<String>,
     },
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]

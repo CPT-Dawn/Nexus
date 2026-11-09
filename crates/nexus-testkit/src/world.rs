@@ -96,6 +96,18 @@ impl World {
         self.runtime_dir().join("nexus").join("nexus.sock")
     }
 
+    /// Where the user's optional `config.toml` lives in this world.
+    pub fn config_path(&self) -> PathBuf {
+        self.tmp.path().join("home/.config/nexus/config.toml")
+    }
+
+    /// Writes the config file the way a plain editor would (in place).
+    pub fn write_config(&self, text: &str) {
+        let path = self.config_path();
+        std::fs::create_dir_all(path.parent().unwrap()).expect("mkdir config dir");
+        std::fs::write(path, text).expect("write config");
+    }
+
     pub fn daemon_log(&self) -> String {
         std::fs::read_to_string(self.tmp.path().join("daemon.log")).unwrap_or_default()
     }
