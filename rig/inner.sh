@@ -57,7 +57,7 @@ unset DBUS_SESSION_BUS_ADDRESS
 apns="$work/apns"
 in_ap() { nsenter --net="$apns" "$@"; }
 in_ap ip link set lo up
-mapfile -t ap_ifaces < <(in_ap bash -c 'for d in /sys/class/net/*; do [ -d $d/phy80211 ] && basename $d; done' | sort)
+mapfile -t ap_ifaces < <(in_ap iw dev | awk '$1 == "Interface" {print $2}' | sort)
 confs=("$here"/aps.d/*.conf)
 (( ${#ap_ifaces[@]} == ${#confs[@]} )) || die "have ${#ap_ifaces[@]} AP radios for ${#confs[@]} AP configs"
 
