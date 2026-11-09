@@ -12,6 +12,9 @@ die() { echo "rig(inner): $*" >&2; exit 1; }
 # Wait until the host has moved the radios in.
 read -r _ <"$work/go"
 
+# /sys shows the namespace it was mounted in: remount it for this one.
+mount -t sysfs sysfs /sys
+
 # Safety: this must be an isolated world. Only loopback and wireless
 # interfaces may exist; a wired interface means we are on the host.
 for dev in /sys/class/net/*; do
