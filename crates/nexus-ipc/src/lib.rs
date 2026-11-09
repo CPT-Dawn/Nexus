@@ -335,6 +335,9 @@ pub enum ErrorCode {
     InvalidConfig,
     /// The VPN did not come up; the message says why.
     VpnFailed,
+    /// No Secret Service (keyring) answers, or it is locked or refused: a
+    /// Profile's secrets cannot be moved into or out of it.
+    KeyringUnavailable,
     #[serde(other)]
     Unknown,
 }

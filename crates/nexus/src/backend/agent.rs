@@ -5,7 +5,13 @@
 //! Every `GetSecrets` becomes a Secret prompt on the [`Broker`]. Secrets are
 //! system-owned by default: `SaveSecrets` and `DeleteSecrets` are accepted and
 //! do nothing, because NetworkManager keeps system-owned secrets in the
-//! Profile itself (research 03). Nothing here logs a settings dictionary or an
+//! Profile itself (research 03).
+//!
+//! A Profile the person chose to "keep in keyring" has its `psk-flags` set to
+//! agent-owned: NetworkManager never stores the secret, so it asks here, and
+//! the agent answers from the Secret Service without a prompt (also for
+//! autoconnect). Without the keyring it falls back to the Secret prompt, so
+//! the join still works. Nothing here logs a settings dictionary or an
 //! answer.
 
 use std::collections::HashMap;
@@ -17,6 +23,7 @@ use nexus_ipc::PromptKind;
 use zbus::{Connection, interface};
 use zbus::{OwnedObjectPath, OwnedVariant, Variant};
 
+use crate::keyring::Keyring;
 use crate::secrets::{Broker, Request, Resolution};
 
 pub const AGENT_PATH: &str = "/org/freedesktop/NetworkManager/SecretAgent";
@@ -85,6 +92,26 @@ fn connection_uuid(connection: &Settings) -> Option<String> {
         .ok()
 }
 
+/// Whether the Wi-Fi secret of this Profile is the agent's to supply
+/// (`psk-flags` has the agent-owned bit): the "keep in keyring" Profiles.
+fn keyring_owned(connection: &Settings) -> bool {
+    connection
+        .get(SECURITY)
+        .and_then(|s| s.get("psk-flags"))
+        .and_then(|v| u32::try_from(v.try_clone().ok()?).ok())
+        .is_some_and(|f| f & 0x1 != 0)
+}
+
+fn psk_of(connection: &Settings) -> Option<String> {
+    connection
+        .get(SECURITY)?
+        .get("psk")?
+        .try_clone()
+        .ok()?
+        .try_into()
+        .ok()
+}
+
 fn key(connection_path: &str, setting_name: &str) -> String {
     format!("{connection_path}\n{setting_name}")
 }
@@ -105,6 +132,26 @@ impl Agent {
                 "Nexus cannot ask for this kind of secret yet".into(),
             ));
         };
+        let kept = keyring_owned(&connection);
+        if kept
+            && flags & REQUEST_NEW == 0
+            && let Some(uuid) = connection_uuid(&connection)
+        {
+            // The keyring is asked first, and quietly: this is also the
+            // answer to an autoconnect nobody is watching.
+            match Keyring.lookup(&uuid).await {
+                Ok(Some(secret)) => {
+                    let value = OwnedVariant::try_from(Variant::from(secret.as_str()))
+                        .map_err(AgentError::ZBus)?;
+                    return Ok(HashMap::from([(
+                        setting_name,
+                        HashMap::from([("psk".to_owned(), value)]),
+                    )]));
+                }
+                Ok(None) => {}
+                Err(e) => tracing::warn!("the keyring cannot give a password: {e}"),
+            }
+        }
         if flags & (ALLOW_INTERACTION | REQUEST_NEW) == 0 {
             // Background request (autoconnect): nobody asked a person.
             return Err(AgentError::NoSecrets(
@@ -155,10 +202,35 @@ impl Agent {
             .withdraw(&key(connection_path.as_str(), &setting_name));
     }
 
-    /// System-owned secrets are stored by NetworkManager itself.
-    async fn save_secrets(&self, _connection: Settings, _connection_path: OwnedObjectPath) {}
+    /// System-owned secrets are stored by NetworkManager itself; a "keep in
+    /// keyring" Profile's secret, once a join with it worked, goes to the keyring.
+    async fn save_secrets(&self, connection: Settings, _connection_path: OwnedObjectPath) {
+        if !keyring_owned(&connection) {
+            return;
+        }
+        let (Some(uuid), Some(psk)) = (connection_uuid(&connection), psk_of(&connection)) else {
+            return;
+        };
+        let psk = zeroize::Zeroizing::new(psk);
+        let ssid = wifi_name(&connection)
+            .map(|s| String::from_utf8_lossy(&s).into_owned())
+            .unwrap_or_default();
+        if let Err(e) = Keyring.store(&uuid, &ssid, &psk).await {
+            tracing::warn!("cannot keep the password of {ssid} in the keyring: {e}");
+        }
+    }
 
-    async fn delete_secrets(&self, _connection: Settings, _connection_path: OwnedObjectPath) {}
+    /// A forgotten "keep in keyring" Profile takes its keyring entry along.
+    async fn delete_secrets(&self, connection: Settings, _connection_path: OwnedObjectPath) {
+        if !keyring_owned(&connection) {
+            return;
+        }
+        if let Some(uuid) = connection_uuid(&connection)
+            && let Err(e) = Keyring.remove(&uuid).await
+        {
+            tracing::warn!("cannot clear a keyring entry: {e}");
+        }
+    }
 }
 
 /// Serves the agent on `conn` and keeps it registered: now, and again every
