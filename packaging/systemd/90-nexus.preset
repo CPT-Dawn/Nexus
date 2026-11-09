@@ -1,0 +1,2 @@
+# Enable the Nexus Daemon's socket for every user at login.
+enable nexus.socket
