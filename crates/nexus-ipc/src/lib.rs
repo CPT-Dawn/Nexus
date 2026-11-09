@@ -106,6 +106,28 @@ pub enum Op {
     /// Drop the Tethering Link, keeping the phone paired. Result:
     /// [`Untethered`]; `not_connected` when nothing is tethered.
     TetherDisconnect,
+    /// Whether this machine can host a Hotspot, and the Hotspot that runs.
+    /// Result: [`Hotspot`].
+    Hotspot,
+    /// Start a Hotspot sharing the internet connection, waiting until it
+    /// is up or has failed. Without `ssid` and `password` Nexus makes both
+    /// up (a strong password). Result: [`HotspotStarted`]; `hotspot_unsupported`
+    /// (the card or the radio cannot host one), `join_failed`,
+    /// `invalid_settings` (the name or password is not usable).
+    HotspotStart {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ssid: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password: Option<Secret>,
+    },
+    /// Stop the Hotspot and forget its Profile. Result: [`HotspotStopped`];
+    /// `not_connected` when none runs.
+    HotspotStop,
+    /// The join details of the running Hotspot, for a QR code. Result:
+    /// [`WifiShare`]; `not_connected` when none runs, `reveal_denied` when
+    /// authorization was refused. Front ends call it only after the person
+    /// pressed a reveal key.
+    HotspotReveal,
     /// Answer an open Secret prompt (`prompt` is the id from its `secret_prompt_opened`
     /// event). The only request besides `wifi_join` that carries a secret.
     /// Result `{}`; `unknown_prompt` when it is closed already.
@@ -346,6 +368,8 @@ pub enum ErrorCode {
     /// No Secret Service (keyring) answers, or it is locked or refused: a
     /// Profile's secrets cannot be moved into or out of it.
     KeyringUnavailable,
+    /// This machine's Wi-Fi cannot host a Hotspot; the message says why.
+    HotspotUnsupported,
     #[serde(other)]
     Unknown,
 }
@@ -426,6 +450,10 @@ pub enum Event {
     /// tethered or dropped). Carries the whole new picture.
     TethersChanged {
         tethers: Tethers,
+    },
+    /// The Hotspot started, stopped or its device count changed.
+    HotspotChanged {
+        hotspot: Hotspot,
     },
     /// The Network is now behind a Portal (`Some`), or no longer is (`None`:
     /// signed in, or the Link went away).
@@ -1093,6 +1121,43 @@ pub struct Tethered {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Untethered {
     pub phone: String,
+}
+
+/// The `hotspot` result and `hotspot_changed` payload.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hotspot {
+    /// This machine can host a Hotspot.
+    pub available: bool,
+    /// Why not, in a sentence, when `available` is false.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
+    /// A Hotspot is up or coming up.
+    pub on: bool,
+    /// It is coming up and not carrying devices yet.
+    #[serde(default)]
+    pub starting: bool,
+    /// The running Hotspot's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssid: Option<String>,
+    /// How many devices are joined; `None` when it cannot be counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub devices: Option<u32>,
+}
+
+/// The `hotspot_start` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HotspotStarted {
+    pub ssid: String,
+    /// The password in use, generated or given.
+    pub password: Secret,
+    /// Nexus made the password up.
+    pub generated: bool,
+}
+
+/// The `hotspot_stop` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HotspotStopped {
+    pub ssid: String,
 }
 
 /// Encodes a value as one line, newline included.

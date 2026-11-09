@@ -39,6 +39,7 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::VpnFailed => 23,
         ErrorCode::MissingPlugin => 24,
         ErrorCode::KeyringUnavailable => 25,
+        ErrorCode::HotspotUnsupported => 26,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -460,6 +461,98 @@ pub fn tether_disconnect(json: bool) -> ExitCode {
     })
 }
 
+/// `nexus hotspot status [--json]`.
+pub fn hotspot_status(json: bool) -> ExitCode {
+    wifi_call(Op::Hotspot, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::Hotspot>(value) {
+            Ok(h) => println!("{}", crate::text::hotspot_line(&h)),
+            Err(e) => eprintln!("nexus: undecodable hotspot: {e}"),
+        }
+    })
+}
+
+/// `nexus hotspot start`.
+pub fn hotspot_start(
+    ssid: Option<String>,
+    source: PasswordSource,
+    qr: bool,
+    json: bool,
+) -> ExitCode {
+    let password = match source {
+        PasswordSource::Flag(p) => Some(Secret::new(p)),
+        PasswordSource::Stdin => {
+            let mut line = zeroize::Zeroizing::new(String::new());
+            if let Err(e) = std::io::stdin().read_line(&mut line) {
+                eprintln!("nexus: cannot read the password from stdin: {e}");
+                return ExitCode::FAILURE;
+            }
+            Some(Secret::new(line.trim_end_matches(['\n', '\r'])))
+        }
+        PasswordSource::None => None,
+    };
+    wifi_call(Op::HotspotStart { ssid, password }, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        let Ok(h) = serde_json::from_value::<nexus_ipc::HotspotStarted>(value) else {
+            eprintln!("nexus: undecodable hotspot result");
+            return;
+        };
+        println!("{}", crate::text::hotspot_started(&h.ssid));
+        println!(
+            "{}",
+            crate::text::share_password(&h.ssid, h.password.expose())
+        );
+        if qr {
+            let share = nexus_ipc::WifiShare {
+                ssid: h.ssid.clone(),
+                auth: nexus_ipc::ShareAuth::Wpa,
+                password: Some(h.password.clone()),
+            };
+            match nexus_tui::qr::draw(&share.payload()) {
+                Some(d) => print_qr(&d, &h.ssid),
+                None => eprintln!("nexus: the join details are too long for a QR code."),
+            }
+        }
+    })
+}
+
+/// `nexus hotspot stop`.
+pub fn hotspot_stop(json: bool) -> ExitCode {
+    wifi_call(Op::HotspotStop, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(h) = serde_json::from_value::<nexus_ipc::HotspotStopped>(value) {
+            println!("{}", crate::text::hotspot_stopped(&h.ssid));
+        }
+    })
+}
+
+/// `nexus hotspot qr [--json]`: the running Hotspot's join code. Asks the
+/// Backend for the password, so it needs the same authorization as
+/// `nexus wifi share`.
+pub fn hotspot_qr(json: bool) -> ExitCode {
+    wifi_call(Op::HotspotReveal, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        let Ok(share) = serde_json::from_value::<nexus_ipc::WifiShare>(value) else {
+            eprintln!("nexus: undecodable share result");
+            return;
+        };
+        match nexus_tui::qr::draw(&share.payload()) {
+            Some(d) => print_qr(&d, &share.ssid),
+            None => eprintln!("nexus: the join details are too long for a QR code."),
+        }
+    })
+}
+
 pub(crate) fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
     let mut conn = match Connection::connect() {
         Ok(c) => c,
@@ -558,6 +651,7 @@ mod tests {
             ErrorCode::InvalidConfig,
             ErrorCode::VpnFailed,
             ErrorCode::MissingPlugin,
+            ErrorCode::HotspotUnsupported,
             ErrorCode::BluetoothOff,
             ErrorCode::NoPhone,
             ErrorCode::UnknownPhone,

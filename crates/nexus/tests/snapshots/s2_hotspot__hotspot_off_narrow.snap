@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_hotspot.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Hotspot ▾  5/6                            ● Offline
+╭ Hotspot ─────────────────────────────────────────────────╮
+│ ○ Off                                                    │
+│ n start, strong password                                 │
+│ c choose name, password                                  │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+╭ Tethering ───────────────────────────────────────────────╮
+│ ● Bluetooth is on                                        │
+│                                                          │
+│ ▸   Galaxy S24 Ultra of the whole family          paired │
+│     Pixel 8                                        saved │
+│     Sam's iPhone                                  paired │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ n hotspot  c custom  enter tether  d details  : palette  ?

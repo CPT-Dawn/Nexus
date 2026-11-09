@@ -3,6 +3,7 @@
 
 mod agent;
 pub mod eap;
+pub mod hotspot;
 pub mod nm;
 mod tether;
 mod vpn;
@@ -11,9 +12,9 @@ mod wifi;
 use std::future::Future;
 
 use nexus_ipc::{
-    AutoconnectSet, Disconnected, Forgotten, Joined, NewTunnel, ProfileSettings, ProfileView,
-    Radios, ScanOutcome, Secret, Status, Tethered, Tethers, Untethered, VpnAdded, VpnKey, VpnList,
-    VpnShare, VpnToggled, WifiList, WifiShare,
+    AutoconnectSet, Disconnected, Forgotten, Hotspot, HotspotStarted, HotspotStopped, Joined,
+    NewTunnel, ProfileSettings, ProfileView, Radios, ScanOutcome, Secret, Status, Tethered,
+    Tethers, Untethered, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
 };
 
 use crate::text::Failure;
@@ -190,6 +191,25 @@ pub trait Backend: Send + Sync + 'static {
 
     /// Drops the Tethering Link, keeping the Profile.
     fn tether_disconnect(&self) -> impl Future<Output = Result<Untethered, BackendError>> + Send;
+
+    /// Whether this machine can host a Hotspot, and the one that runs.
+    fn hotspot(&self) -> impl Future<Output = Result<Hotspot, BackendError>> + Send;
+
+    /// Starts a Hotspot and waits until it is up or has failed. Without a
+    /// name or password the Backend makes them up. Refused with
+    /// `hotspot_unsupported` when the card cannot host one.
+    fn hotspot_start(
+        &self,
+        ssid: Option<String>,
+        password: Option<Secret>,
+    ) -> impl Future<Output = Result<HotspotStarted, BackendError>> + Send;
+
+    /// Stops the Hotspot and forgets its Profile.
+    fn hotspot_stop(&self) -> impl Future<Output = Result<HotspotStopped, BackendError>> + Send;
+
+    /// The running Hotspot's join details. Needs the Backend's authorization;
+    /// a refusal is `reveal_denied`.
+    fn hotspot_reveal(&self) -> impl Future<Output = Result<WifiShare, BackendError>> + Send;
 
     /// Switches Wi-Fi on or off. Refused with `hard_blocked` while a hardware
     /// switch holds it off.

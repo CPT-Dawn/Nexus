@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_hotspot.rs
+expression: rig.text(WIDE)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
+╭ Hotspot ─────────────────────────────╮╭ Galaxy S24 Ultra of the whole family ────────────────────────────────────────────────────────────╮
+│ ○ Off                                ││ Paired                                                                                           │
+│ n start, strong password             ││                                                                                                  │
+│ c choose name, password              ││ Address     AA:BB:CC:DD:EE:03                                                                    │
+│                                      ││ Bluetooth   on                                                                                   │
+╰──────────────────────────────────────╯│ Profile     none yet                                                                             │
+╭ Tethering ───────────────────────────╮│                                                                                                  │
+│ ● Bluetooth is on                    ││ Press enter to tether. Switch on Bluetooth tethering on the phone first.                         │
+│                                      ││                                                                                                  │
+│ ▸   Galaxy S24 Ultra of …     paired ││                                                                                                  │
+│     Pixel 8                    saved ││                                                                                                  │
+│     Sam's iPhone              paired ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ j/k move  n hotspot  c custom  enter tether  h/l tab  : palette  ? help  q quit

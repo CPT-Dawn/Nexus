@@ -210,6 +210,11 @@ fn session(
     if let Ok(tethers) = conn.tethers()? {
         send(Msg::Tethers(tethers))?;
     }
+    if let Ok(hotspot) = conn.call(Op::Hotspot)?
+        && let Ok(hotspot) = serde_json::from_value(hotspot)
+    {
+        send(Msg::Hotspot(hotspot))?;
+    }
     send(Msg::Activity(
         conn.activity()?
             .map_err(|f| refused("activity", f))?
@@ -221,6 +226,7 @@ fn session(
             Some(Event::NetworksChanged { wifi }) => send(Msg::Wifi(wifi))?,
             Some(Event::VpnsChanged { vpns }) => send(Msg::Vpns(vpns))?,
             Some(Event::TethersChanged { tethers }) => send(Msg::Tethers(tethers))?,
+            Some(Event::HotspotChanged { hotspot }) => send(Msg::Hotspot(hotspot))?,
             Some(event @ (Event::SecretPromptOpened { .. } | Event::SecretPromptClosed { .. })) => {
                 send(Msg::Prompt(event))?
             }

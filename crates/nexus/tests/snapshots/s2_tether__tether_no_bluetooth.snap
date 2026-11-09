@@ -3,17 +3,17 @@ source: crates/nexus/tests/s2_tether.rs
 expression: rig.text(STANDARD)
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
-╭ Tethering ─────────────────╮╭ Tethering ─────────────────────────────────────────────────────────╮
-│ ○ No Bluetooth             ││ No Bluetooth adapter was found, or the Bluetooth service is not    │
-│                            ││ running (systemctl start bluetooth).                               │
+╭ Hotspot ───────────────────╮╭ Tethering ─────────────────────────────────────────────────────────╮
+│ ○ Not available            ││ No Bluetooth adapter was found, or the Bluetooth service is not    │
+│ This machine has no Wi-Fi  ││ running (systemctl start bluetooth).                               │
+│ card, so it cannot host a  ││                                                                    │
+│ Hotspot.                   ││                                                                    │
+╰────────────────────────────╯│                                                                    │
+╭ Tethering ─────────────────╮│                                                                    │
+│ ○ No Bluetooth             ││                                                                    │
+│                            ││                                                                    │
 │ No paired phone offers     ││                                                                    │
 │ network access.            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
