@@ -7,7 +7,7 @@ mod traffic;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use nexus_ipc::{ErrorCode, Event, Op, Request, Response};
+use nexus_ipc::{ErrorCode, Event, Op, Request, Response, Status, WifiList};
 
 use crate::backend::BackendError;
 use tokio::sync::broadcast;
@@ -48,7 +48,19 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
     let settings = Arc::new(Settings::load(config::default_path(), events.clone()));
     tokio::spawn(config::watch(settings.clone()));
     let live = Arc::new(Live::default());
-    tokio::spawn(watch_backend(backend.clone(), events.clone(), live.clone()));
+    // The baseline is read before the socket exists, so anything a client
+    // can see happening is a change from it (and gets an activity entry).
+    let baseline = tokio::time::timeout(BASELINE_WAIT, async {
+        (backend.wifi_list().await.ok(), backend.status().await.ok())
+    })
+    .await
+    .unwrap_or_default();
+    tokio::spawn(watch_backend(
+        backend.clone(),
+        events.clone(),
+        live.clone(),
+        baseline,
+    ));
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -78,6 +90,9 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
     Ok(())
 }
 
+/// How long startup waits for the Backend's first answers before listening.
+const BASELINE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// What the Daemon remembers between requests.
 #[derive(Debug, Default)]
 struct Live {
@@ -93,9 +108,8 @@ async fn watch_backend<B: Backend>(
     backend: Arc<B>,
     events: broadcast::Sender<Event>,
     live: Arc<Live>,
+    (mut last, mut status): (Option<WifiList>, Option<Status>),
 ) {
-    let mut last = backend.wifi_list().await.ok();
-    let mut status = backend.status().await.ok();
     loop {
         backend.changed().await;
         match backend.wifi_list().await {
