@@ -151,7 +151,9 @@ async fn phones(conn: &Connection) -> zbus::Result<Vec<Found>> {
         .cache_properties(CacheProperties::No)
         .build()
         .await?;
-    let saved = saved_addresses(conn).await?;
+    // Read the saved Profiles only once a phone turns up: this runs on every
+    // Backend tick, and most machines have no Bluetooth Device at all.
+    let mut saved: Option<Vec<String>> = None;
     let mut out = Vec::new();
     for path in nm.get_devices().await? {
         let device = no_cache!(PhoneDeviceProxy, conn, path.as_str());
@@ -172,10 +174,13 @@ async fn phones(conn: &Connection) -> zbus::Result<Vec<Found>> {
             continue;
         }
         let id = address.to_ascii_uppercase();
+        if saved.is_none() {
+            saved = Some(saved_addresses(conn).await?);
+        }
         out.push(Found {
             path,
             phone: Phone {
-                saved: saved.contains(&id),
+                saved: saved.as_ref().is_some_and(|s| s.contains(&id)),
                 connected: state == STATE_ACTIVATED,
                 connecting: (STATE_PREPARE..STATE_ACTIVATED).contains(&state),
                 id,
