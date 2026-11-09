@@ -14,6 +14,7 @@ use nexus_ipc::{
 };
 
 use super::caps::Caps;
+use super::eap_form::{EapForm, Typed};
 use super::hits::Hit;
 use super::profile::{Action, Editor, ProfileMsg};
 use super::share::{Share, Stage};
@@ -194,6 +195,8 @@ pub struct App {
     /// An open Secret prompt: it has the keys until answered or cancelled.
     field: Option<PasswordField>,
     confirm: Option<Confirm>,
+    /// The 802.1X sign-in form: while open it has the keys.
+    eap: Option<EapForm>,
     /// The Profile settings editor, while open: it has the keys.
     editor: Option<Editor>,
     /// The share view (QR code) of a saved Network.
@@ -229,6 +232,7 @@ impl App {
             tether: TetherTab::default(),
             field: None,
             confirm: None,
+            eap: None,
             editor: None,
             share: None,
             toast: None,
@@ -281,6 +285,10 @@ impl App {
 
     pub fn field(&self) -> Option<&PasswordField> {
         self.field.as_ref()
+    }
+
+    pub fn eap_form(&self) -> Option<&EapForm> {
+        self.eap.as_ref()
     }
 
     pub fn editor(&self) -> Option<&Editor> {
@@ -599,6 +607,26 @@ impl App {
                     Err(message) => self.say(message, true, None),
                 }
             }
+            (
+                Cmd::JoinEap {
+                    network, ssid, eap, ..
+                },
+                result,
+            ) => {
+                self.wifi.busy = None;
+                match result {
+                    Ok(_) => self.say(format!("Joined {ssid}."), false, None),
+                    // Back to the form, nothing typed lost, to try again.
+                    Err(message) => {
+                        self.eap = Some(EapForm::reopened(
+                            network.clone(),
+                            ssid.clone(),
+                            eap,
+                            message,
+                        ));
+                    }
+                }
+            }
             (Cmd::Disconnect { network, ssid }, Ok(_)) => {
                 let undo = Cmd::Join {
                     network: network.clone(),
@@ -663,6 +691,19 @@ impl App {
         }
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.quit = true;
+            return true;
+        }
+        if let Some(form) = self.eap.as_mut() {
+            match form.key(key) {
+                Typed::Editing => {}
+                Typed::Cancel => self.eap = None,
+                Typed::Submit(eap) => {
+                    if let Some(form) = self.eap.take() {
+                        let (network, ssid) = (form.network.clone(), form.name.clone());
+                        self.run_wifi(Cmd::JoinEap { network, ssid, eap });
+                    }
+                }
+            }
             return true;
         }
         if self.field.is_some() {
@@ -927,6 +968,12 @@ impl App {
                 };
                 let (network, ssid) = (entry.network_id(), entry.name().to_owned());
                 match key.code {
+                    KeyCode::Enter
+                        if entry.enterprise() && !entry.saved() && self.wifi.busy.is_none() =>
+                    {
+                        self.eap = Some(EapForm::new(network, ssid));
+                        true
+                    }
                     KeyCode::Enter if !entry.joined() && self.wifi.busy.is_none() => {
                         self.run_wifi(Cmd::Join { network, ssid });
                         true
@@ -1087,7 +1134,7 @@ impl App {
 
     /// Sends a Wi-Fi command, marking a join as in flight.
     fn run_wifi(&mut self, cmd: Cmd) {
-        if let Cmd::Join { ssid, .. } = &cmd {
+        if let Cmd::Join { ssid, .. } | Cmd::JoinEap { ssid, .. } = &cmd {
             self.wifi.busy = Some(ssid.clone());
         }
         self.toast = None;
@@ -1123,6 +1170,9 @@ impl App {
     pub fn hints(&self, narrow: bool) -> Vec<(&'static str, &'static str)> {
         if self.palette.is_some() {
             return vec![("enter", "run"), ("esc", "close")];
+        }
+        if self.eap.is_some() {
+            return vec![("tab", "next"), ("enter", "join"), ("esc", "cancel")];
         }
         if self.field.is_some() {
             return vec![("enter", "join"), ("ctrl-r", "show"), ("esc", "cancel")];

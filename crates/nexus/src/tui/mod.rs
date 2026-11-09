@@ -9,6 +9,8 @@ mod bigtype;
 mod caps;
 mod client;
 mod doctor_view;
+mod eap_form;
+mod eap_ui;
 mod graph;
 mod hits;
 mod layout;

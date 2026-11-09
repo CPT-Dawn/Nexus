@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use nexus_ipc::{
-    Connection, Failure, Op, Prompt, SavedWifi, ScanOutcome, Secret, WifiList, WifiNetwork,
+    Connection, Eap, Failure, Op, Prompt, SavedWifi, ScanOutcome, Secret, WifiList, WifiNetwork,
 };
 use zeroize::Zeroizing;
 
@@ -54,6 +54,11 @@ impl Entry {
         }
     }
 
+    /// Whether it signs in with a username and certificate (802.1X).
+    pub fn enterprise(&self) -> bool {
+        matches!(self, Entry::Net(n) if n.security == nexus_ipc::Security::Enterprise)
+    }
+
     pub fn joined(&self) -> bool {
         matches!(self, Entry::Net(n) if n.joined)
     }
@@ -83,6 +88,12 @@ pub enum Cmd {
     Join {
         network: String,
         ssid: String,
+    },
+    /// Join an enterprise Network with the form's settings.
+    JoinEap {
+        network: String,
+        ssid: String,
+        eap: Box<Eap>,
     },
     Disconnect {
         network: String,
@@ -125,6 +136,10 @@ impl Cmd {
             Cmd::Join { network, .. } => Op::WifiJoin {
                 network: network.clone(),
                 password: None,
+            },
+            Cmd::JoinEap { network, eap, .. } => Op::WifiJoinEap {
+                network: network.clone(),
+                eap: (**eap).clone(),
             },
             Cmd::Disconnect { .. } => Op::WifiDisconnect,
             Cmd::Forget { network, .. } => Op::WifiForget {
