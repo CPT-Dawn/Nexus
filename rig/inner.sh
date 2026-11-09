@@ -8,7 +8,7 @@ work="$1"; testbin="$2"; shift 2
 export PATH="$PATH:/usr/sbin:/sbin"
 
 dump_logs() {
-    for f in /run/nexus-rig/*.log; do [ -e "$f" ] || continue; echo "::group::rig log $(basename "$f")"; tail -n 60 "$f"; echo "::endgroup::"; done
+    for f in /run/nexus-rig/*.log; do [ -e "$f" ] || continue; echo "::group::rig log $(basename "$f")"; tail -n 150 "$f"; echo "::endgroup::"; done
 }
 die() { echo "rig(inner): $*" >&2; dump_logs >&2; exit 1; }
 
@@ -90,7 +90,7 @@ auth-polkit=false
 wifi.backend=wpa_supplicant
 wifi.scan-rand-mac-address=no
 [logging]
-level=${NEXUS_RIG_NM_LOG:-INFO}
+level=${NEXUS_RIG_NM_LOG:-DEBUG}
 EOF
 nm_up() {
     dbus-send --bus="$DBUS_SYSTEM_BUS_ADDRESS" --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
