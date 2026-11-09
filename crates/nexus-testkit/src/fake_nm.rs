@@ -1801,11 +1801,12 @@ fn vpn_secrets(settings: &SettingsDict, setting: &str) -> SettingsDict {
 }
 
 #[derive(Debug, zbus::DBusError)]
-#[zbus(prefix = "org.freedesktop.NetworkManager.Settings.Error")]
+#[zbus(prefix = "org.freedesktop.NetworkManager.Settings")]
 enum SettingsError {
     #[zbus(error)]
     ZBus(zbus::Error),
     VersionIdMismatch(String),
+    PermissionDenied(String),
 }
 
 struct Profile(Shared, usize);
@@ -1923,10 +1924,11 @@ impl Profile {
     fn get_secrets(
         &self,
         setting: &str,
-    ) -> zbus::fdo::Result<HashMap<String, HashMap<String, OwnedVariant>>> {
+    ) -> Result<HashMap<String, HashMap<String, OwnedVariant>>, SettingsError> {
         let mut m = self.0.lock().unwrap();
         if m.deny_secret_reads {
-            return Err(zbus::fdo::Error::AccessDenied(
+            // NM_SETTINGS_ERROR_PERMISSION_DENIED, as nm-errors.h names it.
+            return Err(SettingsError::PermissionDenied(
                 "Insufficient privileges.".into(),
             ));
         }

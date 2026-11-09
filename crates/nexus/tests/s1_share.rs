@@ -72,6 +72,8 @@ fn wpa3_networks_say_sae() {
     assert_eq!(resp["ok"]["auth"], "sae", "{resp}");
 }
 
+/// The fake refuses with `org.freedesktop.NetworkManager.Settings.PermissionDenied`,
+/// the name NetworkManager really uses, not a bus-level AccessDenied.
 #[test]
 fn denied_authorization_is_a_clear_refusal_and_no_secret_leaks() {
     let world = world();
