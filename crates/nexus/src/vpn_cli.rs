@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use nexus_ipc::{Connection, NewTunnel, Op, Secret, Vpn, VpnKind, VpnList, VpnState};
 use serde_json::Value;
 
-use crate::cli::{EXIT_DAEMON_ERROR, exit_code, report, unreachable, wifi_call};
+use crate::cli::{EXIT_DAEMON_ERROR, answering_prompts, exit_code, report, unreachable, wifi_call};
 
 fn state_word(state: VpnState) -> &'static str {
     match state {
@@ -111,21 +111,34 @@ pub fn toggle(name: &str, up: bool, json: bool) -> ExitCode {
         Err(code) => return code,
     };
     let op = if up {
-        Op::VpnUp { vpn: vpn.id }
+        Op::VpnUp {
+            vpn: vpn.id.clone(),
+        }
     } else {
-        Op::VpnDown { vpn: vpn.id }
+        Op::VpnDown {
+            vpn: vpn.id.clone(),
+        }
     };
-    report(conn.call(op), |value| {
+    let show = |value: Value| {
         if json {
             println!("{value}");
         } else if let Ok(t) = serde_json::from_value::<nexus_ipc::VpnToggled>(value) {
             println!("{} is {}.", printable(&t.name), state_word(t.state));
         }
-    })
+    };
+    if !up {
+        return report(conn.call(op), show);
+    }
+    // A plugin VPN may ask for a user name, password or one-time code: this
+    // terminal answers.
+    drop(conn);
+    answering_prompts(op, &vpn.id, show)
 }
 
 /// `nexus vpn import <file> [--name N]`.
-pub fn import(path: &str, name: Option<String>, json: bool) -> ExitCode {
+pub fn import(path: &str, name: Option<String>, kind: Option<String>, json: bool) -> ExitCode {
+    // `.ovpn` and `.pcf` files belong to a plugin; `--type` names one outright.
+    let plugin = kind.or_else(|| nexus_tui::plugin::for_path(path).map(|p| p.name.to_owned()));
     let text = match std::fs::read_to_string(path) {
         Ok(t) => zeroize::Zeroizing::new(t),
         Err(e) => {
@@ -143,6 +156,7 @@ pub fn import(path: &str, name: Option<String>, json: bool) -> ExitCode {
         Op::VpnImport {
             name,
             config: Secret::new(text.as_str()),
+            plugin,
         },
         |value| added(value, json),
     )
@@ -152,6 +166,10 @@ fn added(value: Value, json: bool) {
     if json {
         println!("{value}");
     } else if let Ok(a) = serde_json::from_value::<nexus_ipc::VpnAdded>(value) {
+        if a.public_key.is_empty() {
+            println!("Saved {}.", printable(&a.name));
+            return;
+        }
         println!(
             "Saved {}. Its public key is {}",
             printable(&a.name),

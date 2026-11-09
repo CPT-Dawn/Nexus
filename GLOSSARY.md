@@ -61,6 +61,10 @@ _Avoid_: device (that is a hardware interface), handset, PAN client
 A Network that tunnels all or some traffic through another machine: a WireGuard tunnel or a plugin VPN such as OpenVPN. Each VPN has a Profile, is up or down independently of the Link that carries it, and a VPN that goes down without being asked to is a drop, which Nexus announces.
 _Avoid_: tunnel (in the UI; fine for what a WireGuard peer pair is), connection
 
+**VPN plugin**:
+The NetworkManager add-on (its package, e.g. `networkmanager-openvpn`) that knows how to read a provider file such as `.ovpn` and run that kind of tunnel. A plugin VPN's Profile names its plugin; if the plugin is not installed Nexus says which package to install instead of failing obscurely.
+_Avoid_: driver, module
+
 **Public key**:
 The half of a WireGuard key pair that is safe to hand out: the other side of a tunnel needs it. Nexus generates the pair when it creates a VPN, and the private half never leaves NetworkManager except through a Reveal.
 _Avoid_: key (alone, ambiguous with the private key)

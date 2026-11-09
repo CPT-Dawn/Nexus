@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_vpn.rs
+expression: rig.text(NARROW)
+---
+ Nexus  VPN ▾  4/6                                ● Offline
+╭ VPN ─────────────────────────────────────────────────────╮
+│ ▸ ~ Office                                          down │
+│                                                          │
+│                                                          │
+│                                                          │
+╭ VPN Office ──────────────────────────────────────────────╮
+│ Password for Office                                      │
+│                                                          │
+│ Password  •••••••_                                       │
+│                                                          │
+│ enter send   ctrl-r show   esc cancel                    │
+╰──────────────────────────────────────────────────────────╯
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ enter send  ctrl-r show  esc cancel

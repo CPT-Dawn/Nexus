@@ -46,6 +46,8 @@ struct Profile {
     kind: VpnKind,
     addresses: Vec<String>,
     endpoint: Option<String>,
+    /// A plugin VPN's NetworkManager plugin (`openvpn`), when it names one.
+    plugin: Option<String>,
 }
 
 fn get<T>(all: &Settings, section: &str, key: &str) -> Option<T>
@@ -87,6 +89,8 @@ async fn profiles(conn: &Connection) -> zbus::Result<Vec<Profile>> {
             .chain(address_data(&all, "ipv6"))
             .collect();
         let endpoint = peers_of(&all).into_iter().find_map(|p| p.endpoint);
+        let plugin = get::<String>(&all, "vpn", "service-type")
+            .and_then(|s| nexus_tui::plugin::name_of_service(&s).map(str::to_owned));
         out.push(Profile {
             path,
             uuid,
@@ -94,6 +98,7 @@ async fn profiles(conn: &Connection) -> zbus::Result<Vec<Profile>> {
             kind,
             addresses,
             endpoint,
+            plugin,
         });
     }
     Ok(out)
@@ -193,6 +198,11 @@ pub async fn up(conn: &Connection, id: &str) -> zbus::Result<Result<VpnToggled, 
     let Some(p) = find(conn, id).await? else {
         return Ok(Err(text::unknown_vpn()));
     };
+    if let Some(plugin) = p.plugin.as_deref()
+        && !nexus_tui::plugin::installed(plugin)
+    {
+        return Ok(Err(text::missing_plugin(plugin)));
+    }
     let nm = NetworkManagerProxy::builder(conn)
         .cache_properties(CacheProperties::No)
         .build()
@@ -423,11 +433,151 @@ fn default_name() -> String {
     "WireGuard".to_owned()
 }
 
+/// How long `nmcli` may take to import a file.
+const IMPORT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// A private directory that is removed, files and all, when dropped. A
+/// provider file can hold keys, so it never sits where others can read it.
+struct Scratch(std::path::PathBuf);
+
+impl Scratch {
+    fn new() -> std::io::Result<Self> {
+        use std::os::unix::fs::DirBuilderExt as _;
+        let base = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(std::env::temp_dir);
+        let dir = base.join(format!("nexus-import-{}", new_uuid()));
+        std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+        Ok(Self(dir))
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A file name `nmcli` will turn into the Profile's name.
+fn file_stem(name: &str, fallback: &str) -> String {
+    let clean: String = name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let clean = clean.trim().trim_start_matches('.');
+    if clean.is_empty() {
+        fallback.to_owned()
+    } else {
+        clean.to_owned()
+    }
+}
+
+/// `Connection 'Office' (uuid) successfully added.` -> `("Office", "uuid")`.
+fn parse_added(stdout: &str) -> Option<(String, String)> {
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("successfully added"))?
+        .trim();
+    let rest = line.strip_prefix("Connection '")?;
+    let at = rest.rfind("' (")?;
+    let (name, rest) = (&rest[..at], &rest[at + 3..]);
+    let uuid = rest.split(')').next()?;
+    Some((name.to_owned(), uuid.to_owned()))
+}
+
+/// Imports a provider file (`.ovpn`, ...) with `nmcli connection import`:
+/// the plugin's own importer is not reachable over D-Bus.
+async fn import_plugin(
+    name: Option<&str>,
+    plugin: &str,
+    config: &Secret,
+) -> Result<VpnAdded, Failure> {
+    let Some(known) = nexus_tui::plugin::by_name(plugin) else {
+        return Err(text::unknown_plugin(plugin));
+    };
+    if !nexus_tui::plugin::installed(plugin) {
+        return Err(text::missing_plugin(plugin));
+    }
+    let internal = |e: std::io::Error| Failure {
+        code: nexus_ipc::ErrorCode::Internal,
+        message: format!("Could not run nmcli: {e}."),
+    };
+    let scratch = Scratch::new().map_err(internal)?;
+    let ext = known.extensions.first().copied().unwrap_or(known.name);
+    let stem = file_stem(name.unwrap_or(""), known.label);
+    let file = scratch.0.join(format!("{stem}.{ext}"));
+    {
+        use std::io::Write as _;
+        use std::os::unix::fs::OpenOptionsExt as _;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&file)
+            .map_err(internal)?;
+        f.write_all(config.expose().as_bytes()).map_err(internal)?;
+    }
+    let run = tokio::process::Command::new("nmcli")
+        .args(["connection", "import", "type", plugin, "file"])
+        .arg(&file)
+        .env("LC_ALL", "C")
+        .stdin(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .output();
+    let output = match tokio::time::timeout(IMPORT_TIMEOUT, run).await {
+        Ok(Ok(o)) => o,
+        Ok(Err(e)) => return Err(internal(e)),
+        Err(_) => {
+            return Err(text::invalid_provider_file(
+                plugin,
+                "nmcli took too long to import it",
+            ));
+        }
+    };
+    if !output.status.success() {
+        let said = String::from_utf8_lossy(&output.stderr);
+        let said = said.trim().trim_start_matches("Error:").trim();
+        // The path is a scratch name; the person does not need it.
+        let said = said.replace(&file.display().to_string(), "the file");
+        return Err(text::invalid_provider_file(
+            plugin,
+            if said.is_empty() {
+                "nmcli refused it"
+            } else {
+                said.trim_end_matches('.')
+            },
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let Some((name, id)) = parse_added(&stdout) else {
+        return Err(text::invalid_provider_file(
+            plugin,
+            "nmcli did not say what it saved",
+        ));
+    };
+    Ok(VpnAdded {
+        id,
+        name,
+        public_key: String::new(),
+    })
+}
+
 pub async fn import(
     conn: &Connection,
     name: Option<&str>,
     config: &Secret,
+    plugin: Option<&str>,
 ) -> zbus::Result<Result<VpnAdded, Failure>> {
+    if let Some(plugin) = plugin {
+        return Ok(import_plugin(name, plugin, config).await);
+    }
     let parsed = match wireguard::parse(config.expose()) {
         Ok(c) => c,
         Err(e) => return Ok(Err(text::invalid_config(&e.to_string()))),
