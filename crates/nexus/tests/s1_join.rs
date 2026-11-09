@@ -82,14 +82,6 @@ fn joining_wpa2_with_the_right_password_works() {
 }
 
 #[test]
-fn a_secured_network_without_a_password_is_refused_before_anything_is_created() {
-    let (world, _) = world();
-    let resp = join(&world, "Home", None);
-    assert_eq!(resp["err"]["code"], "password_required", "{resp}");
-    assert_eq!(world.nm.profile_count(), 0);
-}
-
-#[test]
 fn a_wrong_password_names_the_network_and_leaves_no_profile() {
     let (world, wlan0) = world();
     world.nm.set_psk("Home", "right-password");
@@ -211,6 +203,39 @@ fn forget_reaches_saved_networks_that_are_out_of_range() {
         .call(json!({"op": "wifi_forget", "network": id("Office")}));
     assert_eq!(resp["ok"]["ssid"], "Office", "{resp}");
     assert_eq!(world.nm.profile_count(), 0);
+}
+
+#[test]
+fn autoconnect_toggles_on_a_saved_network_in_range_or_out() {
+    let (world, _) = world();
+    world
+        .nm
+        .add_wifi_profile("uuid-home", "Home", b"Home", true);
+    world
+        .nm
+        .add_wifi_profile("uuid-office", "Office", b"Office", true);
+
+    let resp = world
+        .wire()
+        .call(json!({"op": "wifi_autoconnect", "network": id("Home"), "enabled": false}));
+    assert_eq!(
+        resp["ok"],
+        json!({"ssid": "Home", "enabled": false}),
+        "{resp}"
+    );
+    assert_eq!(world.nm.profile_autoconnect("uuid-home"), Some(false));
+    assert_eq!(row(&list(&world), "Home")["autoconnect"], false);
+
+    let resp = world
+        .wire()
+        .call(json!({"op": "wifi_autoconnect", "network": id("Office"), "enabled": false}));
+    assert!(resp.get("ok").is_some(), "{resp}");
+    assert_eq!(list(&world)["saved"][0]["autoconnect"], false);
+
+    let nope = world
+        .wire()
+        .call(json!({"op": "wifi_autoconnect", "network": id("Nowhere"), "enabled": true}));
+    assert_eq!(nope["err"]["code"], "unknown_network", "{nope}");
 }
 
 #[test]

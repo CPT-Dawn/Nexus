@@ -18,6 +18,21 @@ pub struct Config {
     pub theme: String,
     pub connectivity: ConnectivityCheck,
     pub menu: Menu,
+    pub prompts: Prompts,
+}
+
+/// Secret prompts (password questions from the Backend).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Prompts {
+    /// Seconds a prompt waits for an answer before it expires (1 to 3600).
+    pub timeout_secs: u64,
+}
+
+impl Default for Prompts {
+    fn default() -> Self {
+        Self { timeout_secs: 120 }
+    }
 }
 
 /// The one outside contact Nexus allows itself, and only through the Backend.
@@ -42,6 +57,7 @@ impl Default for Config {
             theme: "midnight-bloom".into(),
             connectivity: ConnectivityCheck::default(),
             menu: Menu::default(),
+            prompts: Prompts::default(),
         }
     }
 }
@@ -69,6 +85,12 @@ pub fn parse(text: &str) -> Result<Config, String> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(format!(
             "connectivity.url must start with http:// or https://, got `{url}`"
+        ));
+    }
+    let secs = config.prompts.timeout_secs;
+    if !(1..=3600).contains(&secs) {
+        return Err(format!(
+            "prompts.timeout_secs must be between 1 and 3600, got {secs}"
         ));
     }
     Ok(config)
@@ -117,6 +139,12 @@ impl Settings {
         };
         settings.refresh(false);
         settings
+    }
+
+    /// How long a Secret prompt waits for an answer.
+    pub fn prompt_timeout(&self) -> std::time::Duration {
+        let state = self.state.lock().expect("settings lock");
+        std::time::Duration::from_secs(state.config.prompts.timeout_secs)
     }
 
     pub fn path(&self) -> Option<&Path> {
@@ -298,6 +326,9 @@ pub async fn watch(settings: std::sync::Arc<Settings>) {
     }
 }
 
+/// How long the directory must stay quiet before the file is re-read.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(150);
+
 async fn watch_inner(settings: &Settings) -> io::Result<()> {
     use rustix::fs::inotify::{self, CreateFlags, WatchFlags};
     use std::mem::MaybeUninit;
@@ -314,6 +345,7 @@ async fn watch_inner(settings: &Settings) -> io::Result<()> {
             | WatchFlags::MOVED_TO
             | WatchFlags::MOVED_FROM
             | WatchFlags::CREATE
+            | WatchFlags::MODIFY
             | WatchFlags::DELETE,
     )?;
     // tokio deprecates the safe constructor; `register` is `unsafe`, which this
@@ -322,19 +354,27 @@ async fn watch_inner(settings: &Settings) -> io::Result<()> {
     let fd = tokio::io::unix::AsyncFd::new(fd)?;
     let mut buf = [MaybeUninit::<u8>::uninit(); 4096];
     loop {
-        let mut guard = fd.readable().await?;
-        // Drain what is queued; the reload compares file contents, so the
-        // individual events do not matter.
-        let mut reader = inotify::Reader::new(fd.get_ref(), &mut buf);
-        loop {
-            match reader.next() {
-                Ok(_) => {}
-                Err(rustix::io::Errno::AGAIN) => {
-                    guard.clear_ready();
-                    break;
+        // Wait for a change, then for the directory to go quiet: an editor
+        // that writes in place leaves a truncated or half-written file until
+        // it finishes, and reading that would report a bogus parse warning.
+        let mut changed = true;
+        while changed {
+            let mut guard = fd.readable().await?;
+            // Drain what is queued; the reload compares file contents, so the
+            // individual events do not matter.
+            let mut reader = inotify::Reader::new(fd.get_ref(), &mut buf);
+            loop {
+                match reader.next() {
+                    Ok(_) => {}
+                    Err(rustix::io::Errno::AGAIN) => {
+                        guard.clear_ready();
+                        break;
+                    }
+                    Err(e) => return Err(e.into()),
                 }
-                Err(e) => return Err(e.into()),
             }
+            drop(guard);
+            changed = tokio::time::timeout(SETTLE, fd.readable()).await.is_ok();
         }
         settings.reload();
     }

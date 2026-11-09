@@ -1,11 +1,13 @@
 //! The Daemon: owns the socket and the Backend, answers Front ends.
 
+mod activity;
 mod socket;
+mod traffic;
 
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use nexus_ipc::{ErrorCode, Event, Op, Request, Response};
+use nexus_ipc::{ErrorCode, Event, Op, Request, Response, Status, WifiList};
 
 use crate::backend::BackendError;
 use tokio::sync::broadcast;
@@ -14,6 +16,7 @@ use tracing_subscriber::EnvFilter;
 use crate::backend::Backend;
 use crate::backend::nm::NetworkManager;
 use crate::config::{self, Settings};
+use crate::secrets::Broker;
 
 /// `nexus daemon`.
 pub fn run() -> ExitCode {
@@ -31,7 +34,7 @@ pub fn run() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match rt.block_on(serve(NetworkManager::new())) {
+    match rt.block_on(serve()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             tracing::error!("{e}");
@@ -40,12 +43,32 @@ pub fn run() -> ExitCode {
     }
 }
 
-async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
-    let backend = Arc::new(backend);
+async fn serve() -> std::io::Result<()> {
     let (events, _) = broadcast::channel::<Event>(64);
     let settings = Arc::new(Settings::load(config::default_path(), events.clone()));
+    let broker = Arc::new(Broker::new(events.clone(), settings.clone()));
+    let backend = Arc::new(NetworkManager::new(broker.clone()));
     tokio::spawn(config::watch(settings.clone()));
-    tokio::spawn(watch_wifi(backend.clone(), events.clone()));
+    let live = Arc::new(Live::default());
+    // Listen first, so nothing between the baseline and the first wait is lost.
+    backend.arm().await;
+    // The baseline is read before the socket exists, so anything a client
+    // can see happening is a change from it (and gets an activity entry).
+    let baseline = tokio::time::timeout(BASELINE_WAIT, async {
+        (backend.wifi_list().await.ok(), backend.status().await.ok())
+    })
+    .await
+    .unwrap_or_default();
+    tokio::spawn(watch_backend(
+        backend.clone(),
+        events.clone(),
+        live.clone(),
+        baseline,
+    ));
+    tokio::spawn({
+        let backend = backend.clone();
+        async move { backend.secrets().await }
+    });
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -59,9 +82,11 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
                 }
                 let backend = backend.clone();
                 let settings = settings.clone();
-                let events = events.clone();
+                let live = live.clone();
+                let broker = broker.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = socket::serve_connection(stream, events, |req| answer(&*backend, &settings, req)).await {
+                    let subscribe = || broker.subscribe();
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, &live, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -74,26 +99,113 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Tells subscribers when the Wi-Fi list changes. The Backend coalesces each
-/// burst of changes into one tick; a tick that changed nothing visible is not
-/// worth an event.
-async fn watch_wifi<B: Backend>(backend: Arc<B>, events: broadcast::Sender<Event>) {
-    let mut last = backend.wifi_list().await.ok();
-    loop {
-        backend.changed().await;
-        match backend.wifi_list().await {
-            Ok(list) if last.as_ref() != Some(&list) => {
-                last = Some(list.clone());
-                let _ = events.send(Event::NetworksChanged { wifi: list });
+/// What subscribers were last told.
+#[derive(Default)]
+struct Seen {
+    status: Option<Status>,
+    wifi: Option<WifiList>,
+}
+
+/// How [`sync`] treats what it reads.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Push {
+    /// Tell subscribers only what differs from before.
+    Changes,
+    /// Tell subscribers everything (after a resume, when nothing can be trusted).
+    All,
+}
+
+/// Re-reads the Backend and pushes `status_changed` and `networks_changed`.
+/// A Backend that is gone reads as an unavailable status and an empty list, so
+/// Front ends learn about the outage and again about the return.
+async fn sync<B: Backend>(
+    backend: &B,
+    events: &broadcast::Sender<Event>,
+    live: &Live,
+    seen: &mut Seen,
+    push: Push,
+) {
+    match backend.status().await {
+        Ok(status) => {
+            // The log entry goes out first, so a Front end that shows the new
+            // status already has the line that explains it.
+            if let Some(before) = &seen.status {
+                for entry in live.activity.observe(before, &status) {
+                    let _ = events.send(Event::Activity { entry });
+                }
             }
-            Ok(_) => {}
-            Err(e) => tracing::debug!("wifi list unavailable: {e}"),
+            if push == Push::All || (push == Push::Changes && seen.status.as_ref() != Some(&status))
+            {
+                let _ = events.send(Event::StatusChanged {
+                    status: status.clone(),
+                });
+            }
+            seen.status = Some(status);
+        }
+        Err(e) => tracing::debug!("status unavailable: {e}"),
+    }
+    let list = match backend.wifi_list().await {
+        Ok(list) => list,
+        Err(BackendError::Unavailable) => WifiList::default(),
+        Err(e) => {
+            tracing::debug!("wifi list unavailable: {e}");
+            return;
+        }
+    };
+    if push == Push::All || (push == Push::Changes && seen.wifi.as_ref() != Some(&list)) {
+        let _ = events.send(Event::NetworksChanged { wifi: list.clone() });
+    }
+    seen.wifi = Some(list);
+}
+
+/// How long startup waits for the Backend's first answers before listening.
+const BASELINE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What the Daemon remembers between requests.
+#[derive(Debug, Default)]
+struct Live {
+    traffic: traffic::Sampler,
+    activity: activity::Log,
+}
+
+/// Keeps subscribers current. The Backend coalesces each burst of changes into
+/// one tick, and only one task may wait for ticks, so the Wi-Fi list, the
+/// status and the activity log are all fed from here. A tick that changed
+/// nothing visible is not worth an event. After the machine wakes from sleep
+/// everything is re-read and re-sent, and a fresh scan is asked for because
+/// the access points seen before sleeping are stale.
+async fn watch_backend<B: Backend>(
+    backend: Arc<B>,
+    events: broadcast::Sender<Event>,
+    live: Arc<Live>,
+    (wifi, status): (Option<WifiList>, Option<Status>),
+) {
+    let mut seen = Seen { status, wifi };
+    loop {
+        let push = tokio::select! {
+            () = backend.changed() => Push::Changes,
+            () = backend.resumed() => {
+                tracing::info!("woke from sleep: refreshing");
+                Push::All
+            }
+        };
+        sync(&*backend, &events, &live, &mut seen, push).await;
+        if push == Push::All
+            && let Err(e) = backend.wifi_scan().await
+        {
+            tracing::debug!("no scan after resume: {e}");
         }
     }
 }
 
 /// One request in, one response out.
-async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> Response {
+async fn answer<B: Backend>(
+    backend: &B,
+    settings: &Settings,
+    broker: &Broker,
+    live: &Live,
+    req: Request,
+) -> Response {
     match req.op {
         Op::Status => match backend.status().await {
             Ok(status) => Response::ok(
@@ -102,13 +214,43 @@ async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> R
             ),
             Err(e) => backend_reply::<()>(req.id, Err(e)),
         },
+        Op::Traffic => match backend.counters().await {
+            Ok(counters) => Response::ok(
+                req.id,
+                serde_json::to_value(live.traffic.rates(counters).await)
+                    .expect("wire types serialize"),
+            ),
+            Err(e) => backend_reply::<()>(req.id, Err(e)),
+        },
+        Op::Activity => Response::ok(
+            req.id,
+            serde_json::to_value(nexus_ipc::ActivityLog {
+                entries: live.activity.entries(),
+            })
+            .expect("wire types serialize"),
+        ),
         Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
         Op::WifiJoin { network, password } => {
             backend_reply(req.id, backend.wifi_join(network, password).await)
         }
+        Op::WifiPower { on } => backend_reply(req.id, backend.wifi_power(on).await),
+        Op::Airplane { on } => backend_reply(req.id, backend.airplane(on).await),
         Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),
         Op::WifiForget { network } => backend_reply(req.id, backend.wifi_forget(network).await),
+        Op::WifiAutoconnect { network, enabled } => {
+            backend_reply(req.id, backend.wifi_autoconnect(network, enabled).await)
+        }
+        Op::SecretAnswer { prompt, secret } => reply(
+            req.id,
+            broker
+                .answer(prompt, secret)
+                .map(|()| serde_json::json!({})),
+        ),
+        Op::SecretCancel { prompt } => reply(
+            req.id,
+            broker.cancel(prompt).map(|()| serde_json::json!({})),
+        ),
         Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
         Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
         // `Subscribe` is handled by the connection itself.

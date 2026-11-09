@@ -40,6 +40,7 @@ use zbus::{OwnedVariant, Variant};
 const MANAGER_PATH: &str = "/org/freedesktop/NetworkManager";
 const ACTIVE_PATH: &str = "/org/freedesktop/NetworkManager/ActiveConnection/1";
 const NAME: &str = "org.freedesktop.NetworkManager";
+const AGENT_MANAGER_PATH: &str = "/org/freedesktop/NetworkManager/AgentManager";
 const SETTINGS_PATH: &str = "/org/freedesktop/NetworkManager/Settings";
 /// NetworkManager refuses `RequestScan` this soon after the last scan.
 pub const SCAN_RATE_LIMIT_MS: i64 = 10_000;
@@ -128,6 +129,9 @@ struct DeviceModel {
     /// `CLOCK_BOOTTIME` ms of the last finished scan; -1 never.
     last_scan: i64,
     aps: Vec<u32>,
+    /// `Device.Statistics` byte counters.
+    rx_bytes: u64,
+    tx_bytes: u64,
     /// `NMDeviceState`.
     state: u32,
     active_ap: Option<u32>,
@@ -141,6 +145,8 @@ struct ProfileModel {
     autoconnect: bool,
     /// False while the profile only lives in NetworkManager's memory.
     persisted: bool,
+    /// Its secrets came from the secret agent, so deleting it tells the agent.
+    agent_secrets: bool,
 }
 
 /// `NMState`.
@@ -184,6 +190,13 @@ impl ActiveConnection {
         }
     }
 
+    pub fn vpn(id: &str) -> Self {
+        Self {
+            id: id.into(),
+            kind: "vpn".into(),
+        }
+    }
+
     pub fn ethernet(id: &str) -> Self {
         Self {
             id: id.into(),
@@ -212,6 +225,28 @@ struct Model {
     scan_requests: u32,
     /// Refuse every `RequestScan`, whatever `LastScan` says.
     refuse_scans: bool,
+    /// Reads of `Statistics.RxBytes`/`TxBytes`.
+    statistics_reads: u32,
+    /// What the Daemon wrote to `Statistics.RefreshRateMs`.
+    refresh_rate_ms: u32,
+    /// The registered secret agent: `(bus name, identifier)`.
+    agent: Option<(String, String)>,
+    /// Agent methods NetworkManager called and the agent answered without error.
+    agent_calls: Vec<String>,
+    /// Ask the agent again with `REQUEST_NEW` after a wrong password (what
+    /// NetworkManager does); `false` makes the join fail with reason 8 instead.
+    request_new: bool,
+    /// The `GetSecrets` request waiting on the agent: `(connection path, setting)`.
+    pending_secrets: Option<(String, String)>,
+    /// The software Wi-Fi switch (`WirelessEnabled` as set by clients).
+    wifi_soft: bool,
+    /// A hardware switch holds the Wi-Fi radio off.
+    wifi_hard_blocked: bool,
+    wwan_soft: bool,
+    /// Activations in flight; a stopped NetworkManager takes them with it.
+    tasks: Vec<tokio::task::AbortHandle>,
+    /// The state before [`FakeNm::sleep`], restored by [`FakeNm::resume`].
+    before_sleep: NmState,
 }
 
 type Shared = Arc<Mutex<Model>>;
@@ -242,6 +277,34 @@ impl Manager {
     #[zbus(property)]
     fn version(&self) -> String {
         self.0.lock().unwrap().version.clone()
+    }
+
+    /// Like NetworkManager: on only if the software switch is on and no
+    /// hardware switch holds the radio.
+    #[zbus(property)]
+    fn wireless_enabled(&self) -> bool {
+        let m = self.0.lock().unwrap();
+        m.wifi_soft && !m.wifi_hard_blocked
+    }
+
+    #[zbus(property)]
+    fn set_wireless_enabled(&mut self, on: bool) {
+        self.0.lock().unwrap().wifi_soft = on;
+    }
+
+    #[zbus(property)]
+    fn wireless_hardware_enabled(&self) -> bool {
+        !self.0.lock().unwrap().wifi_hard_blocked
+    }
+
+    #[zbus(property)]
+    fn wwan_enabled(&self) -> bool {
+        self.0.lock().unwrap().wwan_soft
+    }
+
+    #[zbus(property)]
+    fn set_wwan_enabled(&mut self, on: bool) {
+        self.0.lock().unwrap().wwan_soft = on;
     }
 
     fn get_devices(&self) -> Vec<OwnedObjectPath> {
@@ -281,6 +344,9 @@ impl Manager {
         let persist: Option<String> = options
             .get("persist")
             .and_then(|v| v.try_clone().ok()?.try_into().ok());
+        // A secured profile without its secret: NetworkManager asks the agent.
+        let needs_agent = connection.contains_key("802-11-wireless-security")
+            && text("802-11-wireless-security", "psk").is_none();
         let n = {
             let mut m = self.0.lock().unwrap();
             m.profiles.push(Some(ProfileModel {
@@ -289,19 +355,26 @@ impl Manager {
                 ssid: ssid.clone(),
                 autoconnect: true,
                 persisted: persist.as_deref() == Some("disk"),
+                agent_secrets: needs_agent,
             }));
             m.profiles.len() - 1
         };
         os.at(profile_path(n), Profile(self.0.clone(), n)).await?;
         let dev = device_index(device.as_str())?;
         let given = text("802-11-wireless-security", "psk").unwrap_or_default();
-        tokio::spawn(activate(
+        let ask = needs_agent.then(|| Ask {
+            settings: clone_settings(&connection),
+            path: profile_path(n),
+        });
+        let task = tokio::spawn(activate(
             conn.clone(),
             self.0.clone(),
             dev,
             ssid,
             Some(given),
+            ask,
         ));
+        self.0.lock().unwrap().tasks.push(task.abort_handle());
         Ok((opath(&profile_path(n)), opath(ACTIVE_PATH), HashMap::new()))
     }
 
@@ -329,9 +402,21 @@ impl Manager {
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no such connection".into()))?;
         let dev = device_index(device.as_str())?;
         // A saved profile brings its own (right) secrets.
-        tokio::spawn(activate(conn.clone(), self.0.clone(), dev, ssid, None));
+        let task = tokio::spawn(activate(
+            conn.clone(),
+            self.0.clone(),
+            dev,
+            ssid,
+            None,
+            None,
+        ));
+        self.0.lock().unwrap().tasks.push(task.abort_handle());
         Ok(opath(ACTIVE_PATH))
     }
+
+    #[zbus(signal)]
+    async fn device_added(emitter: &SignalEmitter<'_>, device: OwnedObjectPath)
+    -> zbus::Result<()>;
 
     #[zbus(signal, name = "StateChanged")]
     async fn nm_state_changed(emitter: &SignalEmitter<'_>, state: u32) -> zbus::Result<()>;
@@ -354,6 +439,16 @@ impl Active {
     #[zbus(property)]
     fn state(&self) -> u32 {
         2 // NM_ACTIVE_CONNECTION_STATE_ACTIVATED
+    }
+
+    /// The first Device carries the primary connection.
+    #[zbus(property)]
+    fn devices(&self) -> Vec<OwnedObjectPath> {
+        if self.0.lock().unwrap().devices.is_empty() {
+            Vec::new()
+        } else {
+            vec![opath(&device_path(0))]
+        }
     }
 }
 
@@ -441,14 +536,117 @@ async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u3
     }
 }
 
+type SettingsDict = HashMap<String, HashMap<String, OwnedVariant>>;
+
+fn clone_settings(s: &SettingsDict) -> SettingsDict {
+    s.iter()
+        .map(|(k, v)| {
+            let inner = v
+                .iter()
+                .filter_map(|(k, v)| Some((k.clone(), v.try_clone().ok()?)))
+                .collect();
+            (k.clone(), inner)
+        })
+        .collect()
+}
+
+/// A profile that has to get its secret from the agent.
+struct Ask {
+    settings: SettingsDict,
+    path: String,
+}
+
+const AGENT_PATH: &str = "/org/freedesktop/NetworkManager/SecretAgent";
+const AGENT_IFACE: &str = "org.freedesktop.NetworkManager.SecretAgent";
+const SECURITY: &str = "802-11-wireless-security";
+/// `NM_SECRET_AGENT_GET_SECRETS_FLAGS_ALLOW_INTERACTION`
+const ALLOW_INTERACTION: u32 = 0x1;
+/// `NM_SECRET_AGENT_GET_SECRETS_FLAGS_REQUEST_NEW`
+const REQUEST_NEW: u32 = 0x2;
+
+/// Calls a method on the registered agent. `Err(None)`: no agent is
+/// registered; `Err(Some(_))`: the agent answered with an error.
+async fn call_agent<B>(
+    conn: &Connection,
+    model: &Shared,
+    method: &str,
+    body: &B,
+) -> Result<zbus::Message, Option<zbus::Error>>
+where
+    B: zbus::zvariant::DynamicType + serde::Serialize,
+{
+    let name = model
+        .lock()
+        .unwrap()
+        .agent
+        .as_ref()
+        .map(|(name, _)| name.clone())
+        .ok_or(None)?;
+    let reply = conn
+        .call_method(
+            Some(name.as_str()),
+            AGENT_PATH,
+            Some(AGENT_IFACE),
+            method,
+            body,
+        )
+        .await
+        .map_err(Some)?;
+    model.lock().unwrap().agent_calls.push(method.to_owned());
+    Ok(reply)
+}
+
+/// Asks the agent for the profile's password until it is right, the way
+/// NetworkManager does: `REQUEST_NEW` marks every repeat. `Ok` carries the
+/// settings to save; `Err` is the `NMDeviceStateReason` the activation dies with.
+async fn negotiate(
+    conn: &Connection,
+    model: &Shared,
+    ask: &Ask,
+    wanted: Option<&str>,
+) -> Result<SettingsDict, u32> {
+    let mut flags = ALLOW_INTERACTION;
+    loop {
+        model.lock().unwrap().pending_secrets = Some((ask.path.clone(), SECURITY.to_owned()));
+        let body = (
+            clone_settings(&ask.settings),
+            opath(&ask.path),
+            SECURITY,
+            vec![format!("{SECURITY}.psk")],
+            flags,
+        );
+        let reply = call_agent(conn, model, "GetSecrets", &body).await;
+        model.lock().unwrap().pending_secrets = None;
+        let Ok(reply) = reply else {
+            return Err(7); // NO_SECRETS: no agent, or it had nothing to give
+        };
+        let Ok(secrets) = reply.body().deserialize::<SettingsDict>() else {
+            return Err(7);
+        };
+        let psk: Option<String> = secrets
+            .get(SECURITY)
+            .and_then(|s| s.get("psk"))
+            .and_then(|v| v.try_clone().ok()?.try_into().ok());
+        if wanted.is_none() || wanted == psk.as_deref() {
+            return Ok(secrets);
+        }
+        if !model.lock().unwrap().request_new {
+            return Err(8); // SUPPLICANT_DISCONNECT: the handshake failed
+        }
+        flags = ALLOW_INTERACTION | REQUEST_NEW;
+    }
+}
+
 /// The life of one activation. `given` is the password sent with a new
 /// profile; `None` means a saved profile with its stored (correct) secret.
+/// `ask` is set when the secret has to come from the agent instead.
 async fn activate(
     conn: Connection,
     model: Shared,
     dev: usize,
     ssid: Vec<u8>,
     given: Option<String>,
+    ask: Option<Ask>,
 ) {
     let step = std::time::Duration::from_millis(15);
     let (script, wanted, ap) = {
@@ -466,13 +664,29 @@ async fn activate(
     };
     // (state to die in, reason), or a clean run.
     let failure = script.or_else(|| match (&wanted, &given) {
+        _ if ask.is_some() => None, // the agent decides, at NEED_AUTH
         (Some(want), Some(got)) if want != got => Some((60, 7)), // NEED_AUTH, NO_SECRETS
         _ => None,
     });
+    let mut agent_secrets = None;
     for s in [40, 50, 60, 70] {
         tokio::time::sleep(step).await;
-        if s == 60 && failure.map(|f| f.0) != Some(60) {
+        let asks = failure.is_none() && ask.is_some();
+        if s == 60 && failure.map(|f| f.0) != Some(60) && !asks {
             continue; // only a failed password visits NEED_AUTH
+        }
+        if asks && s == 60 {
+            set_device_state(&conn, &model, dev, 60, 0).await;
+            let ask = ask.as_ref().expect("checked");
+            match negotiate(&conn, &model, ask, wanted.as_deref()).await {
+                Ok(secrets) => agent_secrets = Some(secrets),
+                Err(reason) => {
+                    tokio::time::sleep(step).await;
+                    set_device_state(&conn, &model, dev, 120, reason).await;
+                    return;
+                }
+            }
+            continue;
         }
         set_device_state(&conn, &model, dev, s, 0).await;
         if let Some((died_in, reason)) = failure
@@ -497,6 +711,74 @@ async fn activate(
             .await;
     }
     set_device_state(&conn, &model, dev, 100, 0).await;
+    if let (Some(secrets), Some(ask)) = (agent_secrets, ask) {
+        // NetworkManager hands the agent what it learned, to store if it wants to.
+        let _ = call_agent(&conn, &model, "SaveSecrets", &(secrets, opath(&ask.path))).await;
+    }
+}
+
+/// `org.freedesktop.NetworkManager.AgentManager`: remembers who registered.
+struct AgentManager(Shared);
+
+#[interface(name = "org.freedesktop.NetworkManager.AgentManager")]
+impl AgentManager {
+    fn register(
+        &self,
+        identifier: String,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+    ) -> zbus::fdo::Result<()> {
+        self.register_with_capabilities(identifier, 0, hdr)
+    }
+
+    fn register_with_capabilities(
+        &self,
+        identifier: String,
+        _capabilities: u32,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+    ) -> zbus::fdo::Result<()> {
+        if identifier.is_empty() || identifier.len() > 255 {
+            return Err(zbus::fdo::Error::InvalidArgs("bad identifier".into()));
+        }
+        let sender = hdr
+            .sender()
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no sender".into()))?
+            .to_string();
+        self.0.lock().unwrap().agent = Some((sender, identifier));
+        Ok(())
+    }
+
+    fn unregister(&self) {
+        self.0.lock().unwrap().agent = None;
+    }
+}
+
+struct Statistics(Shared, usize);
+
+#[interface(name = "org.freedesktop.NetworkManager.Device.Statistics")]
+impl Statistics {
+    #[zbus(property)]
+    fn refresh_rate_ms(&self) -> u32 {
+        self.0.lock().unwrap().refresh_rate_ms
+    }
+
+    #[zbus(property)]
+    fn set_refresh_rate_ms(&self, ms: u32) {
+        self.0.lock().unwrap().refresh_rate_ms = ms;
+    }
+
+    #[zbus(property)]
+    fn rx_bytes(&self) -> u64 {
+        let mut m = self.0.lock().unwrap();
+        m.statistics_reads += 1;
+        m.devices[self.1].rx_bytes
+    }
+
+    #[zbus(property)]
+    fn tx_bytes(&self) -> u64 {
+        let mut m = self.0.lock().unwrap();
+        m.statistics_reads += 1;
+        m.devices[self.1].tx_bytes
+    }
 }
 
 struct Wireless(Shared, usize);
@@ -650,6 +932,28 @@ impl Profile {
         ])
     }
 
+    /// Like NetworkManager, replaces the settings; the fake keeps only the
+    /// `connection.autoconnect` flag, the one thing the Backend changes.
+    async fn update(
+        &self,
+        settings: HashMap<String, HashMap<String, OwnedVariant>>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> zbus::fdo::Result<()> {
+        let auto: Option<bool> = settings
+            .get("connection")
+            .and_then(|c| c.get("autoconnect"))
+            .and_then(|v| v.try_clone().ok()?.try_into().ok());
+        if let Some(p) = self.0.lock().unwrap().profiles[self.1].as_mut() {
+            p.autoconnect = auto.unwrap_or(true);
+            p.persisted = true;
+        }
+        Self::updated(&emitter).await?;
+        Ok(())
+    }
+
+    #[zbus(signal)]
+    async fn updated(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
     fn save(&self) {
         if let Some(p) = self.0.lock().unwrap().profiles[self.1].as_mut() {
             p.persisted = true;
@@ -663,20 +967,25 @@ impl Profile {
         #[zbus(connection)] conn: &Connection,
     ) -> zbus::fdo::Result<()> {
         // Like NetworkManager, deleting a Profile in use drops its Link.
-        let in_use: Vec<usize> = {
+        let (in_use, told_agent): (Vec<usize>, bool) = {
             let mut m = self.0.lock().unwrap();
-            let ssid = m.profiles[self.1]
-                .take()
-                .map(|p| p.ssid)
-                .unwrap_or_default();
-            (0..m.devices.len())
+            let gone = m.profiles[self.1].take();
+            let told_agent = gone.as_ref().is_some_and(|p| p.agent_secrets);
+            let ssid = gone.map(|p| p.ssid).unwrap_or_default();
+            let in_use = (0..m.devices.len())
                 .filter(|d| {
                     m.devices[*d]
                         .active_ap
                         .is_some_and(|ap| m.aps[&ap].ssid == ssid)
                 })
-                .collect()
+                .collect();
+            (in_use, told_agent)
         };
+        if told_agent {
+            // The agent may hold secrets of its own for this profile.
+            let body = (SettingsDict::new(), opath(&profile_path(self.1)));
+            let _ = call_agent(conn, &self.0, "DeleteSecrets", &body).await;
+        }
         for dev in in_use {
             set_device_state(conn, &self.0, dev, 30, 38).await; // CONNECTION_REMOVED
         }
@@ -697,6 +1006,18 @@ pub struct FakeNm {
     address: String,
     model: Shared,
     conn: Option<Connection>,
+    logind: Option<Connection>,
+}
+
+const LOGIND_NAME: &str = "org.freedesktop.login1";
+const LOGIND_PATH: &str = "/org/freedesktop/login1";
+
+struct Logind;
+
+#[interface(name = "org.freedesktop.login1.Manager")]
+impl Logind {
+    #[zbus(signal)]
+    async fn prepare_for_sleep(emitter: &SignalEmitter<'_>, start: bool) -> zbus::Result<()>;
 }
 
 impl FakeNm {
@@ -720,15 +1041,92 @@ impl FakeNm {
             join_failures: HashMap::new(),
             scan_requests: 0,
             refuse_scans: false,
+            statistics_reads: 0,
+            refresh_rate_ms: 0,
+            agent: None,
+            agent_calls: Vec::new(),
+            request_new: true,
+            pending_secrets: None,
+            wifi_soft: true,
+            wifi_hard_blocked: false,
+            wwan_soft: true,
+            tasks: Vec::new(),
+            before_sleep: NmState::Disconnected,
         }));
         let mut nm = FakeNm {
             rt,
             address: address.to_owned(),
             model,
             conn: None,
+            logind: None,
         };
         nm.restart();
+        nm.start_logind();
         nm
+    }
+
+    /// The fake `org.freedesktop.login1`, which only announces sleeping and
+    /// waking. It stays up when NetworkManager goes away.
+    fn start_logind(&mut self) {
+        let address = self.address.clone();
+        let conn = self.rt.block_on(async move {
+            connection::Builder::address(address.as_str())
+                .serve_at(LOGIND_PATH, Logind)
+                .name(LOGIND_NAME)
+                .build()
+                .await
+                .expect("serve fake logind")
+        });
+        self.logind = Some(conn);
+    }
+
+    fn prepare_for_sleep(&self, start: bool) {
+        let Some(conn) = &self.logind else { return };
+        let conn = conn.clone();
+        self.rt.block_on(async move {
+            if let Ok(iface) = conn
+                .object_server()
+                .interface::<_, Logind>(LOGIND_PATH)
+                .await
+            {
+                let _ = Logind::prepare_for_sleep(iface.signal_emitter(), start).await;
+            }
+        });
+    }
+
+    /// The machine suspends: logind announces it, NetworkManager goes ASLEEP.
+    pub fn sleep(&self) {
+        let state = self.model.lock().unwrap().state;
+        if state != NmState::Asleep {
+            self.model.lock().unwrap().before_sleep = state;
+        }
+        self.prepare_for_sleep(true);
+        self.set_state(NmState::Asleep);
+    }
+
+    /// The machine wakes: logind announces it first, then NetworkManager
+    /// returns to the state it slept in.
+    pub fn resume(&self) {
+        self.prepare_for_sleep(false);
+        let back = self.model.lock().unwrap().before_sleep;
+        self.set_state(back);
+    }
+
+    /// Whether Wi-Fi is on, as NetworkManager's `WirelessEnabled` reads.
+    pub fn wifi_enabled(&self) -> bool {
+        let m = self.model.lock().unwrap();
+        m.wifi_soft && !m.wifi_hard_blocked
+    }
+
+    pub fn wwan_enabled(&self) -> bool {
+        self.model.lock().unwrap().wwan_soft
+    }
+
+    /// Flips a hardware kill switch on the Wi-Fi radio.
+    pub fn set_wifi_hardware_blocked(&self, blocked: bool) {
+        self.model.lock().unwrap().wifi_hard_blocked = blocked;
+        self.notify(|m, e| Box::pin(async move { m.wireless_enabled_changed(e).await }));
+        self.notify(|m, e| Box::pin(async move { m.wireless_hardware_enabled_changed(e).await }));
     }
 
     /// Whether the fake currently owns the NetworkManager name.
@@ -738,14 +1136,40 @@ impl FakeNm {
 
     /// NetworkManager going away: the name is released.
     pub fn stop(&mut self) {
+        self.forget_activations();
         self.conn = None;
+    }
+
+    /// A NetworkManager that goes away forgets its joins in flight: their
+    /// tasks end and their Devices fall back to rest.
+    fn forget_activations(&self) {
+        let mut m = self.model.lock().unwrap();
+        for task in m.tasks.drain(..) {
+            task.abort();
+        }
+        m.pending_secrets = None;
+        // Profiles only in memory die with NetworkManager.
+        for p in &mut m.profiles {
+            if p.as_ref().is_some_and(|p| !p.persisted) {
+                *p = None;
+            }
+        }
+        for d in &mut m.devices {
+            if (40..100).contains(&d.state) {
+                d.state = 30;
+                d.active_ap = None;
+            }
+        }
     }
 
     /// NetworkManager (re)appearing with its current model. Objects are
     /// served before the name is requested, so a client that watches the name
     /// never sees a half-built tree.
     pub fn restart(&mut self) {
+        self.forget_activations();
         self.conn = None;
+        // Agents have to register again with a new NetworkManager.
+        self.model.lock().unwrap().agent = None;
         let (address, model) = (self.address.clone(), self.model.clone());
         let conn = self.rt.block_on(async move {
             let (devices, aps, profiles) = {
@@ -765,10 +1189,12 @@ impl FakeNm {
                 .serve_at("/org/freedesktop", ObjectManager)
                 .serve_at(MANAGER_PATH, Manager(model.clone()))
                 .serve_at(ACTIVE_PATH, Active(model.clone()))
-                .serve_at(SETTINGS_PATH, Settings(model.clone()));
+                .serve_at(SETTINGS_PATH, Settings(model.clone()))
+                .serve_at(AGENT_MANAGER_PATH, AgentManager(model.clone()));
             for n in 0..devices {
                 b = b
                     .serve_at(device_path(n), Device(model.clone(), n))
+                    .serve_at(device_path(n), Statistics(model.clone(), n))
                     .serve_at(device_path(n), Wireless(model.clone(), n));
             }
             for id in aps {
@@ -820,6 +1246,8 @@ impl FakeNm {
                 interface: interface.into(),
                 last_scan: -1,
                 aps: Vec::new(),
+                rx_bytes: 0,
+                tx_bytes: 0,
                 state: 30, // NM_DEVICE_STATE_DISCONNECTED
                 active_ap: None,
             });
@@ -829,7 +1257,11 @@ impl FakeNm {
         self.with_conn(move |c| async move {
             let os = c.object_server();
             let _ = os.at(device_path(n), Device(model.clone(), n)).await;
+            let _ = os.at(device_path(n), Statistics(model.clone(), n)).await;
             let _ = os.at(device_path(n), Wireless(model, n)).await;
+            if let Ok(i) = os.interface::<_, Manager>(MANAGER_PATH).await {
+                let _ = Manager::device_added(i.signal_emitter(), opath(&device_path(n))).await;
+            }
         });
         DeviceId(n)
     }
@@ -902,9 +1334,43 @@ impl FakeNm {
         });
     }
 
+    /// [`set_strength`](Self::set_strength) for the first access point
+    /// broadcasting `ssid`.
+    pub fn set_strength_of(&self, ssid: &str, strength: u8) {
+        let ap = {
+            let m = self.model.lock().unwrap();
+            let id = m
+                .aps
+                .iter()
+                .find(|(_, ap)| ap.ssid == ssid.as_bytes())
+                .map(|(id, _)| *id)
+                .unwrap_or_else(|| panic!("no access point for {ssid}"));
+            ApId(id)
+        };
+        self.set_strength(ap, strength);
+    }
+
     /// Pretends `device` last scanned `ms_ago` milliseconds ago.
     pub fn set_last_scan_ago(&self, device: DeviceId, ms_ago: i64) {
         self.model.lock().unwrap().devices[device.0].last_scan = boottime_ms() - ms_ago;
+    }
+
+    /// Sets a Device's byte counters (`Statistics.RxBytes`/`TxBytes`). The
+    /// first Device added carries the primary connection.
+    pub fn set_traffic(&self, device: DeviceId, rx_bytes: u64, tx_bytes: u64) {
+        let mut m = self.model.lock().unwrap();
+        m.devices[device.0].rx_bytes = rx_bytes;
+        m.devices[device.0].tx_bytes = tx_bytes;
+    }
+
+    /// How many times a counter was read, to prove nobody polls needlessly.
+    pub fn statistics_reads(&self) -> u32 {
+        self.model.lock().unwrap().statistics_reads
+    }
+
+    /// What was last written to `Statistics.RefreshRateMs` (0 = never).
+    pub fn refresh_rate_ms(&self) -> u32 {
+        self.model.lock().unwrap().refresh_rate_ms
     }
 
     /// Makes NetworkManager refuse every `RequestScan`.
@@ -927,6 +1393,7 @@ impl FakeNm {
                 ssid: ssid.to_vec(),
                 autoconnect,
                 persisted: true,
+                agent_secrets: false,
             }));
             m.profiles.len() - 1
         };
@@ -959,10 +1426,54 @@ impl FakeNm {
             .insert(ssid.as_bytes().to_vec(), (died_in, reason));
     }
 
+    /// Whether a secret agent is registered with the fake AgentManager.
+    pub fn agent_registered(&self) -> bool {
+        self.model.lock().unwrap().agent.is_some()
+    }
+
+    /// The agent methods NetworkManager called that the agent answered
+    /// without an error, in order (`GetSecrets`, `SaveSecrets`, ...).
+    pub fn agent_calls(&self) -> Vec<String> {
+        self.model.lock().unwrap().agent_calls.clone()
+    }
+
+    /// After a wrong password, fail the join with reason 8 instead of asking
+    /// the agent again with `REQUEST_NEW` (some NetworkManager versions do).
+    pub fn set_request_new(&self, yes: bool) {
+        self.model.lock().unwrap().request_new = yes;
+    }
+
+    /// Whether a `GetSecrets` call is waiting on the agent right now.
+    pub fn secrets_pending(&self) -> bool {
+        self.model.lock().unwrap().pending_secrets.is_some()
+    }
+
+    /// NetworkManager giving up on the `GetSecrets` request that is waiting:
+    /// sends the agent `CancelGetSecrets`.
+    pub fn cancel_pending_secrets(&self) {
+        let Some((path, setting)) = self.model.lock().unwrap().pending_secrets.clone() else {
+            return;
+        };
+        let model = self.model.clone();
+        self.with_conn(|conn| async move {
+            let _ = call_agent(&conn, &model, "CancelGetSecrets", &(opath(&path), setting)).await;
+        });
+    }
+
     /// Profiles NetworkManager would keep across a restart.
     pub fn persisted_profiles(&self) -> usize {
         let m = self.model.lock().unwrap();
         m.profiles.iter().flatten().filter(|p| p.persisted).count()
+    }
+
+    /// Whether the Profile with this UUID joins by itself; `None` if absent.
+    pub fn profile_autoconnect(&self, uuid: &str) -> Option<bool> {
+        let m = self.model.lock().unwrap();
+        m.profiles
+            .iter()
+            .flatten()
+            .find(|p| p.uuid == uuid)
+            .map(|p| p.autoconnect)
     }
 
     /// Profiles that exist at all, in memory or on disk.

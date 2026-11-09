@@ -10,12 +10,13 @@
 use std::collections::{HashMap, HashSet};
 
 use nexus_ipc::{
-    Band, Disconnected, Forgotten, Joined, SavedWifi, ScanOutcome, Secret, Security, WifiDevice,
-    WifiList, WifiNetwork,
+    AutoconnectSet, Band, Disconnected, Forgotten, Joined, SavedWifi, ScanOutcome, Secret,
+    Security, WifiDevice, WifiList, WifiNetwork,
 };
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
+use crate::secrets::{Broker, Ended};
 use crate::text::{self, Failure};
 
 /// NetworkManager refuses `RequestScan` when the last scan finished less than
@@ -99,6 +100,8 @@ trait Settings {
 )]
 trait SettingsConnection {
     fn get_settings(&self) -> zbus::Result<HashMap<String, HashMap<String, OwnedVariant>>>;
+    fn get_secrets(&self, setting: &str) -> zbus::Result<Settings>;
+    fn update(&self, settings: Settings) -> zbus::Result<()>;
     fn save(&self) -> zbus::Result<()>;
     fn delete(&self) -> zbus::Result<()>;
 }
@@ -324,9 +327,11 @@ fn assemble(
             .or_insert((ap, 1));
     }
     // One Profile per SSID is enough to mark a row; the first one wins.
-    let mut profile_of: HashMap<&[u8], &str> = HashMap::new();
+    let mut profile_of: HashMap<&[u8], (&str, bool)> = HashMap::new();
     for p in &profiles {
-        profile_of.entry(&p.ssid).or_insert(&p.uuid);
+        profile_of
+            .entry(&p.ssid)
+            .or_insert((&p.uuid, p.autoconnect));
     }
     let mut networks: Vec<WifiNetwork> = by_ssid
         .into_iter()
@@ -339,7 +344,10 @@ fn assemble(
             access_points,
             joined: joined.contains(&ssid),
             device: best.device,
-            profile: profile_of.get(ssid.as_slice()).map(|u| (*u).to_owned()),
+            profile: profile_of
+                .get(ssid.as_slice())
+                .map(|(u, _)| (*u).to_owned()),
+            autoconnect: profile_of.get(ssid.as_slice()).map(|(_, a)| *a),
         })
         .collect();
     networks.sort_by(|a, b| {
@@ -485,7 +493,40 @@ fn new_profile(
 
 /// Joins a Network and waits for the outcome. The inner error is something to
 /// tell the person; the outer one is a bus problem.
+///
+/// Without a password for an unsaved secured Network, NetworkManager asks our
+/// secret agent, which opens a Secret prompt; this call waits on it. A
+/// password rejected after the person typed it (reasons 7, 8, 11) reopens the
+/// prompt, saying so, and the join starts over.
 pub async fn join(
+    conn: &Connection,
+    broker: &Broker,
+    network: &str,
+    password: Option<&Secret>,
+) -> zbus::Result<Result<Joined, Failure>> {
+    broker.forget_ended(network);
+    loop {
+        let result = join_once(conn, network, password).await?;
+        let Err(failure) = &result else {
+            return Ok(result);
+        };
+        if failure.code != nexus_ipc::ErrorCode::WrongPassword || password.is_some() {
+            return Ok(result);
+        }
+        let name = nexus_ipc::parse_network_id(network)
+            .map(|s| String::from_utf8_lossy(&s).into_owned())
+            .unwrap_or_default();
+        match broker.take_ended(network) {
+            Some(Ended::Cancelled) => return Ok(Err(text::prompt_cancelled(&name))),
+            Some(Ended::Expired) => return Ok(Err(text::prompt_expired(&name))),
+            Some(Ended::Withdrawn) => return Ok(Err(text::join_withdrawn(&name))),
+            Some(Ended::Answered) => broker.mark_rejected(network),
+            None => return Ok(result),
+        }
+    }
+}
+
+async fn join_once(
     conn: &Connection,
     network: &str,
     password: Option<&Secret>,
@@ -515,6 +556,11 @@ pub async fn join(
     let device = no_cache!(DeviceProxy, conn, device_path.as_str());
     // Subscribe before asking: the Device may move on before the call returns.
     let mut states = device.receive_device_state_changed().await?;
+    // NetworkManager restarting forgets the join; do not wait it out.
+    let mut owner = zbus::fdo::DBusProxy::new(conn)
+        .await?
+        .receive_name_owner_changed_with_args(&[(0, "org.freedesktop.NetworkManager")])
+        .await?;
     let none = OwnedObjectPath::try_from("/").expect("root path");
     let device_obj = OwnedObjectPath::try_from(device_path.as_str()).expect("device path");
 
@@ -534,9 +580,6 @@ pub async fn join(
                 _ => {}
             }
             let password = password.map(Secret::expose).filter(|_| secured);
-            if secured && password.is_none() {
-                return Ok(Err(text::password_required(&name)));
-            }
             if let Some(pw) = password
                 && net.security != Security::Wpa3
                 && !(8..=63).contains(&pw.chars().count())
@@ -556,7 +599,7 @@ pub async fn join(
         }
     };
 
-    let outcome = wait_for_link(&mut states, &name, secured).await;
+    let outcome = wait_for_link(&mut states, &mut owner, &name, secured).await;
     let settings = no_cache!(SettingsConnectionProxy, conn, profile_path.as_str());
     match outcome {
         Ok(()) => {
@@ -585,6 +628,7 @@ pub async fn join(
 /// Watches a Device until the join it started is up or dead.
 async fn wait_for_link(
     states: &mut StateChangedStream,
+    owner: &mut zbus::fdo::NameOwnerChangedStream,
     name: &str,
     secured: bool,
 ) -> Result<(), Failure> {
@@ -595,6 +639,7 @@ async fn wait_for_link(
     loop {
         let signal = tokio::select! {
             s = states.next() => s,
+            _ = owner.next() => return Err(text::join_interrupted(name)),
             () = &mut deadline => return Err(text::join_timed_out(name)),
         };
         let Some(signal) = signal else {
@@ -657,6 +702,44 @@ pub async fn forget(conn: &Connection, network: &str) -> zbus::Result<Result<For
         Err(text::unknown_network(&name))
     } else {
         Ok(Forgotten { ssid: name })
+    })
+}
+
+/// Turns automatic joining on or off for every Profile saved for a Network.
+/// `Update` replaces a Profile's settings whole, so this reads them (and the
+/// Wi-Fi secrets, best effort) back, flips `connection.autoconnect` and
+/// writes them again.
+pub async fn set_autoconnect(
+    conn: &Connection,
+    network: &str,
+    enabled: bool,
+) -> zbus::Result<Result<AutoconnectSet, Failure>> {
+    let Some(ssid) = nexus_ipc::parse_network_id(network) else {
+        return Ok(Err(text::bad_network_id()));
+    };
+    let name = String::from_utf8_lossy(&ssid).into_owned();
+    let mut changed = 0;
+    for p in profiles(conn).await?.into_iter().filter(|p| p.ssid == ssid) {
+        let proxy = no_cache!(SettingsConnectionProxy, conn, p.path.as_str());
+        let mut all = proxy.get_settings().await?;
+        if let Ok(secrets) = proxy.get_secrets("802-11-wireless-security").await {
+            for (setting, values) in secrets {
+                all.entry(setting).or_default().extend(values);
+            }
+        }
+        all.entry("connection".to_owned())
+            .or_default()
+            .insert("autoconnect".to_owned(), variant(enabled));
+        proxy.update(all).await?;
+        changed += 1;
+    }
+    Ok(if changed == 0 {
+        Err(text::unknown_network(&name))
+    } else {
+        Ok(AutoconnectSet {
+            ssid: name,
+            enabled,
+        })
     })
 }
 

@@ -3,41 +3,44 @@ source: crates/nexus/tests/s2_tui.rs
 expression: styled_of(&rig.buffer(STANDARD))
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
-╭ Overview ──────────────────╮╭ Wi-Fi ─────────────────────────────────────────────────────────────╮
-│ ▸ Wi-Fi     Home-5G        ││                                                                    │
-│   Ethernet  Idle           ││ ● Online                                                           │
-│   VPN       Idle           ││                                                                    │
-│   Hotspot   Off            ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │
-│                            ││                                                                    │
-│                            ││ Wi-Fi         Home-5G                                              │
-│                            ││ Primary link  Home-5G                                              │
-│                            ││ Internet      full                                                 │
-│                            ││ Backend       networkmanager 1.58.1                                │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
+╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+│ ▸ ● Wi-Fi                  ││     ░░    ░░░░    ░░      ░░░░░░  ░░░░    ░░░░░░                   │
+│     Home-5G                ││   ░░██░░░░████░░░░██░░  ░░██████░░████░░░░██████░░                 │
+│   ○ Ethernet               ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░██░░░░                   │
+│     Not connected          ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░████░░                   │
+│   ○ VPN                    ││ ░░██░░██░░██░░██░░██░░░░  ░░██░░░░██░░██░░██░░░░                   │
+│     Not connected          ││   ░░██░░░░██░░██░░██████░░██████░░██░░██░░██████░░                 │
+│   ○ Hotspot                ││     ░░    ░░  ░░  ░░░░░░  ░░░░░░  ░░  ░░  ░░░░░░                   │
+│     Not started            ││                                                                    │
+│                            ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │
+│                            ││ Internet: full  |  Backend: networkmanager 1.58.1                  │
+│                            │╰────────────────────────────────────────────────────────────────────╯
+│                            │╭ Traffic ───────────────────────────────────────────────────────────╮
+│                            ││ ↓ 0 B/s          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                            ││ down             ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                            ││ ↑ 0 B/s          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                            ││ up               ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                            │╰────────────────────────────────────────────────────────────────────╯
+│                            │╭ Recent activity ───────────────────────────────────────────────────╮
+│                            ││ ● Joined Home-5G (Wi-Fi)                                           │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  h/l tab  ? help  q quit
+ j/k move  enter open  h/l tab  ? help  q quit
 
- 2309 cells  fg=- bg=- mods=[]
-   17 cells  fg=- bg=- mods=[bold]
-   29 cells  fg=- bg=- mods=[reversed]
-  181 cells  fg=cyan bg=- mods=[]
-  135 cells  fg=gray bg=- mods=[]
-    7 cells  fg=gray bg=- mods=[reversed]
-    1 cells  fg=green bg=- mods=[]
-    8 cells  fg=green bg=- mods=[bold]
-  106 cells  fg=lightcyan bg=- mods=[]
+ 1441 cells  fg=- bg=- mods=[]
+    6 cells  fg=- bg=- mods=[bold,reversed]
+   68 cells  fg=- bg=- mods=[bold]
+   31 cells  fg=- bg=- mods=[reversed]
+  426 cells  fg=cyan bg=- mods=[]
+   58 cells  fg=darkgray bg=- mods=[]
+  147 cells  fg=gray bg=- mods=[]
+   24 cells  fg=gray bg=- mods=[reversed]
+  211 cells  fg=green bg=- mods=[]
+  172 cells  fg=green bg=- mods=[dim]
+    1 cells  fg=green bg=- mods=[reversed]
+  208 cells  fg=lightcyan bg=- mods=[]
     7 cells  fg=lightcyan bg=- mods=[bold]

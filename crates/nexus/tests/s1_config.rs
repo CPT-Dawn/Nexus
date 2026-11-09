@@ -41,6 +41,25 @@ fn editing_the_file_applies_live_and_announces_it() {
 }
 
 #[test]
+fn a_half_written_file_is_not_reported_as_broken() {
+    let world = World::start(NEXUS);
+    let mut events = world.wire();
+    events.subscribe();
+
+    // The first half ends mid-value, which on its own would not parse.
+    world.write_config_in_pieces(
+        "theme = \"nord\"\n[connectivity]\nenabled = fal",
+        "se\n",
+        std::time::Duration::from_millis(50),
+    );
+
+    let event = events.next_event("config_reloaded");
+    assert!(event.get("warning").is_none(), "{event}");
+    assert_eq!(event["config"]["theme"], "nord");
+    assert_eq!(event["config"]["connectivity"]["enabled"], false);
+}
+
+#[test]
 fn a_single_key_can_be_read() {
     let world = World::start(NEXUS);
     let mut events = world.wire();
@@ -257,4 +276,23 @@ fn the_cli_sets_and_gets_a_key() {
     let out = world.run_nexus(&["config", "set", "nope", "1"]);
     assert_eq!(out.status.code(), Some(4), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("unknown"));
+}
+
+#[test]
+fn the_prompt_timeout_is_a_setting_with_sane_bounds() {
+    let world = World::start(NEXUS);
+    let mut wire = world.wire();
+    let resp = wire.call(json!({"op": "config_get", "key": "prompts.timeout_secs"}));
+    assert_eq!(resp["ok"]["value"], 120, "{resp}");
+
+    let resp = wire.call(json!({"op": "config_set", "key": "prompts.timeout_secs", "value": 0}));
+    assert_eq!(resp["err"]["code"], "bad_request", "{resp}");
+    assert!(
+        resp["err"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("between 1 and 3600")
+    );
+    let resp = wire.call(json!({"op": "config_set", "key": "prompts.timeout_secs", "value": 30}));
+    assert_eq!(resp["ok"]["value"], 30, "{resp}");
 }

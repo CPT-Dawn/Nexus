@@ -1,12 +1,15 @@
 //! The domain-level Backend interface (ADR-0001). The Daemon depends on this
 //! trait, never on NetworkManager types, so another Backend can be added later.
 
+mod agent;
 pub mod nm;
 mod wifi;
 
 use std::future::Future;
 
-use nexus_ipc::{Disconnected, Forgotten, Joined, ScanOutcome, Secret, Status, WifiList};
+use nexus_ipc::{
+    AutoconnectSet, Disconnected, Forgotten, Joined, Radios, ScanOutcome, Secret, Status, WifiList,
+};
 
 use crate::text::Failure;
 
@@ -18,6 +21,15 @@ pub struct Capabilities {
     pub connectivity_check: bool,
     /// Can tell a Portal from a plain outage.
     pub portal_detection: bool,
+}
+
+/// Byte counters of the Device carrying the primary Link.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Counters {
+    /// Identifies the Device, so a change of Link restarts the baseline.
+    pub device: String,
+    pub rx_bytes: u64,
+    pub tx_bytes: u64,
 }
 
 /// Why a Backend call failed. For `status`, "not running" is a [`Status`]
@@ -62,6 +74,8 @@ pub trait Backend: Send + Sync + 'static {
     /// re-requesting inside the Backend's rate limit.
     fn wifi_scan(&self) -> impl Future<Output = Result<ScanOutcome, BackendError>> + Send;
 
+    /// Byte counters of the primary Link's Device, `None` without one.
+    fn counters(&self) -> impl Future<Output = Result<Option<Counters>, BackendError>> + Send;
     /// Joins a Wi-Fi Network (`network` is a `WifiNetwork.id`) and waits
     /// until it is up or has failed. A Profile exists afterwards only if the
     /// join worked.
@@ -79,6 +93,34 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
     ) -> impl Future<Output = Result<Forgotten, BackendError>> + Send;
+
+    /// Turns automatic joining of a saved Network on or off.
+    fn wifi_autoconnect(
+        &self,
+        network: String,
+        enabled: bool,
+    ) -> impl Future<Output = Result<AutoconnectSet, BackendError>> + Send;
+
+    /// Switches Wi-Fi on or off. Refused with `hard_blocked` while a hardware
+    /// switch holds it off.
+    fn wifi_power(&self, on: bool) -> impl Future<Output = Result<Radios, BackendError>> + Send;
+
+    /// Airplane mode: every radio off (`on`) or back on.
+    fn airplane(&self, on: bool) -> impl Future<Output = Result<Radios, BackendError>> + Send;
+
+    /// Starts listening for [`Backend::changed`] and [`Backend::resumed`]
+    /// now, so nothing that happens between this call and the first wait on
+    /// them is lost. Best effort: they retry on their own if this fails.
+    fn arm(&self) -> impl Future<Output = ()> + Send;
+
+    /// Resolves each time the machine wakes from sleep, when the Backend's
+    /// picture of the world may be stale. Cancel-safe.
+    fn resumed(&self) -> impl Future<Output = ()> + Send;
+
+    /// Answers the Backend's requests for secrets through Secret prompts, for
+    /// as long as the Daemon runs: registers with the Backend, and again
+    /// whenever it comes back. Never returns.
+    fn secrets(&self) -> impl Future<Output = ()> + Send;
 
     /// Resolves after the Backend changed, once per burst: a storm of
     /// property changes is coalesced into a single tick. Cancel-safe.

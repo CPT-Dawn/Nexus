@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_wifi.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
+╭ Wi-Fi ───────────────────────────────╮╭ Home-5G ─────────────────────────────────────────────────────────────────────────────────────────╮
+│ ▸ ● Home-5G         ▂▄▆█ wpa2     5G ││ ● Connected                                                                                      │
+│     Work-Secure     ▂▄▆█ wpa3     5G ││                                                                                                  │
+│     Cafe Guest      ▂▄▆█ open   2.4G ││ Signal         82%  ▂▄▆█                                                                         │
+│     Neighbour-2G    ▂▄▆█ wpa2   2.4G ││ Security      WPA2 personal                                                                      │
+│     A very long ne… ▂▄▆█ wpa2   2.4G ││ Band          5 GHz                                                                              │
+│     Rooftop-6E      ▂▄▆█ wpa2     6G ││ Access points 1                                                                                  │
+│   ── Saved, out of range             ││ Adapter       wlan0                                                                              │
+│     Parents House               auto ││ Autoconnect   on                                                                                 │
+│     Hotel Lobby               manual ││                                                                                                  │
+│                                      ││ Press x to disconnect.                                                                           │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ j/k move  r scan  x disconnect  f forget  a auto  h/l tab  ? help  q quit

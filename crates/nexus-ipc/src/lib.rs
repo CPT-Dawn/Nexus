@@ -45,6 +45,11 @@ pub enum Op {
     /// Ask the Backend to refresh the Wi-Fi list. Results arrive as
     /// `networks_changed` events; the response only says what was done.
     WifiScan,
+    /// Download and upload rates of the primary Link, in bytes per second.
+    /// Zero without a Link; the first call only sets a baseline.
+    Traffic,
+    /// The recent activity log, newest first.
+    Activity,
     /// Join a Wi-Fi Network, waiting until it is up or has failed. `network`
     /// is a `WifiNetwork.id`. A Profile is saved only if the join succeeds.
     /// Result: [`Joined`]. Failures carry a human sentence and one of the
@@ -61,6 +66,23 @@ pub enum Op {
     /// Forget (delete the Profile of) a Wi-Fi Network by `WifiNetwork.id`.
     /// Result: [`Forgotten`]; `unknown_network` when nothing is saved for it.
     WifiForget { network: String },
+    /// Turn automatic joining of a saved Network on or off, by
+    /// `WifiNetwork.id`. Result: [`AutoconnectSet`]; `unknown_network` when
+    /// nothing is saved for it.
+    WifiAutoconnect { network: String, enabled: bool },
+    /// Answer an open Secret prompt (`prompt` is the id from its `secret_prompt_opened`
+    /// event). The only request besides `wifi_join` that carries a secret.
+    /// Result `{}`; `unknown_prompt` when it is closed already.
+    SecretAnswer { prompt: u64, secret: Secret },
+    /// Decline an open Secret prompt. The join waiting on it fails with
+    /// `password_required`. Result `{}`; `unknown_prompt` when closed already.
+    SecretCancel { prompt: u64 },
+    /// Switch Wi-Fi on or off. Result: [`Radios`]. `hard_blocked` while a
+    /// hardware switch holds the radio off.
+    WifiPower { on: bool },
+    /// Airplane mode: every radio the Backend controls off (`on`) or back on.
+    /// Result: [`Radios`]. `hard_blocked` when a hardware switch prevents it.
+    Airplane { on: bool },
     /// Start receiving event lines on this connection. Answered with
     /// `{"ok": {}}`; events follow, interleaved with later responses.
     Subscribe,
@@ -77,20 +99,28 @@ pub enum Op {
 }
 
 /// A password or other secret. It serializes as the plain string (the wire
-/// needs it) but never shows in `Debug` output, so logs cannot leak it.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// needs it), never shows in `Debug` output, and wipes its memory on drop.
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Secret(String);
+pub struct Secret(zeroize::Zeroizing<String>);
 
 impl Secret {
     pub fn new(text: impl Into<String>) -> Self {
-        Self(text.into())
+        Self(zeroize::Zeroizing::new(text.into()))
     }
 
     pub fn expose(&self) -> &str {
         &self.0
     }
 }
+
+impl PartialEq for Secret {
+    fn eq(&self, other: &Self) -> bool {
+        self.expose() == other.expose()
+    }
+}
+
+impl Eq for Secret {}
 
 impl std::fmt::Debug for Secret {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -166,6 +196,10 @@ pub enum ErrorCode {
     UnknownNetwork,
     /// There is no Wi-Fi Link to disconnect.
     NotConnected,
+    /// A hardware switch (not software) holds the radio off.
+    HardBlocked,
+    /// No Secret prompt with that id is open (it was answered, cancelled or expired).
+    UnknownPrompt,
     #[serde(other)]
     Unknown,
 }
@@ -211,6 +245,10 @@ pub enum Event {
     NetworksChanged {
         wifi: WifiList,
     },
+    /// Something worth a line in the activity strip just happened.
+    Activity {
+        entry: ActivityEntry,
+    },
     /// `config.toml` changed (or was fixed, or broke). `config` is what is now
     /// in force; `warning` says why the file is being ignored, if it is.
     ConfigReloaded {
@@ -218,7 +256,101 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         warning: Option<String>,
     },
+    /// The Backend needs a secret from the user. Prompts still open when a
+    /// Front end subscribes are replayed to it, so one that was not running
+    /// when the prompt opened still sees it.
+    SecretPromptOpened {
+        prompt: Prompt,
+    },
+    /// A Secret prompt is gone: answer it no more.
+    SecretPromptClosed {
+        id: u64,
+        reason: PromptClosed,
+    },
     /// An event from a newer daemon; its payload is discarded.
+    #[serde(other)]
+    Unknown,
+}
+
+/// The `traffic` result: the primary Link's rates in bytes per second.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Traffic {
+    pub rx_bps: u64,
+    pub tx_bps: u64,
+}
+
+/// What kind of thing an [`ActivityEntry`] reports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ActivityKind {
+    Joined,
+    Lost,
+    VpnUp,
+    VpnDown,
+    /// A Portal was detected on the Link.
+    Portal,
+    /// Internet is reachable again (after a Portal login).
+    Online,
+    #[serde(other)]
+    Other,
+}
+
+/// One line of the activity log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivityEntry {
+    /// Unix seconds.
+    pub at: u64,
+    pub kind: ActivityKind,
+    /// Plain English, ready to show.
+    pub text: String,
+}
+
+/// The `activity` result, newest first.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivityLog {
+    pub entries: Vec<ActivityEntry>,
+}
+
+/// What a Secret prompt asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum PromptKind {
+    /// The password of a Wi-Fi Network.
+    WifiPassword,
+    #[serde(other)]
+    Unknown,
+}
+
+/// An open Secret prompt. Never holds a secret.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Prompt {
+    pub id: u64,
+    pub kind: PromptKind,
+    /// The Network's name.
+    pub network: String,
+    /// `WifiNetwork.id` of the Network.
+    pub network_id: String,
+    /// The password was tried and rejected: this asks again.
+    pub retry: bool,
+    /// A sentence for the person, e.g. "Wrong password for Home. Try again."
+    pub message: String,
+    /// Seconds until the prompt expires.
+    pub expires_in: u64,
+}
+
+/// Why a Secret prompt closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum PromptClosed {
+    Answered,
+    Cancelled,
+    /// Nobody answered in time.
+    Expired,
+    /// The Backend no longer needs it (the join was abandoned).
+    Withdrawn,
     #[serde(other)]
     Unknown,
 }
@@ -292,6 +424,53 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link: Option<Link>,
     pub backend: BackendInfo,
+    /// Radio switches. Absent from older daemons: reads as "all on".
+    #[serde(default)]
+    pub radios: Radios,
+}
+
+/// The state of one radio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Radio {
+    /// On, and not blocked by anything.
+    pub enabled: bool,
+    /// A hardware switch (not software) holds it off: asking to turn it on cannot help.
+    pub hardware_blocked: bool,
+}
+
+/// All radio switches, the `wifi_power` and `airplane` result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Radios {
+    pub wifi: Radio,
+    /// Every radio the Backend controls is off.
+    pub airplane: bool,
+}
+
+impl Default for Radios {
+    fn default() -> Self {
+        Self {
+            wifi: Radio {
+                enabled: true,
+                hardware_blocked: false,
+            },
+            airplane: false,
+        }
+    }
+}
+
+impl Radios {
+    /// A phrase about a radio that is off, or `None` when all is well.
+    pub fn human(&self) -> Option<&'static str> {
+        if self.wifi.hardware_blocked {
+            Some("Wi-Fi is blocked by a hardware switch")
+        } else if self.airplane {
+            Some("airplane mode is on")
+        } else if !self.wifi.enabled {
+            Some("Wi-Fi is off")
+        } else {
+            None
+        }
+    }
 }
 
 impl Status {
@@ -305,6 +484,7 @@ impl Status {
                 name: "networkmanager".into(),
                 version: None,
             },
+            radios: Radios::default(),
         }
     }
 
@@ -319,6 +499,14 @@ impl Status {
             Some(l) => format!("{prefix}{}", l.name),
             None => String::new(),
         };
+        let base = self.human_state(link, how);
+        match self.radios.human() {
+            Some(radio) if self.state != State::Unavailable => format!("{base}; {radio}"),
+            _ => base,
+        }
+    }
+
+    fn human_state(&self, link: impl Fn(&str) -> String, how: &str) -> String {
         match self.state {
             State::Unavailable => "NetworkManager is not running".into(),
             State::Asleep => "networking is switched off".into(),
@@ -423,6 +611,9 @@ pub struct WifiNetwork {
     /// UUID of the saved Profile for it, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+    /// Whether the saved Profile joins by itself; `None` without a Profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub autoconnect: Option<bool>,
 }
 
 /// A saved Wi-Fi Profile whose Network is not in range.
@@ -474,6 +665,13 @@ pub struct Disconnected {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Forgotten {
     pub ssid: String,
+}
+
+/// The `wifi_autoconnect` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutoconnectSet {
+    pub ssid: String,
+    pub enabled: bool,
 }
 
 /// Encodes a value as one line, newline included.
@@ -530,6 +728,8 @@ pub struct Connection {
     next_id: u64,
     /// Half a line read before a timeout.
     partial: String,
+    /// Events that arrived while `call` waited for its response.
+    parked: std::collections::VecDeque<Event>,
 }
 
 impl Connection {
@@ -545,6 +745,7 @@ impl Connection {
             reader: BufReader::new(UnixStream::connect(path)?),
             next_id: 1,
             partial: String::new(),
+            parked: std::collections::VecDeque::new(),
         })
     }
 
@@ -565,7 +766,11 @@ impl Connection {
                 return Err(io::ErrorKind::UnexpectedEof.into());
             }
             let Ok(resp) = serde_json::from_str::<Response>(&buf) else {
-                continue; // an event line, or noise
+                // An event line (kept for `next_event`), or noise.
+                if let Ok(line) = serde_json::from_str::<EventLine>(&buf) {
+                    self.parked.push_back(line.event);
+                }
+                continue;
             };
             if resp.id != Some(id) {
                 continue;
@@ -581,6 +786,9 @@ impl Connection {
     /// `None` means nothing arrived in time. Call `Op::Subscribe` first or
     /// none will come.
     pub fn next_event(&mut self, wait: Duration) -> io::Result<Option<Event>> {
+        if let Some(event) = self.parked.pop_front() {
+            return Ok(Some(event));
+        }
         self.reader.get_ref().set_read_timeout(Some(wait))?;
         let result = loop {
             match self.reader.read_line(&mut self.partial) {
@@ -615,6 +823,16 @@ impl Connection {
     /// Convenience for the `wifi_scan` op.
     pub fn wifi_scan(&mut self) -> io::Result<Result<ScanOutcome, Failure>> {
         Ok(self.call(Op::WifiScan)?.and_then(decode))
+    }
+
+    /// Convenience for the `traffic` op.
+    pub fn traffic(&mut self) -> io::Result<Result<Traffic, Failure>> {
+        Ok(self.call(Op::Traffic)?.and_then(decode))
+    }
+
+    /// Convenience for the `activity` op.
+    pub fn activity(&mut self) -> io::Result<Result<ActivityLog, Failure>> {
+        Ok(self.call(Op::Activity)?.and_then(decode))
     }
 
     /// Convenience for the `status` op.

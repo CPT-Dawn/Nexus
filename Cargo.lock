@@ -665,6 +665,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zbus",
+ "zeroize",
 ]
 
 [[package]]
@@ -673,6 +674,7 @@ version = "2.0.0-dev"
 dependencies = [
  "serde",
  "serde_json",
+ "zeroize",
 ]
 
 [[package]]
@@ -681,6 +683,7 @@ version = "2.0.0-dev"
 dependencies = [
  "nexus-ipc",
  "rustix",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
@@ -1599,6 +1602,15 @@ name = "zcheapstr"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "939f186d9ecebe044315a5cb6d6f78568bbc21152adc954d5a0c2f58bdbc9920"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "zeroize"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 dependencies = [
  "serde",
 ]

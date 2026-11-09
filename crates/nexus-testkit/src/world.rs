@@ -88,6 +88,12 @@ impl World {
         Self::builder(bin).start()
     }
 
+    /// The process id of the Daemon this world started, if one runs. With
+    /// socket activation under a wrapper it is the wrapper's, not the Daemon's.
+    pub fn daemon_pid(&self) -> Option<u32> {
+        self.daemon.as_ref().map(Child::id)
+    }
+
     pub fn runtime_dir(&self) -> PathBuf {
         self.tmp.path().join("run")
     }
@@ -106,6 +112,21 @@ impl World {
         let path = self.config_path();
         std::fs::create_dir_all(path.parent().unwrap()).expect("mkdir config dir");
         std::fs::write(path, text).expect("write config");
+    }
+
+    /// Writes the config file in place but in two pieces, `pause` apart, the
+    /// way a slow editor or a big save looks from the outside: the file
+    /// exists with only its first half until the second arrives.
+    pub fn write_config_in_pieces(&self, first: &str, second: &str, pause: std::time::Duration) {
+        use std::io::Write;
+        let path = self.config_path();
+        std::fs::create_dir_all(path.parent().unwrap()).expect("mkdir config dir");
+        let mut file = std::fs::File::create(path).expect("create config");
+        file.write_all(first.as_bytes()).expect("write first half");
+        file.flush().expect("flush");
+        std::thread::sleep(pause);
+        file.write_all(second.as_bytes())
+            .expect("write second half");
     }
 
     pub fn daemon_log(&self) -> String {
@@ -219,6 +240,8 @@ pub struct Wire {
     reader: BufReader<UnixStream>,
     next_id: u64,
     patience: Duration,
+    /// Event lines that arrived while [`Wire::call`] waited for its response.
+    events: std::collections::VecDeque<Value>,
 }
 
 impl Wire {
@@ -235,6 +258,7 @@ impl Wire {
             reader: BufReader::new(stream),
             next_id: 1,
             patience,
+            events: std::collections::VecDeque::new(),
         }
     }
 
@@ -281,7 +305,10 @@ impl Wire {
     /// other lines, and returns it whole. Panics if none arrives.
     pub fn next_event(&mut self, name: &str) -> Value {
         loop {
-            let line = self.read_line();
+            let line = match self.events.pop_front() {
+                Some(line) => line,
+                None => self.read_line(),
+            };
             assert!(!line.is_null(), "no `{name}` event arrived in time");
             if line["event"] == name {
                 return line;
@@ -297,8 +324,19 @@ impl Wire {
         req.as_object_mut()
             .unwrap()
             .extend(op.as_object().expect("op is an object").clone());
-        let resp = self.raw(&req.to_string());
-        assert_eq!(resp["id"], id, "response id: {resp}");
-        resp
+        let stream = self.reader.get_mut();
+        stream.write_all(req.to_string().as_bytes()).expect("write");
+        stream.write_all(b"\n").expect("write");
+        loop {
+            let resp = self.read_line();
+            // Events interleave with responses on a subscribed connection;
+            // keep them for `next_event`.
+            if resp.get("event").is_some() {
+                self.events.push_back(resp);
+                continue;
+            }
+            assert_eq!(resp["id"], id, "response id: {resp}");
+            return resp;
+        }
     }
 }

@@ -187,11 +187,44 @@ pub fn out_of_range(ssid: &str) -> Failure {
     fail(ErrorCode::OutOfRange, out_of_range_sentence(ssid))
 }
 
-pub fn password_required(ssid: &str) -> Failure {
+/// Nobody answered the password prompt in time. The Network stays unsaved and
+/// reads as "password needed".
+pub fn prompt_expired(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::PasswordRequired,
+        format!(
+            "{ssid} needs a password, and nobody gave one in time. Join it again to be asked again."
+        ),
+    )
+}
+
+/// The password prompt was declined (or no Front end could answer it).
+pub fn prompt_cancelled(ssid: &str) -> Failure {
     fail(
         ErrorCode::PasswordRequired,
         format!("{ssid} needs a password. Pass --password, or --password-stdin to type it in."),
     )
+}
+
+/// The Backend dropped the join while its prompt was open.
+pub fn join_withdrawn(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("Joining {ssid} was cancelled."),
+    )
+}
+
+/// The sentence on a password prompt.
+pub fn password_prompt(ssid: &str, retry: bool) -> String {
+    if retry {
+        format!("Wrong password for {ssid}. Try again.")
+    } else {
+        format!("Password for {ssid}")
+    }
+}
+
+pub fn unknown_prompt() -> String {
+    "That prompt is closed already (answered, cancelled or expired).".into()
 }
 
 pub fn bad_passphrase_length(ssid: &str) -> Failure {
@@ -233,6 +266,34 @@ pub fn not_connected() -> Failure {
     fail(
         ErrorCode::NotConnected,
         "Not connected to any Wi-Fi network.",
+    )
+}
+
+pub fn wifi_hard_blocked() -> Failure {
+    fail(
+        ErrorCode::HardBlocked,
+        "Wi-Fi is blocked by a hardware switch (a key, slider or BIOS setting). \
+         Flip it off and Nexus will pick it up; software cannot turn it on.",
+    )
+}
+
+/// A join that NetworkManager's restart cut short.
+pub fn join_interrupted(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("NetworkManager restarted while joining {ssid}. Nothing was saved; try again."),
+    )
+}
+
+/// `nexus wifi on|off` and `nexus airplane on|off` outcomes.
+pub fn radios(r: &nexus_ipc::Radios) -> String {
+    r.human().map_or_else(
+        || "Wi-Fi is on.".to_owned(),
+        |what| {
+            let mut s = what.to_owned();
+            s.replace_range(..1, &s[..1].to_uppercase());
+            format!("{s}.")
+        },
     )
 }
 
