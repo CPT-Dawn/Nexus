@@ -836,6 +836,28 @@ impl Profile {
         ])
     }
 
+    /// Like NetworkManager, replaces the settings; the fake keeps only the
+    /// `connection.autoconnect` flag, the one thing the Backend changes.
+    async fn update(
+        &self,
+        settings: HashMap<String, HashMap<String, OwnedVariant>>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> zbus::fdo::Result<()> {
+        let auto: Option<bool> = settings
+            .get("connection")
+            .and_then(|c| c.get("autoconnect"))
+            .and_then(|v| v.try_clone().ok()?.try_into().ok());
+        if let Some(p) = self.0.lock().unwrap().profiles[self.1].as_mut() {
+            p.autoconnect = auto.unwrap_or(true);
+            p.persisted = true;
+        }
+        Self::updated(&emitter).await?;
+        Ok(())
+    }
+
+    #[zbus(signal)]
+    async fn updated(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
     fn save(&self) {
         if let Some(p) = self.0.lock().unwrap().profiles[self.1].as_mut() {
             p.persisted = true;
@@ -1196,6 +1218,16 @@ impl FakeNm {
     pub fn persisted_profiles(&self) -> usize {
         let m = self.model.lock().unwrap();
         m.profiles.iter().flatten().filter(|p| p.persisted).count()
+    }
+
+    /// Whether the Profile with this UUID joins by itself; `None` if absent.
+    pub fn profile_autoconnect(&self, uuid: &str) -> Option<bool> {
+        let m = self.model.lock().unwrap();
+        m.profiles
+            .iter()
+            .flatten()
+            .find(|p| p.uuid == uuid)
+            .map(|p| p.autoconnect)
     }
 
     /// Profiles that exist at all, in memory or on disk.

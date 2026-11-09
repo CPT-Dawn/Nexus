@@ -7,7 +7,7 @@ mod wifi;
 
 use std::future::Future;
 
-use nexus_ipc::{Disconnected, Forgotten, Joined, ScanOutcome, Secret, Status, WifiList};
+use nexus_ipc::{AutoconnectSet, Disconnected, Forgotten, Joined, ScanOutcome, Secret, Status, WifiList};
 
 use crate::text::Failure;
 
@@ -80,6 +80,13 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
     ) -> impl Future<Output = Result<Forgotten, BackendError>> + Send;
+
+    /// Turns automatic joining of a saved Network on or off.
+    fn wifi_autoconnect(
+        &self,
+        network: String,
+        enabled: bool,
+    ) -> impl Future<Output = Result<AutoconnectSet, BackendError>> + Send;
 
     /// Answers the Backend's requests for secrets through Secret prompts, for
     /// as long as the Daemon runs: registers with the Backend, and again

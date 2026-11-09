@@ -121,6 +121,9 @@ async fn answer<B: Backend>(
         }
         Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),
         Op::WifiForget { network } => backend_reply(req.id, backend.wifi_forget(network).await),
+        Op::WifiAutoconnect { network, enabled } => {
+            backend_reply(req.id, backend.wifi_autoconnect(network, enabled).await)
+        }
         Op::SecretAnswer { prompt, secret } => reply(
             req.id,
             broker
