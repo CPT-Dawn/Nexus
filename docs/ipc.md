@@ -1196,6 +1196,8 @@ Command line: `nexus status --waybar --follow (and the TUI)`.
 
 After `subscribe` the connection also receives event lines, interleaved with the responses to later requests. An event carries `v`, `event` and its payload. Events are pushed after a change settles (a burst of Backend changes yields one event per Daemon tick), so a Front end can keep its picture current without polling.
 
+A subscriber that stops reading is not buffered forever: the Daemon queues up to 1024 lines per connection, and a connection that falls further behind is closed. A Front end that sees the stream end re-connects, re-subscribes and re-reads what it shows.
+
 ### `status_changed`
 
 The overall state or the primary Link changed. Carries the whole new status (what `status` would answer).
