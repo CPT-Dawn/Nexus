@@ -144,3 +144,9 @@ Add an AP: drop a hostapd config in `rig/aps.d/<name>.conf` with `interface=@IFA
 - Prompts: `nm.add_plugin_vpn_of(uuid, name, Some("openvpn"))` gives the Profile a `vpn.service-type`; `nm.script_vpn_asks(uuid, &["username", "password", "otp"])` makes activation call the Nexus secret agent's `GetSecrets("vpn", hints)` first; `nm.vpn_answers(uuid)` returns what the agent handed back. A hint `x-vpn-message:<text>` becomes the prompt sentence. A Profile without a `service-type` is never checked for its plugin.
 - S2 (`s2_vpn.rs`): prompt overlays at narrow/standard/wide, the user name shown as typed, the code masked, Esc declining, `.ovpn` import and the missing-plugin toast. `s1_notifications.rs` covers the "One-time code needed" notification.
 - Demo: `cargo run -p nexus-testkit --example demo -- target/debug/nexus vpn-plugin`, press `4`.
+
+## Trust and auto-VPN (ticket #25)
+
+- S1 (`crates/nexus/tests/s1_trust.rs`): defaults (open Untrusted, secured Trusted), `trust_set` and its persistence across a Daemon restart (the world's `$HOME/.local/state/nexus/trust.json`), Untrusted join brings the VPN up and notifies, Portal then VPN, Trusted join untouched, metered marking (`world.nm.profile_int(uuid, "connection", "metered")`), the `policy` notification switch, and the CLI.
+- The fake does not make a joined Network the primary connection or set connectivity by itself. After `wifi_join`, a test calls `go_online(&world, ssid, NmConnectivity::Full)` (set primary, connectivity, state), as NetworkManager would; `Portal` instead of `Full` holds the policy back until it is switched to `Full`.
+- Demo: `cargo run -p nexus-testkit --example demo -- target/debug/nexus wifi`, press `2`, pick an open Network (Cafe Guest), press `t`.

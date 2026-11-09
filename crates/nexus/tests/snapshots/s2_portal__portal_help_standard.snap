@@ -13,7 +13,7 @@ expression: frame
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █░  ░░░░░░░░       │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
 │                  │  Esc                  Back out; never quits                █n-in page is      │
-│                  │  o                    Open a Portal's login page           █                  │
+│                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │nager 1.58.1      │
 │                  │  ?                    Show or hide this help               │──────────────────╯
 │                  │  q                    Quit (Ctrl-C works anywhere)         │──────────────────╮
@@ -22,11 +22,11 @@ expression: frame
 │                  │  Wi-Fi: x             Disconnect                           │──────────────────╯
 │                  │  Wi-Fi: f             Forget (asks first)                  │──────────────────╮
 │                  │  Wi-Fi: a             Toggle autoconnect                   │                  │
-│                  │  Wi-Fi: e             Edit the Profile's settings          │isit any plain... │
-│                  │  Wi-Fi: s             Share as a QR code (asks first)      │──────────────────╯
-│                  │  VPN: Enter           Bring the VPN up or down             │──────────────────╮
+│                  │  Wi-Fi: t             Mark Trusted or Untrusted            │isit any plain... │
+│                  │  Wi-Fi: e             Edit the Profile's settings          │──────────────────╯
+│                  │  Wi-Fi: s             Share as a QR code (asks first)      │──────────────────╮
+│                  │  VPN: Enter           Bring the VPN up or down             │                  │
 │                  │  VPN: i               Import a WireGuard .conf             │                  │
 │                  │  VPN: c               Create a WireGuard VPN with new keys │                  │
-│                  │  VPN: p               Show a VPN's public key              │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

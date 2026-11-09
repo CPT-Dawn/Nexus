@@ -11,8 +11,9 @@ expression: frame
 │     A very lo… ▂▄▆█ wpa2   ││ Band          5 GHz                                                │
 │     Rooftop-6E ▂▄▆█ wpa2   ││ Access points 1                                                    │
 │   ── Saved, out of range   ││ Adapter       wlan0                                                │
-│     Parents House     auto ││ Autoconnect   on                                                   │
-│     Hotel Lobby     manual ││                                                                    │
+│     Parents House     auto ││ Trust         Trusted                                              │
+│     Hotel Lobby     manual ││ Autoconnect   on                                                   │
+│                            ││                                                                    │
 │                            ││ Press x to disconnect.                                             │
 │                            ││                                                                    │
 │                            ││                                                                    │
@@ -27,6 +28,5 @@ expression: frame
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
-│                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  r scan  x disconnect  f forget  s share  a auto  e settings  h/l tab  : palette  ? help
+ j/k move  r scan  x disconnect  f forget  s share  a auto  t trust  e settings  : palette  ? help

@@ -64,6 +64,25 @@ pub fn table(list: &WifiList) -> String {
     out
 }
 
+/// `nexus trust list`: every nearby Network and how far it is trusted.
+pub fn trust_table(list: &WifiList) -> String {
+    if list.networks.is_empty() {
+        return "No Wi-Fi networks in range.\n".into();
+    }
+    let width = list
+        .networks
+        .iter()
+        .map(|n| printable(&n.ssid).chars().count())
+        .max()
+        .unwrap_or(4)
+        .max(4);
+    let mut out = format!("{:<width$}  TRUST\n", "SSID");
+    for n in &list.networks {
+        let _ = writeln!(out, "{:<width$}  {}", printable(&n.ssid), n.trust.label());
+    }
+    out
+}
+
 pub fn scan_line(o: &ScanOutcome) -> String {
     let age = o
         .last_scan_ms_ago

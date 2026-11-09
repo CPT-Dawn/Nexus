@@ -22,6 +22,7 @@ expression: top
 │                                      │  Wi-Fi: x             Disconnect                           │                                      │
 │                                      │  Wi-Fi: f             Forget (asks first)                  │                                      │
 │                                      │  Wi-Fi: a             Toggle autoconnect                   │                                      │
+│                                      │  Wi-Fi: t             Mark Trusted or Untrusted            │                                      │
 │                                      │  Wi-Fi: e             Edit the Profile's settings          │                                      │
 │                                      │  Wi-Fi: s             Share as a QR code (asks first)      │                                      │
 │                                      │  VPN: Enter           Bring the VPN up or down             │                                      │
@@ -31,6 +32,5 @@ expression: top
 │                                      │  VPN: s               Share a VPN's config as a QR code (a │                                      │
 │                                      │  Hotspot: n           Share this connection with a made-up │                                      │
 │                                      │  Hotspot: c           Start a Hotspot with a name and pass │                                      │
-│                                      │  Hotspot: S           Stop the Hotspot                     │                                      │
 ╰──────────────────────────────────────╰────────────────────────────────────────────────────────────╯──────────────────────────────────────╯
  j/k scroll  esc close

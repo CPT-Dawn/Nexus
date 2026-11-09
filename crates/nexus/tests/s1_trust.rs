@@ -213,9 +213,9 @@ fn an_untrusted_network_can_be_marked_metered() {
 
 #[test]
 fn policy_notifications_can_be_switched_off_and_the_activity_log_keeps_the_line() {
-    let (world, _) = world(&format!(
-        "[notifications]\njoined = false\nlost = false\npolicy = false\n[trust]\nauto_vpn = \"Work\"\n"
-    ));
+    let (world, _) = world(
+        "[notifications]\njoined = false\nlost = false\npolicy = false\n[trust]\nauto_vpn = \"Work\"\n",
+    );
     join(&world, "Cafe", None);
     go_online(&world, "Cafe", NmConnectivity::Full);
     wait_vpn_up(&world);
@@ -233,4 +233,28 @@ fn policy_notifications_can_be_switched_off_and_the_activity_log_keeps_the_line(
         lines.contains(&"Cafe is untrusted: brought up the VPN Work."),
         "{lines:?}"
     );
+}
+
+#[test]
+fn the_cli_lists_and_sets_trust() {
+    let (world, _) = world(QUIET);
+    let list = world.run_nexus(&["trust", "list"]);
+    let text = String::from_utf8_lossy(&list.stdout).into_owned();
+    assert!(list.status.success(), "{list:?}");
+    assert!(
+        text.contains("Cafe") && text.contains("Untrusted"),
+        "{text}"
+    );
+    assert!(text.contains("Home") && text.contains("Trusted"), "{text}");
+
+    let set = world.run_nexus(&["trust", "set", "Cafe", "trusted"]);
+    assert!(set.status.success(), "{set:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&set.stdout).trim(),
+        "Cafe is now trusted."
+    );
+    assert_eq!(network(&world, "Cafe")["trust"], "trusted");
+
+    let gone = world.run_nexus(&["trust", "set", "Nowhere", "untrusted"]);
+    assert_eq!(gone.status.code(), Some(9), "{gone:?}");
 }

@@ -11,7 +11,7 @@ expression: frame
 │   ○ VPN                    │╰──│   Disconnect                                               x │──╯
 │     Not connected          │╭ T│   Forget network                                           f │──╮
 │   ○ Hotspot                ││ ↓│   Toggle autoconnect                                       a │⣀ │
-│     Not started            ││ ↑│ ▸ Edit network settings                                    e │⣀ │
+│     Not started            ││ ↑│ ▸ Trust or distrust network                                t │⣀ │
 │                            │╰──│   Open the Wi-Fi tab and pick a Network first.               │──╯
 │                            │   ╰──────────────────────────────────────────────────────────────╯
 ╰────────────────────────────╯

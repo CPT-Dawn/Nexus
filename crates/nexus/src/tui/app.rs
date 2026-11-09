@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
     ActivityEntry, ActivityKind, Connectivity, Event, Finding, Hotspot, Op, PromptClosed,
-    PromptKind, Secret, State, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
+    PromptKind, Secret, State, Status, Tethers, Traffic, Trust, VpnList, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
@@ -833,6 +833,29 @@ impl App {
                 };
                 self.say(text, false, Some(undo));
             }
+            (
+                Cmd::Trust {
+                    network,
+                    ssid,
+                    trust,
+                },
+                Ok(_),
+            ) => {
+                let other = match trust {
+                    Trust::Untrusted => Trust::Trusted,
+                    _ => Trust::Untrusted,
+                };
+                let undo = Cmd::Trust {
+                    network: network.clone(),
+                    ssid: ssid.clone(),
+                    trust: other,
+                };
+                let text = match trust {
+                    Trust::Untrusted => format!("{ssid} is now untrusted."),
+                    _ => format!("{ssid} is now trusted."),
+                };
+                self.say(text, false, Some(undo));
+            }
             (Cmd::OpenPortal, Ok(_)) => {
                 self.say("Opened the login page in your browser.", false, None);
             }
@@ -1165,6 +1188,18 @@ impl App {
                         self.open_editor(network, ssid);
                         true
                     }
+                    KeyCode::Char('t') if entry.trust().is_some() => {
+                        let trust = match entry.trust() {
+                            Some(Trust::Untrusted) => Trust::Trusted,
+                            _ => Trust::Untrusted,
+                        };
+                        self.run_wifi(Cmd::Trust {
+                            network,
+                            ssid,
+                            trust,
+                        });
+                        true
+                    }
                     KeyCode::Char('a') if entry.autoconnect().is_some() => {
                         let enabled = !entry.autoconnect().unwrap_or(true);
                         self.run_wifi(Cmd::Autoconnect {
@@ -1486,6 +1521,9 @@ impl App {
             }
             if e.autoconnect().is_some() {
                 v.push(("a", "auto"));
+            }
+            if e.trust().is_some() {
+                v.push(("t", "trust"));
             }
             if e.saved() {
                 v.push(("e", "settings"));

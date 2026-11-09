@@ -1,19 +1,18 @@
 ---
 source: crates/nexus/tests/s2_palette.rs
-assertion_line: 358
 expression: bottom
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
 ╭ Connections ─────────────────────────╭ All keys (j/k scroll) ─────────────────────────────────────╮──────────────────────────────────────╮
-│ ▸ ○ Wi-Fi                            │  o                    Open a Portal's login page           │░  ░░░░░░░░                           │
-│     Not connected                    │  f                    Overview: run the fix (asks first)   │█░░████████░░                         │
-│   ○ Ethernet                         │  ?                    Show or hide this help               │█░░██░░░░░░                           │
-│     Not connected                    │  q                    Quit (Ctrl-C works anywhere)         │█░░██████░░                           │
-│   ○ VPN                              │  Wi-Fi: Enter         Join the selected Network            ██░░██░░░░░░                           │
-│     Not connected                    │  Wi-Fi: r             Rescan                               ██░░████████░░                         │
-│   ○ Hotspot                          │  Wi-Fi: x             Disconnect                           █░  ░░░░░░░░                           │
-│     Not started                      │  Wi-Fi: f             Forget (asks first)                  █                                      │
-│                                      │  Wi-Fi: a             Toggle autoconnect                   █                                      │
+│ ▸ ○ Wi-Fi                            │  f                    Overview: run the fix (asks first)   │░  ░░░░░░░░                           │
+│     Not connected                    │  ?                    Show or hide this help               │█░░████████░░                         │
+│   ○ Ethernet                         │  q                    Quit (Ctrl-C works anywhere)         │█░░██░░░░░░                           │
+│     Not connected                    │  Wi-Fi: Enter         Join the selected Network            │█░░██████░░                           │
+│   ○ VPN                              │  Wi-Fi: r             Rescan                               ██░░██░░░░░░                           │
+│     Not connected                    │  Wi-Fi: x             Disconnect                           ██░░████████░░                         │
+│   ○ Hotspot                          │  Wi-Fi: f             Forget (asks first)                  █░  ░░░░░░░░                           │
+│     Not started                      │  Wi-Fi: a             Toggle autoconnect                   █                                      │
+│                                      │  Wi-Fi: t             Mark Trusted or Untrusted            █                                      │
 │                                      │  Wi-Fi: e             Edit the Profile's settings          █                                      │
 │                                      │  Wi-Fi: s             Share as a QR code (asks first)      █──────────────────────────────────────╯
 │                                      │  VPN: Enter           Bring the VPN up or down             █ecent activity ───────────────────────╮

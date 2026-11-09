@@ -157,6 +157,37 @@ pub fn wifi_list(json: bool) -> ExitCode {
     })
 }
 
+/// `nexus trust list [--json]`.
+pub fn trust_list(json: bool) -> ExitCode {
+    wifi_call(Op::WifiList, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::WifiList>(value) {
+            Ok(list) => print!("{}", crate::wifi_view::trust_table(&list)),
+            Err(e) => eprintln!("nexus: undecodable list: {e}"),
+        }
+    })
+}
+
+/// `nexus trust set <ssid> trusted|untrusted [--json]`.
+pub fn trust_set(ssid: &str, trust: nexus_ipc::Trust, json: bool) -> ExitCode {
+    wifi_call(
+        Op::TrustSet {
+            network: nexus_ipc::network_id(ssid.as_bytes()),
+            trust,
+        },
+        |value| {
+            if json {
+                println!("{value}");
+            } else if let Ok(t) = serde_json::from_value::<nexus_ipc::TrustSet>(value) {
+                println!("{}", crate::text::trust_marked(&t.ssid, t.trust));
+            }
+        },
+    )
+}
+
 /// `nexus wifi scan [--json]`.
 pub fn wifi_scan(json: bool) -> ExitCode {
     wifi_call(Op::WifiScan, |value| {

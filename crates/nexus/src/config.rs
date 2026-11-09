@@ -26,7 +26,7 @@ pub struct Config {
 }
 
 /// What joining an Untrusted Network does.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TrustConfig {
     /// The VPN (its name or Profile UUID) to bring up after joining an
@@ -34,15 +34,6 @@ pub struct TrustConfig {
     pub auto_vpn: String,
     /// Also mark the Network's Profile metered, so apps go easy on data.
     pub metered: bool,
-}
-
-impl Default for TrustConfig {
-    fn default() -> Self {
-        Self {
-            auto_vpn: String::new(),
-            metered: false,
-        }
-    }
 }
 
 /// Which desktop notifications the Daemon sends. Each kind has its own switch.

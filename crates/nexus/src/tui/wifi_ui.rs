@@ -281,6 +281,7 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
             if let Some(name) = wifi.adapter_name(&n.device) {
                 lines.push(row("Adapter", text(name.into())));
             }
+            lines.push(row("Trust", text(n.trust.label().into())));
             if let Some(auto) = n.autoconnect {
                 lines.push(row(
                     "Autoconnect",

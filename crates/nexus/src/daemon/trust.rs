@@ -12,7 +12,9 @@ use std::sync::Mutex;
 
 use std::sync::Arc;
 
-use nexus_ipc::{ActivityKind, Connectivity, Event, Security, Status, Trust, WifiList, WifiNetwork};
+use nexus_ipc::{
+    ActivityKind, Connectivity, Event, Security, Status, Trust, WifiList, WifiNetwork,
+};
 
 use super::{Live, notify};
 use crate::backend::Backend;
@@ -143,10 +145,10 @@ pub async fn run_policy<B: Backend>(
         .next()
         .map(|c| c.to_lowercase().chain(chars).collect())
         .unwrap_or_default();
-    if let Some(entry) = live
-        .activity
-        .record(ActivityKind::Policy, format!("{ssid} is untrusted: {lower}"))
-    {
+    if let Some(entry) = live.activity.record(
+        ActivityKind::Policy,
+        format!("{ssid} is untrusted: {lower}"),
+    ) {
         let _ = live.events.send(Event::Activity { entry });
     }
     notifier.policy(&ssid, &body);

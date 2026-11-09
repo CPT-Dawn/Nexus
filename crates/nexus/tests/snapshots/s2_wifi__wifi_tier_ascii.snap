@@ -11,9 +11,9 @@ expression: frame
 |     A very lo~ #... wpa2   || Band          2.4 GHz                                              |
 |     Rooftop-6E #... wpa2   || Access points 1                                                    |
 |   -- Saved, out of range   || Adapter       wlan0                                                |
-|     Parents House     auto ||                                                                    |
-|     Hotel Lobby     manual || Press enter to join. You will be asked for the password.           |
-|                            ||                                                                    |
+|     Parents House     auto || Trust         Trusted                                              |
+|     Hotel Lobby     manual ||                                                                    |
+|                            || Press enter to join. You will be asked for the password.           |
 |                            ||                                                                    |
 |                            ||                                                                    |
 |                            ||                                                                    |
@@ -29,19 +29,19 @@ expression: frame
 |                            ||                                                                    |
 |                            ||                                                                    |
 +----------------------------++--------------------------------------------------------------------+
- j/k move  enter join  r scan  h/l tab  : palette  ? help  q quit
+ j/k move  enter join  r scan  t trust  h/l tab  : palette  ? help  q quit
 
- 2051 cells  fg=- bg=- mods=[]
+ 2021 cells  fg=- bg=- mods=[]
    44 cells  fg=idx115 bg=- mods=[]
-   72 cells  fg=idx116 bg=- mods=[]
+   73 cells  fg=idx116 bg=- mods=[]
     7 cells  fg=idx116 bg=- mods=[bold]
-  230 cells  fg=idx145 bg=- mods=[]
+  252 cells  fg=idx145 bg=- mods=[]
     9 cells  fg=idx145 bg=- mods=[bold]
    11 cells  fg=idx149 bg=- mods=[]
     2 cells  fg=idx179 bg=- mods=[]
     3 cells  fg=idx210 bg=- mods=[bold]
   174 cells  fg=idx237 bg=- mods=[]
   104 cells  fg=idx242 bg=- mods=[]
-   39 cells  fg=idx254 bg=- mods=[]
+   46 cells  fg=idx254 bg=- mods=[]
    21 cells  fg=idx254 bg=- mods=[bold]
    33 cells  fg=idx254 bg=idx235 mods=[bold]

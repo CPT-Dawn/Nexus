@@ -13,7 +13,7 @@ expression: rig.text(STANDARD)
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █░  ░░░░░░░░       │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
 │                  │  Esc                  Back out; never quits                █ks healthy.       │
-│                  │  o                    Open a Portal's login page           █                  │
+│                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │──────────────────╯
 │                  │  ?                    Show or hide this help               │──────────────────╮
 │                  │  q                    Quit (Ctrl-C works anywhere)         │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
@@ -22,11 +22,11 @@ expression: rig.text(STANDARD)
 │                  │  Wi-Fi: x             Disconnect                           │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
 │                  │  Wi-Fi: f             Forget (asks first)                  │──────────────────╯
 │                  │  Wi-Fi: a             Toggle autoconnect                   │──────────────────╮
+│                  │  Wi-Fi: t             Mark Trusted or Untrusted            │                  │
 │                  │  Wi-Fi: e             Edit the Profile's settings          │                  │
 │                  │  Wi-Fi: s             Share as a QR code (asks first)      │                  │
 │                  │  VPN: Enter           Bring the VPN up or down             │                  │
 │                  │  VPN: i               Import a WireGuard .conf             │                  │
 │                  │  VPN: c               Create a WireGuard VPN with new keys │                  │
-│                  │  VPN: p               Show a VPN's public key              │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

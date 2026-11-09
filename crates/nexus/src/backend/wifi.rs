@@ -771,10 +771,12 @@ pub async fn set_metered(
     metered: bool,
 ) -> zbus::Result<Result<(), Failure>> {
     let value = variant(i32::from(metered));
-    Ok(match update_connection(conn, network, "metered", value).await? {
-        Err(f) if f.code == nexus_ipc::ErrorCode::UnknownNetwork => Ok(()),
-        other => other.map(|_| ()),
-    })
+    Ok(
+        match update_connection(conn, network, "metered", value).await? {
+            Err(f) if f.code == nexus_ipc::ErrorCode::UnknownNetwork => Ok(()),
+            other => other.map(|_| ()),
+        },
+    )
 }
 
 /// Sets one `connection.*` key on every Profile saved for a Network and
@@ -802,7 +804,7 @@ async fn update_connection(
         }
         all.entry("connection".to_owned())
             .or_default()
-            .insert(key.to_owned(), value.try_clone().map_err(zbus::Error::from)?);
+            .insert(key.to_owned(), value.try_clone()?);
         proxy.update(all).await?;
         changed += 1;
     }

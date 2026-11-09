@@ -12,8 +12,8 @@ expression: rig.styled(STANDARD)
 │     A very │   Password                                                             │            │
 │     Rooftop│   Enter your password.                                                 │            │
 │   ── Saved,│   CA certificate empty: use the system CAs                             │            │
-│     Parents│   Server name    e.g. radius.uni.example                               │.           │
-│     Hotel L│ ▸ Skip check     [x] don't check the server                            │            │
+│     Parents│   Server name    e.g. radius.uni.example                               │            │
+│     Hotel L│ ▸ Skip check     [x] don't check the server                            │.           │
 │            │   Anyone nearby can pose as this network and read your password.       │            │
 │            │                                                                        │            │
 │            │                                                                        │            │

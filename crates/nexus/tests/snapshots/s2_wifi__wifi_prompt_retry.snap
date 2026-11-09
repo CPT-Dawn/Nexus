@@ -11,9 +11,9 @@ expression: frame
 │     A very lo… ▂▄▆█ wpa2   ││ Band          5 GHz                                                │
 │     Rooftop-6E ▂▄▆█ wpa2   ││ Access points 1                                                    │
 │   ── Saved, out of range   ││ Adapter       wlan0                                                │
-│     Parents House     auto ││                                                                    │
-│     Hotel Lobby     manual ││ Pr╭ Join Work-Secure ──────────────────────────────────────────╮   │
-│                            ││   │ Wrong password for Work-Secure. Try again.                 │   │
+│     Parents House     auto ││ Trust         Trusted                                              │
+│     Hotel Lobby     manual ││   ╭ Join Work-Secure ──────────────────────────────────────────╮   │
+│                            ││ Pr│ Wrong password for Work-Secure. Try again.                 │   │
 │                            ││   │                                                            │   │
 │                            ││   │ Password  _                                                │   │
 │                            ││   │                                                            │   │

@@ -12,8 +12,8 @@ expression: frame
 │     A very │   Password                                                             │            │
 │     Rooftop│   CA certificate empty: use the system CAs                             │            │
 │   ── Saved,│   Server name    e.g. radius.uni.example                               │            │
-│     Parents│   Skip check     [ ] check the server (recommended)                    │.           │
-│     Hotel L│                                                                        │            │
+│     Parents│   Skip check     [ ] check the server (recommended)                    │            │
+│     Hotel L│                                                                        │.           │
 │            │                                                                        │            │
 │            │                                                                        │            │
 │            │                                                                        │            │

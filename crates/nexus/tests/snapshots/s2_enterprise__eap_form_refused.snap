@@ -12,8 +12,8 @@ expression: frame
 │     A very │ ▸ Identity       you@uni.example_                                      │            │
 │     Rooftop│   Anonymous id   e.g. anonymous@uni.example (optional)                 │            │
 │   ── Saved,│   Password       ••••••••••                                            │            │
-│     Parents│   CA certificate empty: use the system CAs                             │.           │
-│     Hotel L│   Server name    radius.uni.example                                    │            │
+│     Parents│   CA certificate empty: use the system CAs                             │            │
+│     Hotel L│   Server name    radius.uni.example                                    │.           │
 │            │   Skip check     [ ] check the server (recommended)                    │            │
 │            │                                                                        │            │
 │            │                                                                        │            │

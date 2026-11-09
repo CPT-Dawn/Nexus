@@ -227,6 +227,20 @@ static WIFI: &[Verb] = &[
         },
     ),
     wifi(
+        "Trust or distrust network",
+        "untrusted vpn metered safe",
+        "t",
+        "Mark Trusted or Untrusted",
+        KeyCode::Char('t'),
+        |app| {
+            if picked(app)?.trust().is_some() {
+                Ok(())
+            } else {
+                Err("That Network isn't in range.")
+            }
+        },
+    ),
+    wifi(
         "Edit network settings",
         "profile ip dns address mac metered priority",
         "e",

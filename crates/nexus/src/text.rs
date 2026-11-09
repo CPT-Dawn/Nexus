@@ -381,6 +381,13 @@ pub fn disconnected(ssid: &str) -> String {
     format!("Disconnected from {ssid}.")
 }
 
+pub fn trust_marked(ssid: &str, trust: nexus_ipc::Trust) -> String {
+    match trust {
+        nexus_ipc::Trust::Untrusted => format!("{ssid} is now untrusted."),
+        _ => format!("{ssid} is now trusted."),
+    }
+}
+
 pub fn forgot(ssid: &str) -> String {
     format!("Forgot {ssid}.")
 }

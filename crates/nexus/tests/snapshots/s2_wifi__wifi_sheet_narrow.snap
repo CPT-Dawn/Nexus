@@ -11,10 +11,10 @@ expression: sheet
     │ Band          5 GHz                                  │
     │ Access points 1                                      │
     │ Adapter       wlan0                                  │
+    │ Trust         Trusted                                │
     │ Autoconnect   on                                     │
     │                                                      │
     │ Press x to disconnect.                               │
-    │                                                      │
     │                                                      │
     │                                                      │
     │                                                      │

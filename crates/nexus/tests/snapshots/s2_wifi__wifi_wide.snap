@@ -11,8 +11,9 @@ expression: frame
 │     A very long ne… ▂▄▆█ wpa2   2.4G ││ Band          5 GHz                                                                              │
 │     Rooftop-6E      ▂▄▆█ wpa2     6G ││ Access points 1                                                                                  │
 │   ── Saved, out of range             ││ Adapter       wlan0                                                                              │
-│     Parents House               auto ││ Autoconnect   on                                                                                 │
-│     Hotel Lobby               manual ││                                                                                                  │
+│     Parents House               auto ││ Trust         Trusted                                                                            │
+│     Hotel Lobby               manual ││ Autoconnect   on                                                                                 │
+│                                      ││                                                                                                  │
 │                                      ││ Press x to disconnect.                                                                           │
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
@@ -31,6 +32,5 @@ expression: frame
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
-│                                      ││                                                                                                  │
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
- j/k move  r scan  x disconnect  f forget  s share  a auto  e settings  h/l tab  : palette  ? help  q quit
+ j/k move  r scan  x disconnect  f forget  s share  a auto  t trust  e settings  h/l tab  : palette  ? help  q quit

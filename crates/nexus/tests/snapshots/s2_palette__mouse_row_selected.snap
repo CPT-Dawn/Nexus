@@ -11,9 +11,9 @@ expression: rig.text()
 │     A very lo… ▂▄▆█ wpa2   ││ Band          2.4 GHz                                              │
 │     Rooftop-6E ▂▄▆█ wpa2   ││ Access points 1                                                    │
 │   ── Saved, out of range   ││ Adapter       wlan0                                                │
-│     Parents House     auto ││                                                                    │
-│     Hotel Lobby     manual ││ Press enter to join.                                               │
-│                            ││                                                                    │
+│     Parents House     auto ││ Trust         Untrusted                                            │
+│     Hotel Lobby     manual ││                                                                    │
+│                            ││ Press enter to join.                                               │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
@@ -29,4 +29,4 @@ expression: rig.text()
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter join  r scan  h/l tab  : palette  ? help  q quit
+ j/k move  enter join  r scan  t trust  h/l tab  : palette  ? help  q quit

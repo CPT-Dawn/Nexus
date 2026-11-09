@@ -66,6 +66,11 @@ enum Command {
         #[command(subcommand)]
         action: ProfileAction,
     },
+    /// Mark Networks Trusted or Untrusted (joining an Untrusted one can bring up a VPN).
+    Trust {
+        #[command(subcommand)]
+        action: TrustAction,
+    },
     /// Explain why the machine is or is not online, and how to fix it.
     Doctor {
         /// Print the findings as JSON.
@@ -240,6 +245,33 @@ enum VpnAction {
         #[arg(long, conflicts_with = "qr")]
         json: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum TrustAction {
+    /// List nearby Networks and whether each is Trusted or Untrusted.
+    List {
+        /// Print the list as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Mark a Network Trusted or Untrusted.
+    Set {
+        /// The Network's name (SSID).
+        ssid: String,
+        /// How much to trust it. Unmarked open Networks count as untrusted.
+        #[arg(value_enum)]
+        trust: TrustLevel,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum TrustLevel {
+    Trusted,
+    Untrusted,
 }
 
 #[derive(Subcommand)]
@@ -548,6 +580,19 @@ fn main() -> ExitCode {
         Command::Hotspot {
             action: HotspotAction::Qr { json },
         } => cli::hotspot_qr(json),
+        Command::Trust {
+            action: TrustAction::List { json },
+        } => cli::trust_list(json),
+        Command::Trust {
+            action: TrustAction::Set { ssid, trust, json },
+        } => cli::trust_set(
+            &ssid,
+            match trust {
+                TrustLevel::Trusted => nexus_ipc::Trust::Trusted,
+                TrustLevel::Untrusted => nexus_ipc::Trust::Untrusted,
+            },
+            json,
+        ),
         Command::Tether {
             action: TetherAction::List { json },
         } => cli::tether_list(json),

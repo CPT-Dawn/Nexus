@@ -71,6 +71,15 @@ impl Entry {
         }
     }
 
+    /// The user's judgement of it; a saved Network out of range has none
+    /// to give (its Trust is read once it is nearby).
+    pub fn trust(&self) -> Option<nexus_ipc::Trust> {
+        match self {
+            Entry::Net(n) => Some(n.trust),
+            Entry::Saved(_) => None,
+        }
+    }
+
     /// Autoconnect of the saved Profile, if there is one.
     pub fn autoconnect(&self) -> Option<bool> {
         match self {
@@ -107,6 +116,12 @@ pub enum Cmd {
         network: String,
         ssid: String,
         enabled: bool,
+    },
+    /// Mark a Network Trusted or Untrusted.
+    Trust {
+        network: String,
+        ssid: String,
+        trust: nexus_ipc::Trust,
     },
     Answer {
         prompt: u64,
@@ -150,6 +165,10 @@ impl Cmd {
             } => Op::WifiAutoconnect {
                 network: network.clone(),
                 enabled: *enabled,
+            },
+            Cmd::Trust { network, trust, .. } => Op::TrustSet {
+                network: network.clone(),
+                trust: *trust,
             },
             Cmd::Answer { prompt, secret } => Op::SecretAnswer {
                 prompt: *prompt,

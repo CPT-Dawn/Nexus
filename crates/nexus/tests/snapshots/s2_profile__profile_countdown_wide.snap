@@ -11,9 +11,9 @@ expression: self.text(size)
 │     A very long ne… ▂▄▆█ wpa2   2.4G ││ Band          5 GHz                                                                              │
 │     Rooftop-6E      ▂▄▆█ wpa2     6G ││ Access points 1                                                                                  │
 │   ── Saved, out of range             ││ Adapter       wlan0                                                                              │
-│     Parents House               auto ││ Autoconnect   on                                                                                 │
-│     Hotel Lobby               manual ││                                                                                                  │
-│                                      ││ Press x to disconnect.                                                                           │
+│     Parents House               auto ││ Trust         Trusted                                                                            │
+│     Hotel Lobby               manual ││ Autoconnect   on                                                                                 │
+│                                      ││                                                                                                  │
 │                                     ╭ Home-5G settings ────────────────────────────────────────────╮                                     │
 │                                     │ Keep these settings?                                         │                                     │
 │                                     │ Reverting in 15s                                             │                                     │
