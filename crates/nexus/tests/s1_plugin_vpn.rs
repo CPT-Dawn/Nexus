@@ -249,7 +249,7 @@ fn a_hint_from_the_plugin_becomes_the_prompt_sentence() {
 }
 
 #[test]
-fn the_cli_picks_the_plugin_from_the_extension_and_missing_plugins_exit_30() {
+fn the_cli_picks_the_plugin_from_the_extension_and_missing_plugins_exit_24() {
     let world = world();
     let file = world.dir().join("Branch.ovpn");
     std::fs::write(&file, OVPN).unwrap();
@@ -263,7 +263,7 @@ fn the_cli_picks_the_plugin_from_the_extension_and_missing_plugins_exit_30() {
     let file = bare.dir().join("Branch.ovpn");
     std::fs::write(&file, OVPN).unwrap();
     let out = bare.run_nexus(&["vpn", "import", file.to_str().unwrap()]);
-    assert_eq!(out.status.code(), Some(30), "{out:?}");
+    assert_eq!(out.status.code(), Some(24), "{out:?}");
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("networkmanager-openvpn"),
         "{out:?}"

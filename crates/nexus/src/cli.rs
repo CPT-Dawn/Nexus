@@ -37,7 +37,7 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::UnknownVpn => 21,
         ErrorCode::InvalidConfig => 22,
         ErrorCode::VpnFailed => 23,
-        ErrorCode::MissingPlugin => 30,
+        ErrorCode::MissingPlugin => 24,
         _ => EXIT_DAEMON_ERROR,
     }
 }
