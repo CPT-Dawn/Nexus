@@ -439,6 +439,12 @@ impl Backend for NetworkManager {
             .map_err(BackendError::Refused)
     }
 
+    async fn wifi_metered(&self, network: String, metered: bool) -> Result<(), BackendError> {
+        self.with_bus(|c| async move { super::wifi::set_metered(&c, &network, metered).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
     async fn profile_get(&self, network: String) -> Result<nexus_ipc::ProfileView, BackendError> {
         self.with_bus(|c| async move { super::wifi::profile::get(&c, &network).await })
             .await?

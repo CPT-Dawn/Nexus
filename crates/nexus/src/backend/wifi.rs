@@ -361,6 +361,7 @@ fn assemble(
                 .get(ssid.as_slice())
                 .map(|(u, _)| (*u).to_owned()),
             autoconnect: profile_of.get(ssid.as_slice()).map(|(_, a)| *a),
+            trust: nexus_ipc::Trust::default(),
         })
         .collect();
     networks.sort_by(|a, b| {
@@ -749,14 +750,43 @@ pub async fn forget(conn: &Connection, network: &str) -> zbus::Result<Result<For
 }
 
 /// Turns automatic joining on or off for every Profile saved for a Network.
-/// `Update` replaces a Profile's settings whole, so this reads them (and the
-/// Wi-Fi secrets, best effort) back, flips `connection.autoconnect` and
-/// writes them again.
 pub async fn set_autoconnect(
     conn: &Connection,
     network: &str,
     enabled: bool,
 ) -> zbus::Result<Result<AutoconnectSet, Failure>> {
+    Ok(
+        update_connection(conn, network, "autoconnect", variant(enabled))
+            .await?
+            .map(|ssid| AutoconnectSet { ssid, enabled }),
+    )
+}
+
+/// Marks every Profile saved for a Network metered (`connection.metered` =
+/// yes, 1) or leaves NetworkManager to guess (unknown, 0). Succeeds quietly
+/// for a Network with no Profile: there is nothing to mark.
+pub async fn set_metered(
+    conn: &Connection,
+    network: &str,
+    metered: bool,
+) -> zbus::Result<Result<(), Failure>> {
+    let value = variant(i32::from(metered));
+    Ok(match update_connection(conn, network, "metered", value).await? {
+        Err(f) if f.code == nexus_ipc::ErrorCode::UnknownNetwork => Ok(()),
+        other => other.map(|_| ()),
+    })
+}
+
+/// Sets one `connection.*` key on every Profile saved for a Network and
+/// returns the Network's name. `Update` replaces a Profile's settings whole,
+/// so this reads them (and the Wi-Fi secrets, best effort) back, changes the
+/// key and writes them again.
+async fn update_connection(
+    conn: &Connection,
+    network: &str,
+    key: &str,
+    value: OwnedVariant,
+) -> zbus::Result<Result<String, Failure>> {
     let Some(ssid) = nexus_ipc::parse_network_id(network) else {
         return Ok(Err(text::bad_network_id()));
     };
@@ -772,17 +802,14 @@ pub async fn set_autoconnect(
         }
         all.entry("connection".to_owned())
             .or_default()
-            .insert("autoconnect".to_owned(), variant(enabled));
+            .insert(key.to_owned(), value.try_clone().map_err(zbus::Error::from)?);
         proxy.update(all).await?;
         changed += 1;
     }
     Ok(if changed == 0 {
         Err(text::unknown_network(&name))
     } else {
-        Ok(AutoconnectSet {
-            ssid: name,
-            enabled,
-        })
+        Ok(name)
     })
 }
 

@@ -22,6 +22,27 @@ pub struct Config {
     pub doctor: DoctorConfig,
     pub notifications: Notifications,
     pub hotspot: HotspotConfig,
+    pub trust: TrustConfig,
+}
+
+/// What joining an Untrusted Network does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TrustConfig {
+    /// The VPN (its name or Profile UUID) to bring up after joining an
+    /// Untrusted Network, once any Portal login is done. Empty: none.
+    pub auto_vpn: String,
+    /// Also mark the Network's Profile metered, so apps go easy on data.
+    pub metered: bool,
+}
+
+impl Default for TrustConfig {
+    fn default() -> Self {
+        Self {
+            auto_vpn: String::new(),
+            metered: false,
+        }
+    }
 }
 
 /// Which desktop notifications the Daemon sends. Each kind has its own switch.
@@ -42,6 +63,9 @@ pub struct Notifications {
     /// "Login required for <network>" (with an action that opens the login
     /// page) and "You're online" once the login is done.
     pub portal: bool,
+    /// "Untrusted network: ..." when a Trust policy brought up a VPN or
+    /// marked the Network metered.
+    pub policy: bool,
 }
 
 impl Default for Notifications {
@@ -53,6 +77,7 @@ impl Default for Notifications {
             secret_prompt: true,
             vpn_dropped: true,
             portal: true,
+            policy: true,
         }
     }
 }
@@ -129,6 +154,7 @@ impl Default for Config {
             doctor: DoctorConfig::default(),
             notifications: Notifications::default(),
             hotspot: HotspotConfig::default(),
+            trust: TrustConfig::default(),
         }
     }
 }
@@ -243,6 +269,16 @@ impl Settings {
             .expect("settings lock")
             .config
             .connectivity
+            .clone()
+    }
+
+    /// The Trust policy as configured right now.
+    pub fn trust(&self) -> TrustConfig {
+        self.state
+            .lock()
+            .expect("settings lock")
+            .config
+            .trust
             .clone()
     }
 

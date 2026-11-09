@@ -86,6 +86,10 @@ pub enum Op {
     /// `WifiNetwork.id`. Result: [`AutoconnectSet`]; `unknown_network` when
     /// nothing is saved for it.
     WifiAutoconnect { network: String, enabled: bool },
+    /// Marks a nearby or joined Wi-Fi Network (`WifiNetwork.id`) Trusted or
+    /// Untrusted. Result: [`TrustSet`]; `unknown_network` when it is not in
+    /// the Wi-Fi list.
+    TrustSet { network: String, trust: Trust },
     /// Reveal what a phone needs to join a saved Network, by `WifiNetwork.id`:
     /// reads the stored password, which needs the Backend's authorization
     /// (NetworkManager asks polkit). Result: [`WifiShare`]; `unknown_network`
@@ -514,6 +518,8 @@ pub enum ActivityKind {
     Lost,
     VpnUp,
     VpnDown,
+    /// A Trust policy did something on joining an Untrusted Network.
+    Policy,
     /// A Portal was detected on the Link.
     Portal,
     /// Internet is reachable again (after a Portal login).
@@ -860,6 +866,37 @@ pub struct WifiNetwork {
     /// Whether the saved Profile joins by itself; `None` without a Profile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub autoconnect: Option<bool>,
+    /// The user's judgement of it. The Backend leaves this at the default;
+    /// the Daemon fills it in from its marks.
+    #[serde(default)]
+    pub trust: Trust,
+}
+
+/// The user's judgement of a Network. A Network nobody marked is Untrusted if
+/// it is open, Trusted otherwise.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum Trust {
+    #[default]
+    Trusted,
+    Untrusted,
+}
+
+impl Trust {
+    pub fn label(self) -> &'static str {
+        match self {
+            Trust::Trusted => "Trusted",
+            Trust::Untrusted => "Untrusted",
+        }
+    }
+}
+
+/// The `trust_set` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrustSet {
+    pub ssid: String,
+    pub trust: Trust,
 }
 
 /// A saved Wi-Fi Profile whose Network is not in range.

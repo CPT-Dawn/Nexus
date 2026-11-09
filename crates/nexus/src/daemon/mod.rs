@@ -6,6 +6,7 @@ mod portal;
 mod profile;
 mod socket;
 mod traffic;
+mod trust;
 mod vpns;
 
 use std::process::ExitCode;
@@ -184,7 +185,7 @@ async fn sync<B: Backend>(
         }
         Err(e) => tracing::debug!("status unavailable: {e}"),
     }
-    let list = match backend.wifi_list().await {
+    let mut list = match backend.wifi_list().await {
         Ok(list) => list,
         Err(BackendError::Unavailable) => WifiList::default(),
         Err(e) => {
@@ -192,6 +193,7 @@ async fn sync<B: Backend>(
             return;
         }
     };
+    live.trust.apply(&mut list);
     if push == Push::All || (push == Push::Changes && seen.wifi.as_ref() != Some(&list)) {
         let _ = events.send(Event::NetworksChanged { wifi: list.clone() });
     }
@@ -314,6 +316,9 @@ struct Live {
     settings: Arc<Settings>,
     opener: portal::SharedOpener,
     profile: Arc<profile::Gate>,
+    events: broadcast::Sender<Event>,
+    trust: trust::Marks,
+    policy: std::sync::Mutex<trust::Policy>,
 }
 
 impl Live {
@@ -328,8 +333,11 @@ impl Live {
             traffic: traffic::Sampler::default(),
             activity: activity::Log::default(),
             profile: Arc::new(profile::Gate::new(events.clone())),
-            doctor: crate::doctor::Memory::new(events),
+            doctor: crate::doctor::Memory::new(events.clone()),
             vpns: vpns::Asked::default(),
+            trust: trust::Marks::load(trust::default_path()),
+            policy: std::sync::Mutex::default(),
+            events,
         }
     }
 }
@@ -355,6 +363,12 @@ async fn watch_backend<B: Backend>(
     let portal = status
         .as_ref()
         .and_then(|s| portal::of_status(s, &live.settings));
+    let wifi = wifi.map(|mut list| {
+        live.trust.apply(&mut list);
+        list
+    });
+    *live.policy.lock().expect("policy") =
+        trust::Policy::starting(wifi.as_ref().and_then(trust::untrusted_join));
     // Read here rather than in the baseline: it is not worth a startup wait,
     // and a Backend that is down simply has no first picture.
     let hotspot = backend.hotspot().await.ok();
@@ -381,6 +395,7 @@ async fn watch_backend<B: Backend>(
             continue;
         };
         sync(&*backend, &events, &live, &notifier, &mut seen, push).await;
+        apply_trust_policy(&backend, &live, &notifier, &seen);
         if push == Push::All
             && let Err(e) = backend.wifi_scan().await
         {
@@ -464,7 +479,14 @@ async fn answer<B: Backend>(
                 Err(f) => Response::err(Some(req.id), f.code, f.message),
             }
         }
-        Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
+        Op::WifiList => backend_reply(
+            req.id,
+            backend.wifi_list().await.map(|mut list| {
+                live.trust.apply(&mut list);
+                list
+            }),
+        ),
+        Op::TrustSet { network, trust } => set_trust(backend, live, req.id, network, trust).await,
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
         Op::WifiJoin { network, password } => {
             let result = backend.wifi_join(network, password).await;
@@ -535,6 +557,82 @@ async fn answer<B: Backend>(
         // `Op` is non_exhaustive: a newer client op this build cannot serve.
         _ => Response::err(Some(req.id), ErrorCode::UnknownOp, "op not supported"),
     }
+}
+
+/// `trust_set`: remembers the mark and tells subscribers the list changed.
+async fn set_trust<B: Backend>(
+    backend: &B,
+    live: &Live,
+    id: u64,
+    network: String,
+    trust: nexus_ipc::Trust,
+) -> Response {
+    let mut list = match backend.wifi_list().await {
+        Ok(list) => list,
+        Err(e) => return backend_reply::<()>(id, Err(e)),
+    };
+    let Some(ssid) = list
+        .networks
+        .iter()
+        .find(|n| n.id == network)
+        .map(|n| n.ssid.clone())
+    else {
+        let f = crate::text::unknown_network(&network_name(&network));
+        return Response::err(Some(id), f.code, f.message);
+    };
+    if let Err(e) = live.trust.set(&network, trust) {
+        return Response::err(
+            Some(id),
+            ErrorCode::Internal,
+            format!("Could not save the mark ({e})."),
+        );
+    }
+    live.trust.apply(&mut list);
+    let _ = live.events.send(Event::NetworksChanged { wifi: list });
+    Response::ok(
+        id,
+        serde_json::to_value(nexus_ipc::TrustSet { ssid, trust }).expect("wire types serialize"),
+    )
+}
+
+fn network_name(id: &str) -> String {
+    nexus_ipc::parse_network_id(id).map_or_else(
+        || id.to_owned(),
+        |bytes| String::from_utf8_lossy(&bytes).into_owned(),
+    )
+}
+
+/// After a re-read: if an Untrusted Network was just joined and the Link is
+/// past any Portal login, runs the Trust policy for it in the background (a
+/// VPN takes seconds to come up, and this loop must keep draining changes).
+fn apply_trust_policy<B: Backend>(
+    backend: &Arc<B>,
+    live: &Arc<Live>,
+    notifier: &notify::Notifier,
+    seen: &Seen,
+) {
+    let (Some(status), Some(list)) = (&seen.status, &seen.wifi) else {
+        return;
+    };
+    let ready = trust::link_ready(status, live.settings.connectivity().enabled);
+    let mut policy = live.policy.lock().expect("policy");
+    let Some(net) = policy.step(trust::untrusted_join(list), ready) else {
+        return;
+    };
+    let (id, ssid) = (net.id.clone(), net.ssid.clone());
+    drop(policy);
+    let config = live.settings.trust();
+    if config.auto_vpn.is_empty() && !config.metered {
+        return;
+    }
+    tokio::spawn(trust::run_policy(
+        backend.clone(),
+        live.clone(),
+        notifier.clone(),
+        id,
+        ssid,
+        config,
+    ));
 }
 
 /// `portal_open`: the login page of the Portal the Link is behind, in the browser.

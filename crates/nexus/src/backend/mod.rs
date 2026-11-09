@@ -135,6 +135,14 @@ pub trait Backend: Send + Sync + 'static {
         enabled: bool,
     ) -> impl Future<Output = Result<AutoconnectSet, BackendError>> + Send;
 
+    /// Marks the Profile(s) of a Network metered, or lets the Backend guess
+    /// again. A Network without a Profile is left alone, quietly.
+    fn wifi_metered(
+        &self,
+        network: String,
+        metered: bool,
+    ) -> impl Future<Output = Result<(), BackendError>> + Send;
+
     /// Reads the join details of a saved Network, password included. Needs
     /// the Backend's authorization; a refusal is `reveal_denied`.
     fn wifi_reveal(

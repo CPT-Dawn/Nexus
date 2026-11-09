@@ -160,6 +160,10 @@ fn on_path(name: &str) -> bool {
 enum Input {
     WrongPassword(String),
     VpnDropped(String),
+    Policy {
+        network: String,
+        body: String,
+    },
     Action {
         note: u32,
         key: String,
@@ -209,6 +213,15 @@ impl Notifier {
     /// A VPN went down without anyone asking.
     pub fn vpn_dropped(&self, name: &str) {
         let _ = self.tx.send(Input::VpnDropped(name.to_owned()));
+    }
+
+    /// A Trust policy acted on joining an Untrusted Network; `body` says what
+    /// it did.
+    pub fn policy(&self, network: &str, body: &str) {
+        let _ = self.tx.send(Input::Policy {
+            network: network.to_owned(),
+            body: body.to_owned(),
+        });
     }
 
     /// A join was refused for a wrong password; `message` is the sentence
@@ -350,6 +363,18 @@ impl Task {
                         URGENCY_CRITICAL,
                         &[],
                         0,
+                    )
+                    .await;
+                }
+            }
+            Input::Policy { network, body } => {
+                if self.settings.notifications().policy {
+                    self.show(
+                        &format!("{network} is untrusted"),
+                        &body,
+                        URGENCY_NORMAL,
+                        &[],
+                        BRIEF_MS,
                     )
                     .await;
                 }
