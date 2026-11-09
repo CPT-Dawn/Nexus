@@ -266,6 +266,7 @@ async fn answer<B: Backend>(
         Op::WifiAutoconnect { network, enabled } => {
             backend_reply(req.id, backend.wifi_autoconnect(network, enabled).await)
         }
+        Op::WifiReveal { network } => backend_reply(req.id, backend.wifi_reveal(network).await),
         Op::SecretAnswer { prompt, secret } => reply(
             req.id,
             broker

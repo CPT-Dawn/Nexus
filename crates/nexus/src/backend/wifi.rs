@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 use nexus_ipc::{
     AutoconnectSet, Band, Disconnected, Forgotten, Joined, SavedWifi, ScanOutcome, Secret,
-    Security, WifiDevice, WifiList, WifiNetwork,
+    Security, ShareAuth, WifiDevice, WifiList, WifiNetwork, WifiShare,
 };
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
@@ -740,6 +740,65 @@ pub async fn set_autoconnect(
             ssid: name,
             enabled,
         })
+    })
+}
+
+/// Whether NetworkManager (or the bus) refused for lack of authorization.
+fn is_denial(e: &zbus::Error) -> bool {
+    match e {
+        zbus::Error::FDO(inner) => matches!(**inner, zbus::fdo::Error::AccessDenied(_)),
+        zbus::Error::MethodError(name, ..) => name.as_str().ends_with(".PermissionDenied"),
+        _ => false,
+    }
+}
+
+/// Reads what a phone needs to join a saved Network. The password comes from
+/// `GetSecrets`, which NetworkManager answers only for callers polkit lets
+/// read secrets: a refusal is `reveal_denied`. Open Networks have no secret,
+/// so nothing is asked of NetworkManager for them.
+pub async fn reveal(conn: &Connection, network: &str) -> zbus::Result<Result<WifiShare, Failure>> {
+    let Some(ssid) = nexus_ipc::parse_network_id(network) else {
+        return Ok(Err(text::bad_network_id()));
+    };
+    let name = String::from_utf8_lossy(&ssid).into_owned();
+    let Some(p) = profiles(conn).await?.into_iter().find(|p| p.ssid == ssid) else {
+        return Ok(Err(text::unknown_network(&name)));
+    };
+    let proxy = no_cache!(SettingsConnectionProxy, conn, p.path.as_str());
+    let all = proxy.get_settings().await?;
+    let key_mgmt: Option<String> = all
+        .get("802-11-wireless-security")
+        .and_then(|s| s.get("key-mgmt"))
+        .and_then(|v| v.try_clone().ok()?.try_into().ok());
+    let (auth, key) = match key_mgmt.as_deref() {
+        None | Some("owe") => {
+            return Ok(Ok(WifiShare {
+                ssid: name,
+                auth: ShareAuth::Open,
+                password: None,
+            }));
+        }
+        Some("wpa-psk") => (ShareAuth::Wpa, "psk"),
+        Some("sae") => (ShareAuth::Sae, "psk"),
+        Some("none") => (ShareAuth::Wep, "wep-key0"),
+        Some(_) => return Ok(Err(text::cannot_share(&name))),
+    };
+    let secrets = match proxy.get_secrets("802-11-wireless-security").await {
+        Ok(s) => s,
+        Err(e) if is_denial(&e) => return Ok(Err(text::reveal_denied(&name))),
+        Err(e) => return Err(e),
+    };
+    let password: Option<String> = secrets
+        .get("802-11-wireless-security")
+        .and_then(|s| s.get(key))
+        .and_then(|v| v.try_clone().ok()?.try_into().ok());
+    Ok(match password {
+        Some(pw) if !pw.is_empty() => Ok(WifiShare {
+            ssid: name,
+            auth,
+            password: Some(Secret::new(pw)),
+        }),
+        _ => Err(text::no_stored_password(&name)),
     })
 }
 

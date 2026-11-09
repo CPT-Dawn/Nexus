@@ -262,6 +262,30 @@ pub fn unknown_network(ssid: &str) -> Failure {
     )
 }
 
+pub fn reveal_denied(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::RevealDenied,
+        format!(
+            "NetworkManager did not authorize showing the password of {ssid}. \
+             Approve the authorization request and try again."
+        ),
+    )
+}
+
+pub fn cannot_share(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("{ssid} uses a security type that has no QR code format."),
+    )
+}
+
+pub fn no_stored_password(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::UnknownNetwork,
+        format!("No password is stored for {ssid}; the system keeps it elsewhere."),
+    )
+}
+
 pub fn not_connected() -> Failure {
     fail(
         ErrorCode::NotConnected,
@@ -312,6 +336,18 @@ pub fn disconnected(ssid: &str) -> String {
 
 pub fn forgot(ssid: &str) -> String {
     format!("Forgot {ssid}.")
+}
+
+pub fn share_password(ssid: &str, password: &str) -> String {
+    format!("{ssid}: {password}")
+}
+
+pub fn share_open(ssid: &str) -> String {
+    format!("{ssid} is an open network: no password to share.")
+}
+
+pub fn share_scan_hint(ssid: &str) -> String {
+    format!("Point a phone camera at the code to join {ssid}.")
 }
 
 #[cfg(test)]
