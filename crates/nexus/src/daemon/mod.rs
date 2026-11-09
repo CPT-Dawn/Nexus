@@ -85,6 +85,11 @@ async fn serve() -> std::io::Result<()> {
         Arc::new(notify::SystemTerminal),
         opener,
     );
+    tokio::spawn(keep_connectivity_check(
+        backend.clone(),
+        settings.clone(),
+        events.subscribe(),
+    ));
     tokio::spawn(watch_backend(
         backend.clone(),
         events.clone(),
@@ -125,6 +130,35 @@ async fn serve() -> std::io::Result<()> {
     }
     tracing::info!("shutting down");
     Ok(())
+}
+
+/// Applies `connectivity.enabled` to the Backend's own check: at start only
+/// when it is off (a check the user switched off in NetworkManager is not
+/// switched on behind their back), then on every change of the setting.
+async fn keep_connectivity_check<B: Backend>(
+    backend: Arc<B>,
+    settings: Arc<Settings>,
+    mut events: broadcast::Receiver<Event>,
+) {
+    let mut applied = true;
+    loop {
+        let wanted = settings.connectivity().enabled;
+        if wanted != applied {
+            match backend.set_connectivity_check(wanted).await {
+                Ok(()) => {}
+                Err(e) => tracing::warn!("cannot change NetworkManager's connectivity check: {e}"),
+            }
+            applied = wanted;
+        }
+        loop {
+            match events.recv().await {
+                Ok(Event::ConfigReloaded { .. })
+                | Err(broadcast::error::RecvError::Lagged(_)) => break,
+                Ok(_) => {}
+                Err(broadcast::error::RecvError::Closed) => return,
+            }
+        }
+    }
 }
 
 /// What subscribers were last told.
@@ -596,7 +630,14 @@ async fn answer<B: Backend>(
             req.id,
             broker.cancel(prompt).map(|()| serde_json::json!({})),
         ),
-        Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
+        Op::ConfigGet { key } => {
+            let mut got = settings.get(key.as_deref());
+            // What the Backend itself probes: read-only, set in its own config.
+            if let (Ok(v), Ok(Some(uri))) = (&mut got, backend.connectivity_uri().await) {
+                v["connectivity_uri"] = serde_json::Value::String(uri);
+            }
+            reply(req.id, got)
+        }
         Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
         // `Subscribe` is handled by the connection itself.
         // `Op` is non_exhaustive: a newer client op this build cannot serve.

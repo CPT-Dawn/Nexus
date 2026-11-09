@@ -59,6 +59,10 @@ pub(super) trait NetworkManager {
     #[zbus(property)]
     fn connectivity_check_enabled(&self) -> zbus::Result<bool>;
     #[zbus(property)]
+    fn set_connectivity_check_enabled(&self, on: bool) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn connectivity_check_uri(&self) -> zbus::Result<String>;
+    #[zbus(property)]
     fn active_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
     fn deactivate_connection(&self, active: &OwnedObjectPath) -> zbus::Result<()>;
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
@@ -641,6 +645,28 @@ impl Backend for NetworkManager {
             .map_err(BackendError::Refused)
     }
 
+    async fn set_connectivity_check(&self, on: bool) -> Result<(), BackendError> {
+        self.with_bus(|c| async move {
+            let nm = NetworkManagerProxy::builder(&c)
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await?;
+            nm.set_connectivity_check_enabled(on).await
+        })
+        .await
+    }
+
+    async fn connectivity_uri(&self) -> Result<Option<String>, BackendError> {
+        self.with_bus(|c| async move {
+            let nm = NetworkManagerProxy::builder(&c)
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await?;
+            Ok(nm.connectivity_check_uri().await.ok().filter(|u| !u.is_empty()))
+        })
+        .await
+    }
+
     async fn airplane(&self, on: bool) -> Result<Radios, BackendError> {
         let radios = self
             .with_bus(|c| async move { Self::set_radios(&c, !on, Some(!on)).await })
@@ -807,6 +833,7 @@ async fn read_facts(conn: &Connection) -> zbus::Result<NetFacts> {
     let wireless_enabled = nm.wireless_enabled().await?;
     let wireless_hw_enabled = nm.wireless_hardware_enabled().await?;
     let connectivity_check = nm.connectivity_check_enabled().await?;
+    let connectivity_uri = nm.connectivity_check_uri().await.ok().filter(|u| !u.is_empty());
     let mut gateway4 = None;
     let mut ipv6 = false;
     let primary = nm.primary_connection().await?;
@@ -843,6 +870,7 @@ async fn read_facts(conn: &Connection) -> zbus::Result<NetFacts> {
         wireless_enabled,
         wireless_hw_enabled,
         connectivity_check,
+        connectivity_uri,
         gateway4,
         ipv6,
     })

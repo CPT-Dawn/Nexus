@@ -61,6 +61,8 @@ pub struct NetFacts {
     pub wireless_hw_enabled: bool,
     /// Whether the Backend probes internet reachability.
     pub connectivity_check: bool,
+    /// The address the Backend probes for connectivity (read-only for Nexus).
+    pub connectivity_uri: Option<String>,
     /// The primary Link's IPv4 gateway.
     pub gateway4: Option<String>,
     /// Whether the primary Link has an IPv6 address.
@@ -111,6 +113,16 @@ pub trait Backend: Send + Sync + 'static {
 
     /// What the Doctor needs to know about the Backend and the primary Link.
     fn net_facts(&self) -> impl Future<Output = Result<NetFacts, BackendError>> + Send;
+
+    /// Switches the Backend's own connectivity check on or off. The Backend
+    /// remembers it. Refused when the user may not change it.
+    fn set_connectivity_check(
+        &self,
+        on: bool,
+    ) -> impl Future<Output = Result<(), BackendError>> + Send;
+
+    /// The address the Backend itself probes for connectivity, when it says.
+    fn connectivity_uri(&self) -> impl Future<Output = Result<Option<String>, BackendError>> + Send;
 
     /// Byte counters of the primary Link's Device, `None` without one.
     fn counters(&self) -> impl Future<Output = Result<Option<Counters>, BackendError>> + Send;

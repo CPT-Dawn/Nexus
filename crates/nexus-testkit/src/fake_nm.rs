@@ -355,6 +355,8 @@ struct Model {
     before_sleep: NmState,
     /// `ConnectivityCheckEnabled`.
     check_enabled: bool,
+    /// `ConnectivityCheckUri`.
+    check_uri: String,
     /// The primary connection's IPv4 gateway; `None` means no `Ip4Config`.
     gateway4: Option<String>,
     /// Whether the primary connection has an IPv6 address.
@@ -473,6 +475,16 @@ impl Manager {
     #[zbus(property)]
     fn connectivity_check_enabled(&self) -> bool {
         self.0.lock().unwrap().check_enabled
+    }
+
+    #[zbus(property)]
+    fn set_connectivity_check_enabled(&mut self, on: bool) {
+        self.0.lock().unwrap().check_enabled = on;
+    }
+
+    #[zbus(property)]
+    fn connectivity_check_uri(&self) -> String {
+        self.0.lock().unwrap().check_uri.clone()
     }
 
     fn get_devices(&self) -> Vec<OwnedObjectPath> {
@@ -2132,6 +2144,7 @@ impl FakeNm {
             tasks: Vec::new(),
             before_sleep: NmState::Disconnected,
             check_enabled: true,
+            check_uri: "http://nm-check.example/check.txt".into(),
             gateway4: None,
             ipv6: false,
             checkpoints: Vec::new(),
@@ -2353,6 +2366,16 @@ impl FakeNm {
         let mut m = self.model.lock().unwrap();
         m.wifi_soft = soft;
         m.wifi_hard_blocked = !hard;
+    }
+
+    /// `ConnectivityCheckEnabled` as clients (or the user) last left it.
+    pub fn connectivity_check(&self) -> bool {
+        self.model.lock().unwrap().check_enabled
+    }
+
+    /// `ConnectivityCheckUri`.
+    pub fn set_connectivity_uri(&self, uri: &str) {
+        self.model.lock().unwrap().check_uri = uri.to_owned();
     }
 
     /// `ConnectivityCheckEnabled`.

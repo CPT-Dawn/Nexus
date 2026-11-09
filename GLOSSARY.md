@@ -41,6 +41,9 @@ _Avoid_: delete connection, remove
 The user's judgement of a Network, either Trusted or Untrusted, which decides policies such as bringing up a VPN on join. Unknown open Networks (OWE included, which encrypts but does not authenticate) start Untrusted; secured ones start Trusted. A mark made by the user (`trust_set`, `nexus trust set`, `t` in the Wi-Fi tab) beats the default and is kept in the Daemon's state file. Joining an Untrusted Network runs the Trust policy once per join, after any Portal login: bring up the configured VPN (`[trust] auto_vpn`) and optionally mark the Network's Profile metered (`[trust] metered`), then say what was done.
 _Avoid_: security level, zone, public/private
 
+**Connectivity check**:
+The Backend's probe that tells a working connection from a Portal or an outage. `connectivity.enabled = false` switches the Backend's own check off (NetworkManager keeps that setting) and `true` switches it back on. The address it probes is the Backend's, read-only in Nexus and set in `NetworkManager.conf`; `connectivity.url` is Nexus's own address, used only by the Doctor and the Portal login.
+
 **Portal**:
 A login or terms page a Network demands before it gives real internet access.
 _Avoid_: captive page, splash page, hotspot login

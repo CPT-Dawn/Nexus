@@ -117,13 +117,22 @@ pub fn assess(i: &Inputs) -> Vec<Finding> {
     }
     radio(i, &mut out);
     if i.check_off {
+        let mut cause = String::from(
+            "Without it Nexus cannot tell a sign-in page or an outage from a working connection, \
+             and the checks that rely on it are skipped.",
+        );
+        if let Some(uri) = i.nm.as_ref().and_then(|n| n.connectivity_uri.as_deref()) {
+            // Read-only here: the address lives in NetworkManager.conf.
+            cause.push_str(&format!(
+                " NetworkManager would check {uri} (set in NetworkManager.conf, not by Nexus)."
+            ));
+        }
         out.push(advice(
             finding(
                 "connectivity-check",
                 Severity::Info,
                 "The connectivity check is switched off",
-                "Without it Nexus cannot tell a sign-in page or an outage from a working connection, \
-                 and the checks that rely on it are skipped.",
+                cause,
             ),
             "Turn it on with `nexus config set connectivity.enabled true`.",
         ));

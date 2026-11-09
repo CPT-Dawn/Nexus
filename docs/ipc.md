@@ -1136,7 +1136,7 @@ The effective config, and the event stream.
 
 #### `config_get`
 
-Read the effective config, or one value by dotted key (`theme`, `connectivity.url`). The result is `{"value": ..., "warning"?: ...}`; `warning` is present while the file on disk is being ignored.
+Read the effective config, or one value by dotted key (`theme`, `connectivity.url`). The result is `{"value": ..., "warning"?: ...}`; `warning` is present while the file on disk is being ignored. While the Backend reports the address it probes for connectivity (NetworkManager's `ConnectivityCheckUri`), the result also carries `connectivity_uri`: read-only, set in `NetworkManager.conf`, not by Nexus. `connectivity.enabled` switches the Backend's own check (NetworkManager's `ConnectivityCheckEnabled`, which NetworkManager remembers) on or off when it changes; `connectivity.url` is only what the Doctor looks up and the Portal login opens.
 
 Command line: `nexus config get [key] [--json]`.
 
