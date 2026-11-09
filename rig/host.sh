@@ -45,10 +45,14 @@ unshare --mount --net --pid --fork --kill-child --mount-proc --propagation priva
     bash "$here/inner.sh" "$work" "$testbin" "$@" &
 inner_pid=$!
 
-# The sleeper and the unshare parent are already in their new network namespaces.
-for _ in $(seq 50); do
-    [[ "$(readlink /proc/$ap_pid/ns/net)" != "$(readlink /proc/$$/ns/net)" ]] && break
-    sleep 0.1
+# The sleeper and the unshare parent must have entered their new network namespaces.
+host_net="$(readlink /proc/$$/ns/net)"
+for pid in "$ap_pid" "$inner_pid"; do
+    for _ in $(seq 100); do
+        [[ "$(readlink /proc/$pid/ns/net)" != "$host_net" ]] && break
+        sleep 0.1
+    done
+    [[ "$(readlink /proc/$pid/ns/net)" != "$host_net" ]] || { echo "rig: namespace for $pid never appeared" >&2; exit 1; }
 done
 iw phy "${phys[0]}" set netns "$inner_pid"
 for p in "${phys[@]:1}"; do iw phy "$p" set netns "$ap_pid"; done
