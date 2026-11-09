@@ -161,6 +161,10 @@ pub struct NetworkManager {
     conn: Mutex<Option<Connection>>,
     /// Every signal NetworkManager sends, plus it appearing and vanishing.
     watch: Mutex<Option<Signals>>,
+    /// A signal was read from `watch` but its burst has not been reported
+    /// yet. Lives outside `changed()` so that cancelling it mid-wait loses
+    /// nothing.
+    burst: std::sync::atomic::AtomicBool,
     /// logind's `PrepareForSleep`, for noticing a resume.
     sleep_watch: Mutex<Option<Signals>>,
 }
@@ -177,6 +181,7 @@ impl NetworkManager {
             broker,
             conn: Mutex::default(),
             watch: Mutex::default(),
+            burst: std::sync::atomic::AtomicBool::new(false),
             sleep_watch: Mutex::default(),
         }
     }
@@ -705,8 +710,18 @@ impl Backend for NetworkManager {
     }
 
     async fn changed(&self) {
+        use std::sync::atomic::Ordering;
         loop {
             let mut guard = self.watch.lock().await;
+            if self.burst.load(Ordering::Acquire) {
+                // A signal was taken (maybe by a cancelled call): finish its burst.
+                tokio::time::sleep(TICK).await;
+                if let Some(signals) = guard.as_mut() {
+                    while signals.next().now_or_never().flatten().is_some() {}
+                }
+                self.burst.store(false, Ordering::Release);
+                return;
+            }
             if guard.is_none() {
                 match self.open_watch().await {
                     Ok(s) => *guard = Some(s),
@@ -727,10 +742,9 @@ impl Backend for NetworkManager {
                 tokio::time::sleep(RETRY).await;
                 continue;
             }
-            // Let the burst land, then swallow it whole.
-            tokio::time::sleep(TICK).await;
-            while signals.next().now_or_never().flatten().is_some() {}
-            return;
+            // Remember the signal before any further await: the wait for the
+            // burst to land may be cancelled, the signal must not be.
+            self.burst.store(true, Ordering::Release);
         }
     }
 

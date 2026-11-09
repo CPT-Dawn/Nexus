@@ -47,3 +47,29 @@ fn a_signal_storm_does_not_stall_the_daemon() {
         "an answer took {worst:?} during a signal storm"
     );
 }
+
+/// While a Hotspot runs the Daemon also wakes on its own count timer. That
+/// timer winning the race against a Backend signal must not eat the signal.
+#[test]
+fn a_hotspot_poll_never_swallows_a_lone_change() {
+    let mut world = World::builder(NEXUS).daemon(false).start();
+    world.write_config("[hotspot]\npoll_secs = 1\n");
+    world.start_daemon();
+    let wlan0 = world.nm.add_wifi_device("wlan0");
+    world
+        .nm
+        .add_ap(wlan0, Ap::wpa2("Home", "AA:00:00:00:02:01", 50));
+    let mut ev = world.wire();
+    ev.subscribe();
+    let resp = world
+        .wire()
+        .call(json!({"op": "hotspot_start", "ssid": "Garage"}));
+    assert!(resp.get("ok").is_some(), "{resp}");
+    ev.next_event("hotspot_changed");
+    // One signal at a time, just before, then just after, the 1 s timer that restarts with every wake.
+    for round in 0..24u8 {
+        world.nm.set_strength_of("Home", 20 + round * 3);
+        ev.next_event("networks_changed");
+        std::thread::sleep(Duration::from_millis(900 + 10 * u64::from(round)));
+    }
+}
