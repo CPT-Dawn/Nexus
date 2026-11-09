@@ -45,9 +45,19 @@ impl Rig {
         let mut rig = Rig::start(world, Some(wlan0), caps);
         rig.key(KeyCode::Char('2'));
         // Settled: the scenario's join is visible, so no late list moves a frame.
-        rig.pump_until("the Wi-Fi list", |a| {
-            a.wifi().len() == 8 && a.wifi().rows()[0].joined()
-        });
+        // Settled: the join's signals can arrive as several lists, and a frame
+        // snapshotted between them shows Home-5G without its joined marker.
+        loop {
+            rig.pump_until("the Wi-Fi list", |a| {
+                a.wifi().len() == 8 && a.wifi().rows()[0].joined()
+            });
+            while let Ok(msg) = rig.rx.recv_timeout(std::time::Duration::from_millis(400)) {
+                rig.app.update(msg);
+            }
+            if rig.app.wifi().rows()[0].joined() {
+                break;
+            }
+        }
         rig
     }
 
