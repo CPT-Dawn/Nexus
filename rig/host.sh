@@ -39,6 +39,14 @@ mapfile -t phys < <(comm -13 "$work/phys.before" "$work/phys.after")
 touch "$work/apns"
 unshare --net="$work/apns" sleep infinity &
 ap_pid=$!
+# The bind mount appears a moment after the sleeper starts. The station
+# namespace copies our mounts when it is created, so it must exist by then,
+# and be a real namespace file (nsfs), not the empty placeholder.
+for _ in $(seq 100); do
+    [[ "$(stat -f -c %T "$work/apns")" == nsfs ]] && break
+    sleep 0.1
+done
+[[ "$(stat -f -c %T "$work/apns")" == nsfs ]] || { echo "rig: AP namespace never appeared" >&2; exit 1; }
 # Station namespace: its init (pid 1 of a new pid namespace) waits for "go".
 mkfifo "$work/go"
 unshare --mount --net --pid --fork --kill-child --mount-proc --propagation private \

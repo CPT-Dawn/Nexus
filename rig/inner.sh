@@ -58,6 +58,7 @@ unset DBUS_SESSION_BUS_ADDRESS
 
 # ---- access points, in their own namespace -------------------------------
 apns="$work/apns"
+[[ "$(stat -f -c %T "$apns")" == nsfs ]] || die "$apns is not a network namespace"
 in_ap() { nsenter --net="$apns" "$@"; }
 in_ap ip link set lo up
 mapfile -t ap_ifaces < <(in_ap iw dev | awk '$1 == "Interface" {print $2}' | sort)
