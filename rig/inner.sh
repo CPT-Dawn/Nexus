@@ -92,14 +92,18 @@ wifi.scan-rand-mac-address=no
 [logging]
 level=${NEXUS_RIG_NM_LOG:-INFO}
 EOF
+nm_up() {
+    dbus-send --bus="$DBUS_SYSTEM_BUS_ADDRESS" --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+        org.freedesktop.DBus.NameHasOwner string:org.freedesktop.NetworkManager 2>/dev/null | grep -q 'boolean true'
+}
 wpa_supplicant -u -O /run/wpa_supplicant >"$bus_dir/wpa_supplicant.log" 2>&1 &
-NetworkManager --no-daemon >"$bus_dir/networkmanager.log" 2>&1 &
+NetworkManager --no-daemon --debug >"$bus_dir/networkmanager.log" 2>&1 &
 nm_pid=$!
 for _ in $(seq 200); do
-    busctl --address="$DBUS_SYSTEM_BUS_ADDRESS" status org.freedesktop.NetworkManager >/dev/null 2>&1 && break
+    nm_up && break
     sleep 0.1
 done
-busctl --address="$DBUS_SYSTEM_BUS_ADDRESS" status org.freedesktop.NetworkManager >/dev/null 2>&1 \
+nm_up \
     || { kill -0 "$nm_pid" 2>/dev/null && echo "NetworkManager still running" >&2 || { wait "$nm_pid"; echo "NetworkManager exited with $?" >&2; }; die "NetworkManager never claimed its name"; }
 
 # ---- run the tests -------------------------------------------------------
