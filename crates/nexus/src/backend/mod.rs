@@ -7,7 +7,7 @@ mod wifi;
 
 use std::future::Future;
 
-use nexus_ipc::{Disconnected, Forgotten, Joined, ScanOutcome, Secret, Status, WifiList};
+use nexus_ipc::{Disconnected, Forgotten, Joined, Radios, ScanOutcome, Secret, Status, WifiList};
 
 use crate::text::Failure;
 
@@ -80,6 +80,22 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
     ) -> impl Future<Output = Result<Forgotten, BackendError>> + Send;
+
+    /// Switches Wi-Fi on or off. Refused with `hard_blocked` while a hardware
+    /// switch holds it off.
+    fn wifi_power(&self, on: bool) -> impl Future<Output = Result<Radios, BackendError>> + Send;
+
+    /// Airplane mode: every radio off (`on`) or back on.
+    fn airplane(&self, on: bool) -> impl Future<Output = Result<Radios, BackendError>> + Send;
+
+    /// Starts listening for [`Backend::changed`] and [`Backend::resumed`]
+    /// now, so nothing that happens between this call and the first wait on
+    /// them is lost. Best effort: they retry on their own if this fails.
+    fn arm(&self) -> impl Future<Output = ()> + Send;
+
+    /// Resolves each time the machine wakes from sleep, when the Backend's
+    /// picture of the world may be stale. Cancel-safe.
+    fn resumed(&self) -> impl Future<Output = ()> + Send;
 
     /// Answers the Backend's requests for secrets through Secret prompts, for
     /// as long as the Daemon runs: registers with the Backend, and again

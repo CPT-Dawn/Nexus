@@ -40,6 +40,15 @@ enum Command {
         #[command(subcommand)]
         action: WifiAction,
     },
+    /// Airplane mode: every radio off (`on`) or back on (`off`).
+    Airplane {
+        /// `on` switches the radios off; `off` brings them back.
+        #[arg(value_enum)]
+        state: Switch,
+        /// Print the radio state as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Read or change the config file.
     Config {
         #[command(subcommand)]
@@ -72,6 +81,18 @@ enum WifiAction {
     },
     /// Join a Network. The Profile is saved only if the join works.
     Join(JoinArgs),
+    /// Switch the Wi-Fi radio on.
+    On {
+        /// Print the radio state as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Switch the Wi-Fi radio off.
+    Off {
+        /// Print the radio state as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Drop the current Wi-Fi Link; the Profile stays.
     Disconnect {
         /// Print the result as JSON.
@@ -86,6 +107,12 @@ enum WifiAction {
         #[arg(long)]
         json: bool,
     },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum Switch {
+    On,
+    Off,
 }
 
 #[derive(ClapArgs)]
@@ -140,6 +167,18 @@ fn main() -> ExitCode {
             };
             cli::wifi_join(&a.ssid, source, a.json)
         }
+        Command::Wifi {
+            action: WifiAction::On { json },
+        } => cli::radio(nexus_ipc::Op::WifiPower { on: true }, json),
+        Command::Wifi {
+            action: WifiAction::Off { json },
+        } => cli::radio(nexus_ipc::Op::WifiPower { on: false }, json),
+        Command::Airplane { state, json } => cli::radio(
+            nexus_ipc::Op::Airplane {
+                on: matches!(state, Switch::On),
+            },
+            json,
+        ),
         Command::Wifi {
             action: WifiAction::Disconnect { json },
         } => cli::wifi_disconnect(json),

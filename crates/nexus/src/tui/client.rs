@@ -16,9 +16,9 @@ use super::app::Msg;
 /// First retry delay after losing the Daemon; doubles up to [`RETRY_MAX`].
 const RETRY_MIN: Duration = Duration::from_millis(100);
 const RETRY_MAX: Duration = Duration::from_secs(2);
-/// Until the Daemon pushes `status_changed` for every Backend change, the
-/// client re-reads the status this often. An unchanged status costs no frame.
-const POLL: Duration = Duration::from_secs(1);
+/// How often the idle link thread wakes to see whether the UI has gone. It
+/// reads nothing: the Daemon pushes `status_changed` for every change.
+const WAKE: Duration = Duration::from_secs(1);
 
 /// Handle to the connection thread; dropping it stops the thread at its
 /// next wake-up.
@@ -86,10 +86,8 @@ fn session(mut conn: Connection, tx: &Sender<Msg>, stop: &AtomicBool) -> io::Res
     };
     push(conn.status()?.map_err(|f| refused("status", f))?)?;
     while !stop.load(Ordering::SeqCst) {
-        match conn.next_event(POLL)? {
-            Some(Event::StatusChanged { status }) => push(status)?,
-            Some(_) => {}
-            None => push(conn.status()?.map_err(|f| refused("status", f))?)?,
+        if let Some(Event::StatusChanged { status }) = conn.next_event(WAKE)? {
+            push(status)?;
         }
     }
     Ok(())

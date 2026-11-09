@@ -12,8 +12,8 @@ use std::time::Duration;
 use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
-    BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind, ScanOutcome,
-    Secret, State, Status, WifiList,
+    BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind, Radio, Radios,
+    ScanOutcome, Secret, State, Status, WifiList,
 };
 use std::pin::Pin;
 
@@ -26,6 +26,7 @@ use zbus::proxy::CacheProperties;
 
 use super::{Backend, BackendError, Capabilities};
 use crate::secrets::Broker;
+use crate::text::{self, Failure};
 
 const SERVICE: &str = "org.freedesktop.NetworkManager";
 
@@ -43,6 +44,16 @@ pub(super) trait NetworkManager {
     fn primary_connection(&self) -> zbus::Result<OwnedObjectPath>;
     #[zbus(property)]
     fn version(&self) -> zbus::Result<String>;
+    #[zbus(property)]
+    fn wireless_enabled(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn set_wireless_enabled(&self, on: bool) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn wireless_hardware_enabled(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn wwan_enabled(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn set_wwan_enabled(&self, on: bool) -> zbus::Result<()>;
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
     fn activate_connection(
         &self,
@@ -89,6 +100,8 @@ pub struct NetworkManager {
     conn: Mutex<Option<Connection>>,
     /// Every signal NetworkManager sends, plus it appearing and vanishing.
     watch: Mutex<Option<Signals>>,
+    /// logind's `PrepareForSleep`, for noticing a resume.
+    sleep_watch: Mutex<Option<Signals>>,
 }
 
 impl std::fmt::Debug for NetworkManager {
@@ -103,6 +116,7 @@ impl NetworkManager {
             broker,
             conn: Mutex::default(),
             watch: Mutex::default(),
+            sleep_watch: Mutex::default(),
         }
     }
 
@@ -157,7 +171,42 @@ impl NetworkManager {
                 name: "networkmanager".into(),
                 version,
             },
+            radios: Self::read_radios(&nm).await?,
         })
+    }
+
+    async fn read_radios(nm: &NetworkManagerProxy<'_>) -> zbus::Result<Radios> {
+        let wifi = nm.wireless_enabled().await?;
+        let hardware_on = nm.wireless_hardware_enabled().await?;
+        let wwan = nm.wwan_enabled().await?;
+        Ok(Radios {
+            wifi: Radio {
+                enabled: wifi,
+                hardware_blocked: !hardware_on,
+            },
+            airplane: !wifi && !wwan,
+        })
+    }
+
+    /// Switches radios: Wi-Fi alone, or (airplane mode) Wi-Fi and mobile
+    /// broadband together. A hardware switch is reported, not fought.
+    async fn set_radios(
+        conn: &Connection,
+        wifi: bool,
+        wwan: Option<bool>,
+    ) -> zbus::Result<Result<Radios, Failure>> {
+        let nm = NetworkManagerProxy::builder(conn)
+            .cache_properties(CacheProperties::No)
+            .build()
+            .await?;
+        if wifi && !nm.wireless_hardware_enabled().await? {
+            return Ok(Err(text::wifi_hard_blocked()));
+        }
+        nm.set_wireless_enabled(wifi).await?;
+        if let Some(on) = wwan {
+            nm.set_wwan_enabled(on).await?;
+        }
+        Ok(Ok(Self::read_radios(&nm).await?))
     }
 
     /// Runs `read` on the bus; a failure becomes `Unavailable` when
@@ -204,6 +253,22 @@ impl NetworkManager {
         let a = MessageStream::for_match_rule(nm_signals, &conn, None).await?;
         let b = MessageStream::for_match_rule(owner, &conn, None).await?;
         Ok(Box::pin(stream::select(a, b)))
+    }
+
+    /// logind's `PrepareForSleep(b)`: true before suspend, false after resume.
+    async fn open_sleep_watch(&self) -> zbus::Result<Signals> {
+        use zbus::message::Type;
+        use zbus::{MatchRule, MessageStream};
+        let conn = self.connection().await?;
+        let rule = MatchRule::builder()
+            .msg_type(Type::Signal)
+            .sender("org.freedesktop.login1")
+            .interface("org.freedesktop.login1.Manager")
+            .member("PrepareForSleep")
+            .build()?;
+        Ok(Box::pin(
+            MessageStream::for_match_rule(rule, &conn, None).await?,
+        ))
     }
 
     async fn has_owner(conn: &Connection) -> bool {
@@ -258,6 +323,68 @@ impl Backend for NetworkManager {
         self.with_bus(|c| async move { super::wifi::forget(&c, &network).await })
             .await?
             .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_power(&self, on: bool) -> Result<Radios, BackendError> {
+        self.with_bus(|c| async move { Self::set_radios(&c, on, None).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn airplane(&self, on: bool) -> Result<Radios, BackendError> {
+        self.with_bus(|c| async move { Self::set_radios(&c, !on, Some(!on)).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn arm(&self) {
+        let mut guard = self.watch.lock().await;
+        if guard.is_none() {
+            match self.open_watch().await {
+                Ok(s) => *guard = Some(s),
+                Err(e) => tracing::debug!("cannot arm the NetworkManager watch: {e}"),
+            }
+        }
+        drop(guard);
+        let mut guard = self.sleep_watch.lock().await;
+        if guard.is_none() {
+            match self.open_sleep_watch().await {
+                Ok(s) => *guard = Some(s),
+                Err(e) => tracing::debug!("cannot arm the sleep watch: {e}"),
+            }
+        }
+    }
+
+    async fn resumed(&self) {
+        loop {
+            let mut guard = self.sleep_watch.lock().await;
+            if guard.is_none() {
+                match self.open_sleep_watch().await {
+                    Ok(s) => *guard = Some(s),
+                    Err(e) => {
+                        tracing::debug!("cannot watch for sleep yet: {e}");
+                        self.forget_connection().await;
+                        drop(guard);
+                        tokio::time::sleep(RETRY).await;
+                        continue;
+                    }
+                }
+            }
+            let signals = guard.as_mut().expect("just opened");
+            let Some(msg) = signals.next().await else {
+                *guard = None;
+                drop(guard);
+                self.forget_connection().await;
+                tokio::time::sleep(RETRY).await;
+                continue;
+            };
+            // `PrepareForSleep(false)` is the machine waking up.
+            if let Ok(msg) = msg
+                && msg.body().deserialize::<bool>() == Ok(false)
+            {
+                return;
+            }
+        }
     }
 
     async fn secrets(&self) {

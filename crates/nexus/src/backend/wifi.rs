@@ -549,6 +549,11 @@ async fn join_once(
     let device = no_cache!(DeviceProxy, conn, device_path.as_str());
     // Subscribe before asking: the Device may move on before the call returns.
     let mut states = device.receive_device_state_changed().await?;
+    // NetworkManager restarting forgets the join; do not wait it out.
+    let mut owner = zbus::fdo::DBusProxy::new(conn)
+        .await?
+        .receive_name_owner_changed_with_args(&[(0, "org.freedesktop.NetworkManager")])
+        .await?;
     let none = OwnedObjectPath::try_from("/").expect("root path");
     let device_obj = OwnedObjectPath::try_from(device_path.as_str()).expect("device path");
 
@@ -587,7 +592,7 @@ async fn join_once(
         }
     };
 
-    let outcome = wait_for_link(&mut states, &name, secured).await;
+    let outcome = wait_for_link(&mut states, &mut owner, &name, secured).await;
     let settings = no_cache!(SettingsConnectionProxy, conn, profile_path.as_str());
     match outcome {
         Ok(()) => {
@@ -616,6 +621,7 @@ async fn join_once(
 /// Watches a Device until the join it started is up or dead.
 async fn wait_for_link(
     states: &mut StateChangedStream,
+    owner: &mut zbus::fdo::NameOwnerChangedStream,
     name: &str,
     secured: bool,
 ) -> Result<(), Failure> {
@@ -626,6 +632,7 @@ async fn wait_for_link(
     loop {
         let signal = tokio::select! {
             s = states.next() => s,
+            _ = owner.next() => return Err(text::join_interrupted(name)),
             () = &mut deadline => return Err(text::join_timed_out(name)),
         };
         let Some(signal) = signal else {
