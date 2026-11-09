@@ -64,3 +64,29 @@ pub fn wifi_with_open_prompt(world: &World) -> JoinHandle<()> {
         }));
     })
 }
+
+/// A WireGuard config the VPN scenarios import (documentation keys).
+pub const WG_CONF: &str = "[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\nAddress = 10.8.0.2/32\nDNS = 10.8.0.1\n\n[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = vpn.work.example:51820\nPersistentKeepalive = 25\n";
+
+/// A filled VPN tab: `Work` (WireGuard, up), `Home Lab` (WireGuard, down) and
+/// `Office OpenVPN` (a plugin VPN, down), on a machine that is online.
+pub fn vpn_busy(world: &World) {
+    use crate::{ActiveConnection, NmConnectivity, NmState};
+    let nm = &world.nm;
+    nm.set_primary(Some(ActiveConnection::wifi("Home-5G")));
+    nm.set_connectivity(NmConnectivity::Full);
+    nm.set_state(NmState::ConnectedGlobal);
+    let mut wire = world.wire();
+    let work = wire.call(json!({"op": "vpn_import", "name": "Work", "config": WG_CONF}));
+    assert!(work.get("ok").is_some(), "importing Work: {work}");
+    let lab = wire.call(json!({
+        "op": "vpn_create", "name": "Home Lab", "addresses": ["10.9.0.2/32"],
+        "peer_key": "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=",
+        "endpoint": "lab.example.org:51820",
+    }));
+    assert!(lab.get("ok").is_some(), "creating Home Lab: {lab}");
+    nm.add_plugin_vpn("uuid-office", "Office OpenVPN");
+    let id = work["ok"]["id"].as_str().expect("an id").to_owned();
+    let up = wire.call(json!({"op": "vpn_up", "vpn": id}));
+    assert!(up.get("ok").is_some(), "bringing Work up: {up}");
+}

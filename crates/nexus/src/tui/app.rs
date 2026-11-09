@@ -2,6 +2,8 @@
 //! arrive as [`Msg`]s, and `update` says whether the screen changed. The only
 //! I/O is [`Runner`] sending the commands the person asked for.
 
+mod vpn_keys;
+
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
@@ -9,13 +11,14 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use nexus_ipc::{
-    ActivityEntry, Event, Finding, PromptClosed, PromptKind, Secret, Status, Traffic, WifiList,
-    WifiShare,
+    ActivityEntry, Event, Finding, PromptClosed, PromptKind, Secret, Status, Traffic, VpnList,
+    WifiList, WifiShare,
 };
 
 use super::caps::Caps;
 use super::share::{Share, Stage};
 use super::theme::{Look, Theme};
+use super::vpn::{self, VpnTab};
 use super::wifi::{Cmd, Confirm, Done, Entry, PasswordField, Runner, SWEEP_FRAME, Toast, WifiTab};
 
 /// How long a toast stays when nobody answers it.
@@ -30,6 +33,10 @@ pub enum Msg {
     Status(Status),
     /// A fresh Wi-Fi list (first connect or `networks_changed`).
     Wifi(WifiList),
+    /// The VPN list (first connect or `vpns_changed`).
+    Vpns(VpnList),
+    /// A VPN command the person gave has finished.
+    Vpn(Box<vpn::Done>),
     /// A Secret prompt opened or closed.
     Prompt(Event),
     /// A command the person gave has finished.
@@ -176,6 +183,8 @@ pub struct App {
     size: (u16, u16),
     quit: bool,
     wifi: WifiTab,
+    vpn: VpnTab,
+    vpn_runner: Option<vpn::Runner>,
     /// An open Secret prompt: it has the keys until answered or cancelled.
     field: Option<PasswordField>,
     confirm: Option<Confirm>,
@@ -203,6 +212,8 @@ impl App {
             size: (80, 24),
             quit: false,
             wifi: WifiTab::default(),
+            vpn: VpnTab::default(),
+            vpn_runner: None,
             field: None,
             confirm: None,
             share: None,
@@ -214,6 +225,7 @@ impl App {
     /// Lets the app act on the Daemon: commands run on threads over `socket`
     /// and finish as [`Msg::Done`] on `tx`. Without it, commands go nowhere.
     pub fn attach(&mut self, socket: PathBuf, tx: Sender<Msg>) {
+        self.vpn_runner = Some(vpn::Runner::new(socket.clone(), tx.clone()));
         self.runner = Some(Runner::new(socket, tx));
     }
 
@@ -229,6 +241,7 @@ impl App {
     pub fn selected(&self) -> usize {
         match self.tab {
             Tab::WiFi => self.wifi.cursor(),
+            Tab::Vpn => self.vpn.cursor(),
             _ => self.selected,
         }
     }
@@ -237,8 +250,13 @@ impl App {
     pub fn rows(&self) -> usize {
         match self.tab {
             Tab::WiFi => self.wifi.len(),
+            Tab::Vpn => self.vpn.len(),
             other => other.rows(),
         }
+    }
+
+    pub fn vpn(&self) -> &VpnTab {
+        &self.vpn
     }
 
     pub fn wifi(&self) -> &WifiTab {
@@ -427,6 +445,8 @@ impl App {
                 changed
             }
             Msg::Wifi(list) => self.wifi.refresh(list),
+            Msg::Vpns(list) => self.vpn.refresh(list) && self.tab == Tab::Vpn,
+            Msg::Vpn(done) => self.vpn_done(*done),
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
             Msg::Shared(result) => match self.share.as_mut() {
@@ -440,7 +460,8 @@ impl App {
                 // A prompt dies with the link; the Daemon replays it if it lives.
                 let changed = self.conn != Conn::Down
                     || self.field.take().is_some()
-                    || self.share.take().is_some();
+                    || self.share.take().is_some()
+                    || self.vpn.drop_secrets();
                 self.conn = Conn::Down;
                 changed
             }
@@ -567,6 +588,9 @@ impl App {
         }
         if self.share.is_some() {
             return self.share_key(key);
+        }
+        if self.tab == Tab::Vpn && self.vpn.layer.is_some() {
+            return self.vpn_layer_key(key);
         }
         match self.layer {
             Layer::Help => {
@@ -716,7 +740,7 @@ impl App {
             KeyCode::Enter if self.tab == Tab::Overview => {
                 self.go_tab(Tab::ALL[1 + self.selected.min(3)])
             }
-            KeyCode::Enter if self.narrow() && self.tab != Tab::WiFi => {
+            KeyCode::Enter if self.narrow() && !matches!(self.tab, Tab::WiFi | Tab::Vpn) => {
                 self.layer = Layer::Sheet;
                 true
             }
@@ -733,6 +757,7 @@ impl App {
     fn tab_key(&mut self, key: KeyEvent) -> bool {
         match self.tab {
             Tab::WiFi => self.wifi_key(key),
+            Tab::Vpn => self.vpn_key(key),
             _ => false,
         }
     }
@@ -803,6 +828,9 @@ impl App {
         if self.tab == Tab::WiFi {
             return self.wifi.move_to(row);
         }
+        if self.tab == Tab::Vpn {
+            return self.vpn.move_to(row);
+        }
         let changed = row != self.selected;
         self.selected = row;
         changed
@@ -832,6 +860,9 @@ impl App {
         if let Some(share) = &self.share {
             return share.hints();
         }
+        if self.tab == Tab::Vpn && self.vpn.layer.is_some() {
+            return self.vpn_hints(false);
+        }
         match self.layer {
             Layer::Help => vec![("esc", "close")],
             Layer::Confirm => vec![("y", "run"), ("n", "cancel")],
@@ -839,6 +870,8 @@ impl App {
                 let mut v = vec![("esc", "back")];
                 if self.tab == Tab::WiFi {
                     v.extend(self.wifi_hints(false));
+                } else if self.tab == Tab::Vpn {
+                    v.extend(self.vpn_hints(false));
                 }
                 v.push(("?", "help"));
                 v
@@ -852,6 +885,8 @@ impl App {
                     // No list and nothing to open on the setup screen.
                 } else if self.tab == Tab::WiFi {
                     v.extend(self.wifi_hints(!narrow));
+                } else if self.tab == Tab::Vpn {
+                    v.extend(self.vpn_hints(!narrow));
                 } else if self.tab == Tab::Overview || (narrow && self.rows() > 0) {
                     v.push(("enter", "open"));
                 }

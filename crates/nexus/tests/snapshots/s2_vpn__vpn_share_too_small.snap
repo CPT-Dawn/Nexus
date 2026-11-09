@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_vpn.rs
+expression: small
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
+╭ VPN ───────────────────────╮╭ Work ──────────────────────────────────────────────────────────────╮
+│   ○ Home Lab          down ││ ● Up                                                               │
+│   ○ Office OpenV…     down ││                                                                    │
+│ ▸ ● Work                up ││ Kind        WireGuard                                              │
+│                            ││ Address     10.8.0.2/32                                            │
+│                            ││ Endpoint    vpn.work.example:51820                                 │
+│                            ││                                                                    │
+│                            ││ Press enter to bring it down.                                      │
+│                ╭ Share Work ────────────────────────────────────────────────────╮                │
+│                │ The QR code needs a window of at least 65 by 36 cells.         │                │
+│                │ Make the window bigger, or use `nexus vpn share --qr`.         │                │
+│                │                                                                │                │
+│                │ Public key  HIgo9xNzJMWLKASShiTqIybxZ0U3wGLiUeJ1PKf8ykw=       │                │
+│                │                                                                │                │
+│                │ esc close                                                      │                │
+│                │                                                                │                │
+│                ╰────────────────────────────────────────────────────────────────╯                │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ esc close

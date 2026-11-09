@@ -202,6 +202,11 @@ fn session(
     if let Ok(list) = conn.wifi_list()? {
         send(Msg::Wifi(list))?;
     }
+    if let Ok(list) = conn.call(Op::VpnList)?
+        && let Ok(list) = serde_json::from_value(list)
+    {
+        send(Msg::Vpns(list))?;
+    }
     send(Msg::Activity(
         conn.activity()?
             .map_err(|f| refused("activity", f))?
@@ -211,6 +216,7 @@ fn session(
         match conn.next_event(WAKE)? {
             Some(Event::StatusChanged { status }) => push(status)?,
             Some(Event::NetworksChanged { wifi }) => send(Msg::Wifi(wifi))?,
+            Some(Event::VpnsChanged { vpns }) => send(Msg::Vpns(vpns))?,
             Some(event @ (Event::SecretPromptOpened { .. } | Event::SecretPromptClosed { .. })) => {
                 send(Msg::Prompt(event))?
             }

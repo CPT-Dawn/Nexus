@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_vpn.rs
+expression: rig.text(NARROW)
+---
+ Nexus  VPN ▾  4/6                                 ● Online
+╭ VPN ─────────────────────────────────────────────────────╮
+│ ▸ ○ Home Lab                                        down │
+│   ○ Office OpenVPN                                  down │
+│   ● Work                                              up │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ j/k move  enter up  i import  c create  h/l tab  ? help  q

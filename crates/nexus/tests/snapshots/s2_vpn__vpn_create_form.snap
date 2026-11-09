@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_vpn.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ VPN ───────────────────────╮╭ VPN ───────────────────────────────────────────────────────────────╮
+│ No VPNs yet.               ││ Nothing selected.                                                  │
+│ Press i to import a        ││                                                                    │
+│ WireGuard .conf,           ││                                                                    │
+│ or c to create a tunnel.   ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                ╭ Create a WireGuard VPN ────────────────────────────────────────╮                │
+│                │ Name      _                                                    │                │
+│                │ Address   this end, e.g. 10.0.0.2/32                           │                │
+│                │ DNS       optional, comma separated                            │                │
+│                │ Peer key  optional: the other side's public key                │                │
+│                │ Endpoint  optional: host:port of the other side                │                │
+│                │                                                                │                │
+│                │ Nexus makes the key pair for you.                              │                │
+│                │                                                                │                │
+│                │                                                                │                │
+│                ╰────────────────────────────────────────────────────────────────╯                │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ enter next  tab move  esc cancel

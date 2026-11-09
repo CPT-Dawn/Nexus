@@ -5,28 +5,28 @@ expression: rig.text(STANDARD)
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
 ╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
 │ ▸ ● Wi-Fi                  ││     ░░    ░░░░    ░░      ░░░░░░  ░░░░    ░░░░░░                   │
-│     Home-5G                ││   ░░██░░░░████░░░░██░░  ░░██████░░████░░░░██████░░                 │
-│   ○ Ethernet       ╭ All keys ──────────────────────────────────────────────╮░                   │
-│     Not connected  │  j / k, Down / Up     Move in the list                 │░                   │
-│   ○ VPN            │  g / G                Jump to top / bottom             │░                   │
-│     Not connected  │  h / l, Left / Right  Previous / next tab              │█░░                 │
-│   ○ Hotspot        │  Tab / Shift-Tab      Next / previous tab              │░                   │
-│     Not started    │  1 - 6                Jump to a tab                    │                    │
-│                    │  Enter                Open the selected card's tab     │ooks healthy.       │
-│                    │  d                    Details sheet (small windows)    │.1                  │
-│                    │  Wi-Fi: Enter         Join the selected Network        │────────────────────╯
-│                    │  Wi-Fi: r             Rescan                           │────────────────────╮
-│                    │  Wi-Fi: x             Disconnect                       │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  Wi-Fi: f             Forget (asks first)              │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    │  Wi-Fi: a             Toggle autoconnect               │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  Wi-Fi: s             Share as a QR code (asks first)  │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    │  Wi-Fi: u             Undo the toast's action          │────────────────────╯
-│                    │  Esc                  Back out; never quits            │────────────────────╮
+│     Home-5G        ╭ All keys ──────────────────────────────────────────────╮█░░                 │
+│   ○ Ethernet       │  j / k, Down / Up     Move in the list                 │░                   │
+│     Not connected  │  g / G                Jump to top / bottom             │░                   │
+│   ○ VPN            │  h / l, Left / Right  Previous / next tab              │░                   │
+│     Not connected  │  Tab / Shift-Tab      Next / previous tab              │█░░                 │
+│   ○ Hotspot        │  1 - 6                Jump to a tab                    │░                   │
+│     Not started    │  Enter                Open the selected card's tab     │                    │
+│                    │  d                    Details sheet (small windows)    │ooks healthy.       │
+│                    │  Wi-Fi: Enter         Join the selected Network        │.1                  │
+│                    │  Wi-Fi: r             Rescan                           │────────────────────╯
+│                    │  Wi-Fi: x             Disconnect                       │────────────────────╮
+│                    │  Wi-Fi: f             Forget (asks first)              │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  Wi-Fi: a             Toggle autoconnect               │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  Wi-Fi: s             Share as a QR code (asks first)  │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  Wi-Fi: u             Undo the toast's action          │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  VPN: Enter           Bring the VPN up or down         │────────────────────╯
+│                    │  VPN: i / c           Import / create a WireGuard VPN  │────────────────────╮
+│                    │  VPN: p / s           Public key / config as a QR code │                    │
+│                    │  Esc                  Back out; never quits            │                    │
 │                    │  ?                    Show or hide this help           │                    │
 │                    │  q, Ctrl-C            Quit                             │                    │
 │                    ╰────────────────────────────────────────────────────────╯                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
  esc close

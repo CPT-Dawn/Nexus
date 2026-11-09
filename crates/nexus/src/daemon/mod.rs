@@ -197,8 +197,9 @@ async fn sync_vpns<B: Backend>(
     if let Some(before) = &seen.vpns {
         let changes = live.vpns.observe(before, &list);
         for (kind, text) in changes.activity {
-            let entry = live.activity.record(kind, text);
-            let _ = events.send(Event::Activity { entry });
+            if let Some(entry) = live.activity.record(kind, text) {
+                let _ = events.send(Event::Activity { entry });
+            }
         }
         for name in changes.dropped {
             notifier.vpn_dropped(&name);

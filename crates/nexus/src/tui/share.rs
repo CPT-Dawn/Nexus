@@ -86,7 +86,7 @@ fn dots(n: usize, sym: &Sym) -> String {
 }
 
 /// QR cells are black on white so a phone reads them on any theme.
-fn code_style(look: &Look) -> Style {
+pub(super) fn code_style(look: &Look) -> Style {
     if look.caps.color == ColorTier::None {
         Style::new()
     } else {
@@ -198,7 +198,7 @@ pub(super) fn draw(f: &mut Frame, share: &Share, body: Rect, look: &Look, sym: &
     }
 }
 
-fn centered(area: Rect, width: u16, height: u16) -> Rect {
+pub(super) fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let width = width.min(area.width);
     let height = height.min(area.height);
     Rect {

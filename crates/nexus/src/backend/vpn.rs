@@ -176,7 +176,7 @@ pub async fn list(conn: &Connection) -> zbus::Result<VpnList> {
             endpoint: p.endpoint,
         })
         .collect();
-    vpns.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    vpns.sort_by_key(|v| v.name.to_lowercase());
     Ok(VpnList { vpns })
 }
 

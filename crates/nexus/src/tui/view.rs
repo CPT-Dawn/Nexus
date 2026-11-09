@@ -15,6 +15,7 @@ use super::doctor_view;
 use super::layout::{self, Areas, Mode};
 use super::overview;
 use super::theme::Look;
+use super::vpn_ui;
 use super::wifi_ui;
 use super::words;
 
@@ -128,6 +129,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         ..a.header
     };
     wifi_ui::overlays(f, app, body, &look, &sym);
+    vpn_ui::overlays(f, app, body, &look, &sym);
     if app.layer() == Layer::Help {
         help(f, area, &look, &sym);
     }
@@ -261,6 +263,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::WiFi {
         return wifi_ui::master(f, app, area, look, sym);
     }
+    if app.tab() == Tab::Vpn {
+        return vpn_ui::master(f, app, area, look, sym);
+    }
     if app.tab().rows() > 0 {
         overview::cards_panel(f, app, area, look, sym, true);
         return;
@@ -277,6 +282,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
 fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::WiFi && app.conn() == Conn::Up {
         return wifi_ui::detail(f, app, area, look, sym);
+    }
+    if app.tab() == Tab::Vpn && app.conn() == Conn::Up {
+        return vpn_ui::detail(f, app, area, look, sym);
     }
     let title = match app.tab() {
         Tab::Overview => "Status",
@@ -315,7 +323,7 @@ fn daemon_lines(app: &App, look: &Look) -> Vec<Line<'static>> {
 }
 
 fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
-    const KEYS: [(&str, &str); 17] = [
+    const KEYS: [(&str, &str); 20] = [
         ("j / k, Down / Up", "Move in the list"),
         ("g / G", "Jump to top / bottom"),
         ("h / l, Left / Right", "Previous / next tab"),
@@ -330,6 +338,9 @@ fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
         ("Wi-Fi: a", "Toggle autoconnect"),
         ("Wi-Fi: s", "Share as a QR code (asks first)"),
         ("Wi-Fi: u", "Undo the toast's action"),
+        ("VPN: Enter", "Bring the VPN up or down"),
+        ("VPN: i / c", "Import / create a WireGuard VPN"),
+        ("VPN: p / s", "Public key / config as a QR code"),
         ("Esc", "Back out; never quits"),
         ("?", "Show or hide this help"),
         ("q, Ctrl-C", "Quit"),

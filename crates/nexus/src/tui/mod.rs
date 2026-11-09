@@ -15,6 +15,8 @@ mod overview;
 mod share;
 mod theme;
 mod view;
+mod vpn;
+mod vpn_ui;
 mod wifi;
 mod wifi_ui;
 mod words;

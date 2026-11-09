@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! cargo build -p nexus
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|vpn]
 //! ```
 //!
 //! Scenarios:
@@ -16,6 +16,12 @@
 //!   row (Home-5G, Parents House, Hotel Lobby) opens the share view; `enter`
 //!   reveals the QR code, `p` shows the password, `esc` closes.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
+//! - `vpn`: online, with three VPNs: Work (WireGuard, up), Home Lab
+//!   (WireGuard, down) and Office OpenVPN (plugin, down). Press `4` for the
+//!   VPN tab; `enter` brings the selected one up or down, `p` shows its public
+//!   key, `s` then `enter` reveals its config as a QR code (needs a window of
+//!   about 70 by 38 cells), `i` imports a `.conf` (type a path), `c` creates a
+//!   tunnel with generated keys, `esc` closes a layer.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -52,6 +58,7 @@ fn main() {
             world.nm.set_connectivity(NmConnectivity::Full);
             world.nm.set_state(NmState::ConnectedGlobal);
         }
+        "vpn" => nexus_testkit::scenarios::vpn_busy(&world),
         "portal" => {
             world
                 .nm

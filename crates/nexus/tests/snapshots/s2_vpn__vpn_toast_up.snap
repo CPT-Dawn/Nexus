@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_vpn.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
+╭ VPN ───────────────────────╮╭ Home Lab ──────────────────────────────────────────────────────────╮
+│ ▸ ● Home Lab            up ││ ● Up                                                               │
+│   ○ Office OpenV…     down ││                                                                    │
+│   ● Work                up ││ Kind        WireGuard                                              │
+│                            ││ Address     10.9.0.2/32                                            │
+│                            ││ Endpoint    lab.example.org:51820                                  │
+│                            ││                                                                    │
+│                            ││ Press enter to bring it down.                                      │
+│                            ││ p shows its public key, s its config as a QR code.                 │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                ╭ Done ───────────╮ │
+│                            ││                                                │ Home Lab is up. │ │
+│                            ││                                                ╰─────────────────╯ │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter down  i import  c create  p key  s share  h/l tab  ? help  q quit
