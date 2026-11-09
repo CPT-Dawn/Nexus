@@ -50,6 +50,14 @@ _Avoid_: hotspot, PAN
 A paired Bluetooth phone that offers network access, which Tethering joins. Listed by name and Bluetooth address; a phone that offers only dial-up is not a Phone to Nexus.
 _Avoid_: device (that is a hardware interface), handset, PAN client
 
+**VPN**:
+A Network that tunnels all or some traffic through another machine: a WireGuard tunnel or a plugin VPN such as OpenVPN. Each VPN has a Profile, is up or down independently of the Link that carries it, and a VPN that goes down without being asked to is a drop, which Nexus announces.
+_Avoid_: tunnel (in the UI; fine for what a WireGuard peer pair is), connection
+
+**Public key**:
+The half of a WireGuard key pair that is safe to hand out: the other side of a tunnel needs it. Nexus generates the pair when it creates a VPN, and the private half never leaves NetworkManager except through a Reveal.
+_Avoid_: key (alone, ambiguous with the private key)
+
 ### System
 
 **Backend**:
