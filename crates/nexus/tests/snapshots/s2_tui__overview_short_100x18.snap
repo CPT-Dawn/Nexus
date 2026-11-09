@@ -1,0 +1,22 @@
+---
+source: crates/nexus/tests/s2_tui.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
+╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+│ ▸ ● Wi-Fi                  ││ ● Online                                                           │
+│     Home-5G                ││                                                                    │
+│   ○ Ethernet               ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │
+│     Not connected          ││ Internet: full  |  Backend: networkmanager 1.58.1                  │
+│   ○ VPN                    │╰────────────────────────────────────────────────────────────────────╯
+│     Not connected          │╭ Traffic ───────────────────────────────────────────────────────────╮
+│   ○ Hotspot                ││ ↓ 0 B/s          ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│     Not started            ││ ↑ 0 B/s          ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                            │╰────────────────────────────────────────────────────────────────────╯
+│                            │╭ Recent activity ───────────────────────────────────────────────────╮
+│                            ││ ● Joined Home-5G (Wi-Fi)                                           │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter open  h/l tab  ? help  q quit

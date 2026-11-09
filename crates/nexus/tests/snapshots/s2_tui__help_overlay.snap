@@ -3,26 +3,26 @@ source: crates/nexus/tests/s2_tui.rs
 expression: rig.text(STANDARD)
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
-╭ Overview ──────────────────╮╭ Wi-Fi ─────────────────────────────────────────────────────────────╮
-│ ▸ Wi-Fi     Home-5G        ││                                                                    │
-│   Ethernet  Idle           ││ ● Online                                                           │
-│   VPN       Idle           ││                                                                    │
-│   Hotspot   Off            ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │
-│                            ││                                                                    │
-│                            ││ Wi-Fi         Home-5G                                              │
-│                    ╭ All keys ──────────────────────────────────────────────╮                    │
-│                    │  j / k, Down / Up     Move in the list                 │                    │
-│                    │  g / G                Jump to top / bottom             │                    │
-│                    │  h / l, Left / Right  Previous / next tab              │                    │
-│                    │  Tab / Shift-Tab      Next / previous tab              │                    │
-│                    │  1 - 6                Jump to a tab                    │                    │
-│                    │  Enter                Open details (small windows)     │                    │
-│                    │  Esc                  Back out; never quits            │                    │
-│                    │  ?                    Show or hide this help           │                    │
-│                    │  q, Ctrl-C            Quit                             │                    │
-│                    ╰────────────────────────────────────────────────────────╯                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
+╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+│ ▸ ● Wi-Fi                  ││     ░░    ░░░░    ░░      ░░░░░░  ░░░░    ░░░░░░                   │
+│     Home-5G                ││   ░░██░░░░████░░░░██░░  ░░██████░░████░░░░██████░░                 │
+│   ○ Ethernet               ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░██░░░░                   │
+│     Not connected          ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░████░░                   │
+│   ○ VPN                    ││ ░░██░░██░░██░░██░░██░░░░  ░░██░░░░██░░██░░██░░░░                   │
+│     Not connected          ││   ░░██░░░░██░░██░░██████░░██████░░██░░██░░██████░░                 │
+│   ○ Hotspot        ╭ All keys ──────────────────────────────────────────────╮░                   │
+│     Not started    │  j / k, Down / Up     Move in the list                 │                    │
+│                    │  g / G                Jump to top / bottom             │ooks healthy.       │
+│                    │  h / l, Left / Right  Previous / next tab              │.1                  │
+│                    │  Tab / Shift-Tab      Next / previous tab              │────────────────────╯
+│                    │  1 - 6                Jump to a tab                    │────────────────────╮
+│                    │  Enter                Open the selected card's tab     │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  Esc                  Back out; never quits            │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  ?                    Show or hide this help           │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  q, Ctrl-C            Quit                             │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    ╰────────────────────────────────────────────────────────╯────────────────────╯
+│                            │╭ Recent activity ───────────────────────────────────────────────────╮
+│                            ││ ● Joined Home-5G (Wi-Fi)                                           │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

@@ -7,6 +7,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use nexus_ipc::Traffic;
 use nexus_testkit::{ActiveConnection, NmConnectivity, NmState, PATIENCE, World};
 use nexus_tui::tui::{self, App, Caps, Client, ColorTier, Glyphs, Msg};
 use ratatui::Terminal;
@@ -42,7 +43,7 @@ struct Rig {
     world: World,
     app: App,
     rx: Receiver<Msg>,
-    _client: Client,
+    client: Client,
 }
 
 impl Rig {
@@ -53,7 +54,7 @@ impl Rig {
             world,
             app: App::new(caps),
             rx,
-            _client: client,
+            client,
         };
         rig.size(STANDARD);
         rig
@@ -67,7 +68,9 @@ impl Rig {
         let world = World::start(NEXUS);
         go_online(&world);
         let mut rig = Rig::start(world, caps);
-        rig.pump_until("the online status", |a| a.status().is_some());
+        rig.pump_until("the online status and its first activity", |a| {
+            a.status().is_some() && !a.activity().is_empty()
+        });
         rig
     }
 
@@ -87,12 +90,25 @@ impl Rig {
                 .recv_timeout(left)
                 .unwrap_or_else(|_| panic!("timed out waiting for {what}"));
             self.app.update(msg);
+            self.sync_watch();
         }
+    }
+
+    /// What `nexus` does after every frame: poll traffic only while the
+    /// graphs are on screen.
+    fn sync_watch(&self) {
+        self.client.watch_traffic(self.app.traffic_visible());
     }
 
     fn key(&mut self, code: KeyCode) {
         self.app
             .update(Msg::Key(KeyEvent::new(code, KeyModifiers::NONE)));
+        self.sync_watch();
+    }
+
+    /// Scripted Daemon traffic, for frames that must not depend on a clock.
+    fn traffic(&mut self, rx_bps: u64, tx_bps: u64) {
+        self.app.update(Msg::Traffic(Traffic { rx_bps, tx_bps }));
     }
 
     fn type_str(&mut self, s: &str) {
@@ -183,27 +199,13 @@ fn overview_online_at_wide_width() {
 }
 
 #[test]
-fn overview_online_at_narrow_width_is_a_single_list() {
+fn overview_online_at_narrow_width_stacks_everything() {
     let rig = Rig::online();
     let frame = rig.text(NARROW);
-    assert!(
-        !frame.contains("Everything looks healthy"),
-        "detail lives in the sheet:\n{frame}"
-    );
+    for part in ["Online", "Traffic", "Wi-Fi", "Recent activity"] {
+        assert!(frame.contains(part), "missing {part}:\n{frame}");
+    }
     insta::assert_snapshot!("overview_online_narrow", frame);
-}
-
-#[test]
-fn narrow_enter_slides_in_the_sheet_and_esc_pops_it() {
-    let mut rig = Rig::online();
-    rig.size(NARROW);
-    rig.key(KeyCode::Enter);
-    let sheet = rig.text(NARROW);
-    assert!(sheet.contains("You're online via Wi-Fi"), "{sheet}");
-    insta::assert_snapshot!("overview_sheet_narrow", sheet);
-    rig.key(KeyCode::Esc);
-    assert!(!rig.text(NARROW).contains("You're online via Wi-Fi"));
-    assert!(!rig.app.should_quit(), "Esc must never quit");
 }
 
 #[test]
@@ -255,15 +257,10 @@ fn the_footer_shows_only_keys_valid_right_now() {
     );
     rig.key(KeyCode::Esc);
 
+    assert!(root.contains("enter open"), "cards open their tab: {root}");
     rig.size(NARROW);
     let narrow = last_line(&rig, NARROW);
     assert!(narrow.contains("enter open"), "{narrow}");
-    rig.key(KeyCode::Enter);
-    let sheet = last_line(&rig, NARROW);
-    assert!(
-        sheet.contains("esc back") && !sheet.contains("enter open"),
-        "{sheet}"
-    );
 }
 
 #[test]
@@ -510,7 +507,10 @@ fn an_idle_tui_draws_no_frames() {
             let mut app = App::new(truecolor());
             tui::event_loop(&mut terminal, &mut app, &rx, |app| {
                 frames.fetch_add(1, Ordering::SeqCst);
-                online.store(app.status().is_some(), Ordering::SeqCst);
+                online.store(
+                    app.status().is_some() && !app.activity().is_empty(),
+                    Ordering::SeqCst,
+                );
             })
             .unwrap();
             text_of(terminal.backend().buffer())
@@ -548,4 +548,301 @@ fn an_idle_tui_draws_no_frames() {
     let last = looper.join().unwrap();
     assert!(frames.load(Ordering::SeqCst) > settled);
     assert!(last.contains("Wi-Fi"), "{last}");
+}
+
+// ---- Overview (#12): hero, traffic, cards, activity -----------------------------
+
+/// A rig with a Wi-Fi Device, so the Daemon has counters to turn into rates.
+fn online_with_device() -> (Rig, nexus_testkit::DeviceId) {
+    let world = World::start(NEXUS);
+    let wlan0 = world.nm.add_wifi_device("wlan0");
+    go_online(&world);
+    let mut rig = Rig::start(world, truecolor());
+    rig.pump_until("status and activity", |a| {
+        a.status().is_some() && !a.activity().is_empty()
+    });
+    (rig, wlan0)
+}
+
+fn portal_rig() -> Rig {
+    let world = World::start(NEXUS);
+    world
+        .nm
+        .set_primary(Some(ActiveConnection::wifi("CafeGuest")));
+    world.nm.set_connectivity(NmConnectivity::Portal);
+    world.nm.set_state(NmState::ConnectedGlobal);
+    let mut rig = Rig::start(world, truecolor());
+    rig.pump_until("the portal status", |a| {
+        a.status()
+            .is_some_and(|s| s.connectivity == nexus_ipc::Connectivity::Portal)
+            && !a.activity().is_empty()
+    });
+    rig
+}
+
+#[test]
+fn the_hero_has_big_type_for_every_state() {
+    let online = Rig::online();
+    insta::assert_snapshot!("hero_online_standard", online.text(STANDARD));
+
+    let portal = portal_rig();
+    let frame = portal.text(STANDARD);
+    assert!(frame.contains("a sign-in page is"), "{frame}");
+    insta::assert_snapshot!("hero_portal_standard", frame);
+
+    let mut offline = Rig::online();
+    offline.world.nm.set_primary(None);
+    offline.world.nm.set_state(NmState::Disconnected);
+    offline.pump_until("offline", |a| {
+        a.status()
+            .is_some_and(|s| s.state == nexus_ipc::State::Offline)
+    });
+    insta::assert_snapshot!("hero_offline_standard", offline.text(STANDARD));
+
+    let mut connecting = Rig::online();
+    connecting.world.nm.set_state(NmState::Connecting);
+    connecting.pump_until("connecting", |a| {
+        a.status()
+            .is_some_and(|s| s.state == nexus_ipc::State::Connecting)
+    });
+    insta::assert_snapshot!("hero_connecting_standard", connecting.text(STANDARD));
+}
+
+#[test]
+fn the_hero_glows_only_where_colour_can_carry_it() {
+    let rig = Rig::online_with(truecolor());
+    assert!(rig.text(STANDARD).contains('░'), "halo missing");
+    let mono = Rig::online_with(caps(ColorTier::None, Glyphs::Unicode));
+    assert!(!mono.text(STANDARD).contains('░'), "no halo without colour");
+    let ascii = Rig::online_with(caps(ColorTier::TrueColor, Glyphs::Ascii));
+    let frame = ascii.text(STANDARD);
+    assert!(frame.is_ascii(), "ASCII mode leaked non-ASCII:\n{frame}");
+    assert!(frame.contains('#'), "{frame}");
+}
+
+#[test]
+fn traffic_graphs_at_every_width() {
+    for (name, size) in [("narrow", NARROW), ("standard", STANDARD), ("wide", WIDE)] {
+        let mut rig = Rig::online();
+        rig.size(size);
+        let ramp = [
+            0, 0, 200_000, 900_000, 2_400_000, 1_200_000, 600_000, 1_800_000,
+        ];
+        for (i, rx) in ramp.into_iter().enumerate() {
+            rig.traffic(rx, rx / 12 + i as u64 * 1_000);
+        }
+        let frame = rig.text(size);
+        assert!(frame.contains("1.8 MB/s"), "{name}:\n{frame}");
+        assert!(
+            frame
+                .chars()
+                .any(|c| ('\u{2840}'..='\u{28ff}').contains(&c)),
+            "braille"
+        );
+        insta::assert_snapshot!(format!("traffic_{name}"), frame);
+    }
+}
+
+#[test]
+fn ascii_graphs_use_plain_bars() {
+    let mut rig = Rig::online_with(caps(ColorTier::TrueColor, Glyphs::Ascii));
+    for rx in [0, 100_000, 1_000_000, 3_000_000] {
+        rig.traffic(rx, rx / 10);
+    }
+    let frame = rig.text(STANDARD);
+    assert!(frame.is_ascii(), "{frame}");
+    insta::assert_snapshot!("traffic_ascii", frame);
+}
+
+#[test]
+fn rates_read_in_plain_units() {
+    let mut rig = Rig::online();
+    for (rx, tx, want) in [
+        (0, 0, "0 B/s"),
+        (950, 12, "950 B/s"),
+        (12_300, 0, "12.3 KB/s"),
+        (3_450_000, 0, "3.5 MB/s"),
+        (2_100_000_000, 0, "2.1 GB/s"),
+    ] {
+        rig.traffic(rx, tx);
+        let frame = rig.text(STANDARD);
+        assert!(frame.contains(want), "{want}:\n{frame}");
+    }
+}
+
+#[test]
+fn traffic_arrives_from_the_daemon_while_the_overview_shows() {
+    let (mut rig, wlan0) = online_with_device();
+    rig.sync_watch();
+    rig.pump_until("a baseline sample", |a| a.traffic_samples() >= 1);
+    rig.world.nm.set_traffic(wlan0, 5_000_000, 500_000);
+    rig.pump_until("a download rate", |a| {
+        a.traffic_now()
+            .is_some_and(|t| t.rx_bps > 0 && t.tx_bps > 0)
+    });
+    assert!(rig.text(STANDARD).contains("B/s"));
+}
+
+/// The 1 Hz refresh runs only while the graphs are visible (ADR-0003).
+#[test]
+fn traffic_polling_stops_when_the_graphs_leave_the_screen() {
+    let (mut rig, _wlan0) = online_with_device();
+    rig.sync_watch();
+    rig.pump_until("polling to start", |a| a.traffic_samples() >= 1);
+
+    // Leave the Overview: nothing may read counters from now on.
+    rig.key(KeyCode::Char('l'));
+    assert!(!rig.app.traffic_visible());
+    let settle = Instant::now() + Duration::from_millis(1300); // one in-flight poll
+    while Instant::now() < settle {
+        let _ = rig.rx.recv_timeout(Duration::from_millis(50));
+    }
+    let reads = rig.world.nm.statistics_reads();
+    // The one deliberate wait: proving a negative.
+    std::thread::sleep(Duration::from_millis(2500));
+    assert_eq!(
+        rig.world.nm.statistics_reads(),
+        reads,
+        "polled while hidden"
+    );
+    assert_eq!(
+        rig.app.traffic_samples(),
+        0,
+        "history is dropped when hidden"
+    );
+
+    // Back on screen: polling resumes.
+    rig.key(KeyCode::Char('h'));
+    assert!(rig.app.traffic_visible());
+    rig.pump_until("polling to resume", |a| a.traffic_samples() >= 1);
+    assert!(rig.world.nm.statistics_reads() > reads);
+}
+
+#[test]
+fn graphs_are_not_visible_behind_overlays_or_in_a_tiny_window() {
+    let mut rig = Rig::online();
+    assert!(rig.app.traffic_visible());
+    rig.type_str("?");
+    assert!(!rig.app.traffic_visible());
+    rig.key(KeyCode::Esc);
+    rig.size((30, 6));
+    assert!(!rig.app.traffic_visible());
+    rig.size(NARROW);
+    assert!(rig.app.traffic_visible());
+}
+
+/// ADR-0003 with the graphs running: a flat line costs no frames.
+#[test]
+fn a_visible_but_flat_graph_draws_no_frames() {
+    let world = World::start(NEXUS);
+    world.nm.add_wifi_device("wlan0");
+    go_online(&world);
+    let (tx, rx) = mpsc::channel();
+    let client = Client::spawn(world.socket(), tx.clone());
+    let frames = Arc::new(AtomicUsize::new(0));
+    let looper = {
+        let frames = frames.clone();
+        std::thread::spawn(move || {
+            let mut terminal = Terminal::new(TestBackend::new(100, 28)).unwrap();
+            let mut app = App::new(truecolor());
+            tui::event_loop(&mut terminal, &mut app, &rx, |app| {
+                frames.fetch_add(1, Ordering::SeqCst);
+                client.watch_traffic(app.traffic_visible());
+            })
+            .unwrap();
+        })
+    };
+    // Wait until the Daemon has been asked for counters a few times.
+    let deadline = Instant::now() + PATIENCE;
+    while world.nm.statistics_reads() < 4 {
+        assert!(Instant::now() < deadline, "polling never started");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::thread::sleep(Duration::from_millis(200));
+    let settled = frames.load(Ordering::SeqCst);
+    std::thread::sleep(Duration::from_millis(2500)); // proving a negative
+    assert_eq!(
+        frames.load(Ordering::SeqCst),
+        settled,
+        "flat graph drew frames"
+    );
+    tx.send(Msg::Key(KeyEvent::new(
+        KeyCode::Char('q'),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    looper.join().unwrap();
+}
+
+#[test]
+fn cards_show_where_you_are_and_enter_opens_their_tab() {
+    let mut rig = Rig::online();
+    let frame = rig.text(STANDARD);
+    for card in ["Wi-Fi", "Ethernet", "VPN", "Hotspot"] {
+        assert!(frame.contains(card), "{card}:\n{frame}");
+    }
+    assert!(
+        frame.contains("Home-5G") && frame.contains("Not started"),
+        "{frame}"
+    );
+
+    rig.type_str("jj");
+    rig.key(KeyCode::Enter);
+    assert_eq!(rig.app.tab().title(), "VPN");
+    rig.key(KeyCode::Char('1'));
+    rig.type_str("G");
+    rig.key(KeyCode::Enter);
+    assert_eq!(rig.app.tab().title(), "Hotspot");
+
+    // Narrow works the same: the cards are in the stack.
+    let mut rig = Rig::online();
+    rig.size(NARROW);
+    rig.key(KeyCode::Enter);
+    assert_eq!(rig.app.tab().title(), "Wi-Fi");
+}
+
+#[test]
+fn the_activity_strip_follows_the_network_live() {
+    let mut rig = Rig::online();
+    assert!(rig.text(STANDARD).contains("Joined Home-5G (Wi-Fi)"));
+    rig.world.nm.set_primary(None);
+    rig.world.nm.set_state(NmState::Disconnected);
+    rig.pump_until("the loss", |a| {
+        a.activity()
+            .first()
+            .is_some_and(|e| e.text == "Lost Home-5G")
+    });
+    let frame = rig.text(STANDARD);
+    let lost = frame.find("Lost Home-5G").expect("lost line");
+    let joined = frame.find("Joined Home-5G").expect("joined line");
+    assert!(lost < joined, "newest first:\n{frame}");
+    insta::assert_snapshot!("activity_strip_standard", frame);
+}
+
+#[test]
+fn the_activity_strip_has_a_friendly_empty_state() {
+    let world = World::start(NEXUS);
+    let mut rig = Rig::start(world, truecolor());
+    rig.pump_until("status", |a| a.status().is_some());
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("Nothing yet"), "{frame}");
+    insta::assert_snapshot!("activity_empty_standard", frame);
+}
+
+#[test]
+fn the_wide_overview_puts_traffic_beside_activity() {
+    let mut rig = Rig::online();
+    rig.size(WIDE);
+    rig.traffic(1_500_000, 120_000);
+    insta::assert_snapshot!("overview_wide_full", rig.text(WIDE));
+}
+
+#[test]
+fn a_short_window_drops_sections_instead_of_corrupting_them() {
+    let rig = Rig::online();
+    for size in [(60u16, 10u16), (60, 14), (100, 14), (100, 18)] {
+        let frame = rig.text(size);
+        assert!(frame.contains("Online"), "{size:?}:\n{frame}");
+        insta::assert_snapshot!(format!("overview_short_{}x{}", size.0, size.1), frame);
+    }
 }
