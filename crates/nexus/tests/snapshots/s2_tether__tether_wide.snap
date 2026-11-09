@@ -33,4 +33,4 @@ expression: rig.text(WIDE)
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
- j/k move  enter tether  h/l tab  ? help  q quit
+ j/k move  enter tether  h/l tab  : palette  ? help  q quit

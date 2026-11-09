@@ -15,7 +15,7 @@ expression: frame
 │                  │  Esc                  Back out; never quits                █n-in page is      │
 │                  │  o                    Open a Portal's login page           █                  │
 │                  │  f                    Overview: run the fix (asks first)   █nager 1.58.1      │
-│                  │  ?                    Show or hide this help               █──────────────────╯
+│                  │  ?                    Show or hide this help               │──────────────────╯
 │                  │  q                    Quit (Ctrl-C works anywhere)         │──────────────────╮
 │                  │  Wi-Fi: Enter         Join the selected Network            │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
 │                  │  Wi-Fi: r             Rescan                               │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
@@ -24,9 +24,9 @@ expression: frame
 │                  │  Wi-Fi: a             Toggle autoconnect                   │                  │
 │                  │  Wi-Fi: e             Edit the Profile's settings          │isit any plain... │
 │                  │  Wi-Fi: s             Share as a QR code (asks first)      │──────────────────╯
-│                  │  Wi-Fi: u             Undo the toast's action              │──────────────────╮
+│                  │  Hotspot: Enter       Use the selected phone's data        │──────────────────╮
+│                  │  Hotspot: x           Drop the phone's tether              │                  │
+│                  │  u                    Wi-Fi, Hotspot: undo the toast       │                  │
 │                  │                                                            │                  │
-│                  │  Login page won't show? A browser with secure DNS (DNS     │                  │
-│                  │  over HTTPS) hides the Portal by skipping the network's    │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

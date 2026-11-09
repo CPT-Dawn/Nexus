@@ -21,4 +21,4 @@ expression: rig.text(NARROW)
 │                                                          │
 │                                                          │
 ╰──────────────────────────────────────────────────────────╯
- j/k move  enter tether  d details  h/l tab  ? help  q quit
+ j/k move  enter tether  d details  : palette  ? help

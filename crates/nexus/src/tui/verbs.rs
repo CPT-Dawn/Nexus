@@ -27,10 +27,11 @@ pub enum Scope {
 pub enum Run {
     /// Press a key as the root layer sees it (works on any tab).
     Root(KeyCode),
-    /// Press a key as the Wi-Fi tab sees it (works while another tab shows).
-    Wifi(KeyCode),
+    /// Press a key as the given tab's handler sees it (works while another
+    /// tab shows; the Verb's `ready` says whether a selection is needed).
+    Key(Tab, KeyCode),
     /// Go to a tab.
-    Tab(Tab),
+    Go(Tab),
     /// Anything else. Returns whether the screen changed.
     Call(fn(&mut App) -> bool),
 }
@@ -52,7 +53,7 @@ pub struct Verb {
 }
 
 /// Every table of Verbs, in the order the help overlay lists them.
-pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI];
+pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, TETHER, UNDO];
 
 pub fn all() -> impl Iterator<Item = &'static Verb> {
     TABLES.iter().flat_map(|t| t.iter())
@@ -69,7 +70,7 @@ const fn go(verb: &'static str, key: &'static str, tab: Tab) -> Verb {
         key,
         help: "",
         scope: Scope::Any,
-        run: Run::Tab(tab),
+        run: Run::Go(tab),
         ready: always,
     }
 }
@@ -158,7 +159,7 @@ const fn wifi(
         key,
         help,
         scope: Scope::Tab(Tab::WiFi),
-        run: Run::Wifi(code),
+        run: Run::Key(Tab::WiFi, code),
         ready,
     }
 }
@@ -241,21 +242,86 @@ static WIFI: &[Verb] = &[
         KeyCode::Char('s'),
         saved,
     ),
-    wifi(
-        "Undo last change",
-        "revert",
-        "u",
-        "Undo the toast's action",
-        KeyCode::Char('u'),
+];
+
+// ---- Hotspot: Tethering ---------------------------------------------------------
+
+fn phone(app: &App) -> Result<&nexus_ipc::Phone, &'static str> {
+    if app.tab() != Tab::Hotspot {
+        return Err("Open the Hotspot tab and pick a phone first.");
+    }
+    app.tether().selected().ok_or("No phone is selected.")
+}
+
+const fn hotspot(
+    verb: &'static str,
+    words: &'static str,
+    key: &'static str,
+    help: &'static str,
+    code: KeyCode,
+    ready: fn(&App) -> Result<(), &'static str>,
+) -> Verb {
+    Verb {
+        verb,
+        words,
+        key,
+        help,
+        scope: Scope::Tab(Tab::Hotspot),
+        run: Run::Key(Tab::Hotspot, code),
+        ready,
+    }
+}
+
+static TETHER: &[Verb] = &[
+    hotspot(
+        "Tether to phone",
+        "bluetooth internet connect share connection",
+        "Enter",
+        "Use the selected phone's data",
+        KeyCode::Enter,
         |app| {
-            if app.toast().is_some_and(|t| t.undo.is_some()) {
+            if phone(app)?.connected {
+                Err("Already tethered to that phone.")
+            } else if app.tether().busy.is_some() {
+                Err("A tether is already starting.")
+            } else {
+                Ok(())
+            }
+        },
+    ),
+    hotspot(
+        "Drop tether",
+        "bluetooth disconnect stop phone",
+        "x",
+        "Drop the phone's tether",
+        KeyCode::Char('x'),
+        |app| {
+            if phone(app)?.connected {
                 Ok(())
             } else {
-                Err("Nothing to undo.")
+                Err("Not tethered to that phone.")
             }
         },
     ),
 ];
+
+// ---- both lists -----------------------------------------------------------------
+
+static UNDO: &[Verb] = &[Verb {
+    verb: "Undo last change",
+    words: "revert",
+    key: "u",
+    help: "Wi-Fi, Hotspot: undo the toast",
+    scope: Scope::Any,
+    run: Run::Call(App::undo),
+    ready: |app| {
+        if app.toast().is_some_and(|t| t.undo.is_some()) {
+            Ok(())
+        } else {
+            Err("Nothing to undo.")
+        }
+    },
+}];
 
 // ---- searching ------------------------------------------------------------------
 

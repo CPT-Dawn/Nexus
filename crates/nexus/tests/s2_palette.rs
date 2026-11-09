@@ -582,3 +582,15 @@ fn nothing_moves_by_itself_while_the_palette_or_help_is_open() {
     assert!(rig.app.next_tick().is_none(), "no timer behind the help");
     assert!(!rig.mouse(MouseEventKind::Moved, 3, 3));
 }
+
+#[test]
+fn hotspot_actions_are_listed_and_say_where_they_work() {
+    let mut rig = Rig::busy();
+    rig.palette("tether");
+    let frame = rig.text();
+    assert!(frame.contains("Tether to phone"), "{frame}");
+    assert!(
+        frame.contains("Open the Hotspot tab and pick a phone first."),
+        "{frame}"
+    );
+}

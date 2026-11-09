@@ -4,17 +4,17 @@ expression: bottom
 ---
  Nexus  Overview ▾  1/6                           ● Offline
 ╭ All keys (j/k scroll) ───────────────────────────────────╮
-│  f                    Overview: run the fix (asks first) │
-│  ?                    Show or hide this help             │
 │  q                    Quit (Ctrl-C works anywhere)       │
 │  Wi-Fi: Enter         Join the selected Network          │
-│  Wi-Fi: r             Rescan                             █
-│  Wi-Fi: x             Disconnect                         █
+│  Wi-Fi: r             Rescan                             │
+│  Wi-Fi: x             Disconnect                         │
 │  Wi-Fi: f             Forget (asks first)                █
 │  Wi-Fi: a             Toggle autoconnect                 █
 │  Wi-Fi: e             Edit the Profile's settings        █
 │  Wi-Fi: s             Share as a QR code (asks first)    █
-│  Wi-Fi: u             Undo the toast's action            │
+│  Hotspot: Enter       Use the selected phone's data      █
+│  Hotspot: x           Drop the phone's tether            █
+│  u                    Wi-Fi, Hotspot: undo the toast     │
 │                                                          │
 │  Login page won't show? A browser with secure DNS (DNS   │
 │  over HTTPS) hides the Portal by skipping the network's  │

@@ -4,25 +4,25 @@ expression: bottom
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
 ╭ Connections ─────╭ All keys (j/k scroll) ─────────────────────────────────────╮──────────────────╮
-│ ▸ ○ Wi-Fi        │  g / G                Jump to top / bottom                 │ ░░░░░░           │
-│     Not connected│  h / l, Left / Right  Previous / next tab                  █░██████░░         │
-│   ○ Ethernet     │  Tab / Shift-Tab      Next / previous tab                  █░██░░░░           │
-│     Not connected│  1 - 6                Jump to a tab                        █░████░░           │
-│   ○ VPN          │  Enter                Open the selected card's tab         █░██░░░░           │
-│     Not connected│  d                    Details sheet (small windows)        █░██████░░         │
-│   ○ Hotspot      │  Esc                  Back out; never quits                █ ░░░░░░           │
-│     Not started  │  o                    Open a Portal's login page           █                  │
-│                  │  f                    Overview: run the fix (asks first)   █                  │
-│                  │  ?                    Show or hide this help               █                  │
-│                  │  q                    Quit (Ctrl-C works anywhere)         █──────────────────╯
-│                  │  Wi-Fi: Enter         Join the selected Network            █──────────────────╮
-│                  │  Wi-Fi: r             Rescan                               █⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                  │  Wi-Fi: x             Disconnect                           │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                  │  Wi-Fi: f             Forget (asks first)                  │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│ ▸ ○ Wi-Fi        │  Tab / Shift-Tab      Next / previous tab                  │ ░░░░░░           │
+│     Not connected│  1 - 6                Jump to a tab                        │░██████░░         │
+│   ○ Ethernet     │  Enter                Open the selected card's tab         █░██░░░░           │
+│     Not connected│  d                    Details sheet (small windows)        █░████░░           │
+│   ○ VPN          │  Esc                  Back out; never quits                █░██░░░░           │
+│     Not connected│  o                    Open a Portal's login page           █░██████░░         │
+│   ○ Hotspot      │  f                    Overview: run the fix (asks first)   █ ░░░░░░           │
+│     Not started  │  ?                    Show or hide this help               █                  │
+│                  │  q                    Quit (Ctrl-C works anywhere)         █                  │
+│                  │  Wi-Fi: Enter         Join the selected Network            █                  │
+│                  │  Wi-Fi: r             Rescan                               █──────────────────╯
+│                  │  Wi-Fi: x             Disconnect                           █──────────────────╮
+│                  │  Wi-Fi: f             Forget (asks first)                  █⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
 │                  │  Wi-Fi: a             Toggle autoconnect                   │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                  │  Wi-Fi: e             Edit the Profile's settings          │──────────────────╯
-│                  │  Wi-Fi: s             Share as a QR code (asks first)      │──────────────────╮
-│                  │  Wi-Fi: u             Undo the toast's action              │s show up here.   │
+│                  │  Wi-Fi: e             Edit the Profile's settings          │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                  │  Wi-Fi: s             Share as a QR code (asks first)      │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                  │  Hotspot: Enter       Use the selected phone's data        │──────────────────╯
+│                  │  Hotspot: x           Drop the phone's tether              │──────────────────╮
+│                  │  u                    Wi-Fi, Hotspot: undo the toast       │s show up here.   │
 │                  │                                                            │                  │
 │                  │  Login page won't show? A browser with secure DNS (DNS     │                  │
 │                  │  over HTTPS) hides the Portal by skipping the network's    │                  │
