@@ -640,8 +640,10 @@ fn an_idle_tui_draws_no_frames() {
             let mut app = App::new(truecolor());
             tui::event_loop(&mut terminal, &mut app, &rx, |app| {
                 frames.fetch_add(1, Ordering::SeqCst);
+                // Settled: the Daemon's picture is in, and the "You're online"
+                // toast's effect has ended (it asks for frames while it runs).
                 online.store(
-                    app.status().is_some() && !app.activity().is_empty(),
+                    app.status().is_some() && !app.activity().is_empty() && !app.animating(),
                     Ordering::SeqCst,
                 );
             })

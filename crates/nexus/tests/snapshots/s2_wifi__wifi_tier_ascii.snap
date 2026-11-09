@@ -32,7 +32,8 @@ expression: frame
  j/k move  enter join  r scan  h/l tab  : palette  ? help  q quit
 
  2051 cells  fg=- bg=- mods=[]
-  116 cells  fg=idx116 bg=- mods=[]
+   44 cells  fg=idx115 bg=- mods=[]
+   72 cells  fg=idx116 bg=- mods=[]
     7 cells  fg=idx116 bg=- mods=[bold]
   230 cells  fg=idx145 bg=- mods=[]
     9 cells  fg=idx145 bg=- mods=[bold]

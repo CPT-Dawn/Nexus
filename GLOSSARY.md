@@ -98,3 +98,11 @@ _Avoid_: diagnostics, troubleshooter, health check
 **Verb**:
 One thing the TUI can do, named in plain English ("Forget network") with its key. The single table of Verbs drives the command palette and the `?` help, so a key is documented and findable by being listed once.
 _Avoid_: command, action, menu item
+
+**Effect**:
+A short animation the TUI plays because something happened: a tab glides in, a joined Network blooms, the focal element pulses while connecting, an error toast shakes once, a toast slides in. Every Effect starts from an event and ends by itself; nothing animates on its own, so an idle TUI draws no frames.
+_Avoid_: animation, transition, ambient motion
+
+**Reduced motion**:
+The mode (`NEXUS_REDUCE_MOTION=1` or `REDUCE_MOTION=1`) in which nothing moves: tabs change at once, toasts appear in place, no pulse, no shake. The colour changes that say what happened stay. Terminals with 16 colours or none play no Effects at all.
+_Avoid_: no-animation mode, calm mode

@@ -1,0 +1,61 @@
+---
+source: crates/nexus/tests/s2_effects.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  * Online
++ Connections ---------------++ Status ------------------------------------------------------------+
+| > * Wi-Fi                  ||   ####    ##    ##  ##        ######    ##    ##  ########         |
+|     Home-5G                || ##    ##  ####  ##  ##          ##      ####  ##  ##               |
+|   o Ethernet               || ##    ##  ########  ##          ##      ########  ######           |
+|     Not connected          || ##    ##  ##  ####  ##          ##      ##  ####  ##               |
+|   o VPN                    ||   ####    ##    ##  ########  ######    ##    ##  ########         |
+|     Not connected          ||                                                                    |
+|   o Hotspot                || You're online via Wi-Fi (Home-5G). Everything looks healthy.       |
+|     Not started            || Internet: full  |  Backend: NetworkManager 1.50                    |
+|                            |+--------------------------------------------------------------------+
+|                            |+ Traffic -----------------------------------------------------------+
+|                            || v 0 B/s                                                            |
+|                            || down             _________________________________________________ |
+|                            || ^ 0 B/s                                                            |
+|                            || up               _________________________________________________ |
+|                            |+--------------------------------------------------------------------+
+|                            |+ Recent activity ---------------------------------------------------+
+|                            || Nothing yet. Joins, losses, VPNs and sign-in pages show up here.   |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
++----------------------------++--------------------------------------------------------------------+
+ j/k move  enter open  h/l tab  : palette  ? help  q quit
+
+  426 cells  fg=#2c4a4c bg=- mods=[]
+  120 cells  fg=#5d7377 bg=- mods=[]
+    6 cells  fg=#8de3b2 bg=- mods=[]
+   16 cells  fg=#8de3b9 bg=- mods=[]
+   16 cells  fg=#8de3c0 bg=- mods=[]
+   13 cells  fg=#8de3c7 bg=- mods=[]
+   19 cells  fg=#8de3ce bg=- mods=[]
+   20 cells  fg=#8de3d5 bg=- mods=[]
+    1 cells  fg=#8de3dc bg=#182724 mods=[bold]
+   11 cells  fg=#8de3dc bg=#182727 mods=[]
+  108 cells  fg=#8de3dc bg=- mods=[]
+    6 cells  fg=#8de3dc bg=- mods=[bold]
+   12 cells  fg=#9db4b5 bg=#182725 mods=[]
+   14 cells  fg=#9db4b5 bg=#182727 mods=[]
+    4 cells  fg=#9db4b5 bg=#182728 mods=[]
+  127 cells  fg=#9db4b5 bg=- mods=[]
+  237 cells  fg=#9ece6a bg=- mods=[]
+   62 cells  fg=#e4f2f0 bg=#17302f mods=[bold]
+    1 cells  fg=#e4f2f0 bg=#182724 mods=[bold]
+    1 cells  fg=#e4f2f0 bg=#182725 mods=[bold]
+   78 cells  fg=#e4f2f0 bg=- mods=[]
+   66 cells  fg=#e4f2f0 bg=- mods=[bold]
+    5 cells  fg=- bg=#182724 mods=[]
+   16 cells  fg=- bg=#182725 mods=[]
+   13 cells  fg=- bg=#182726 mods=[]
+   38 cells  fg=- bg=#182727 mods=[]
+    3 cells  fg=- bg=#182728 mods=[]
+ 1361 cells  fg=- bg=- mods=[]

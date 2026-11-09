@@ -324,16 +324,48 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
     }
 }
 
+/// Where a toast sits in `body`: bottom right, one column and one row clear of
+/// the border. `None` when there is no room for it.
+pub(super) fn toast_rect(toast: &super::wifi::Toast, body: Rect) -> Option<Rect> {
+    let undo = if toast.undo.is_some() { "  u undo" } else { "" };
+    let width = (toast.text.chars().count() + undo.len() + 4)
+        .min(body.width.saturating_sub(2) as usize) as u16;
+    if body.height < 5 || width < 8 {
+        return None;
+    }
+    // A long message wraps (up to four lines) instead of being cut off.
+    let need = toast.text.chars().count() + undo.len();
+    let inner_width = (width as usize).saturating_sub(4).max(1);
+    let lines = if need <= inner_width {
+        1
+    } else {
+        // Words break early: leave some slack.
+        need.div_ceil(inner_width.saturating_sub(8).max(1))
+    }
+    .clamp(1, 4)
+    .min(body.height.saturating_sub(4).max(1) as usize) as u16;
+    let height = lines + 2;
+    Some(Rect {
+        x: body.right().saturating_sub(width + 2),
+        y: body.bottom().saturating_sub(height + 1),
+        width,
+        height,
+    })
+}
+
 /// The layers over the tab: password field, Forget confirmation, toast.
 /// They show on any tab, because a Secret prompt can open anywhere.
-pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &Sym) {
+///
+/// `modal` is where dialogs go: the detail pane when the screen is split, so
+/// the list beside them stays whole; `body` is the whole room, for the toast.
+pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, modal: Rect, look: &Look, sym: &Sym) {
     if app.field().is_none()
         && let Some(share) = app.share()
     {
-        super::share::draw(f, share, body, look, sym);
+        super::share::draw(f, share, modal, look, sym);
     }
     if let Some(field) = app.field() {
-        let rect = centered(body, 62, 7);
+        let rect = centered(modal, 62, 7);
         f.render_widget(Clear, rect);
         let vpn = field.prompt.kind == PromptKind::VpnSecret;
         let title = if vpn {
@@ -382,7 +414,7 @@ pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &
         ];
         f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
     } else if let Some(confirm) = app.confirm() {
-        let rect = centered(body, 52, 6);
+        let rect = centered(modal, 52, 6);
         f.render_widget(Clear, rect);
         let block = sym.block(look, "Forget", true);
         let inner = block.inner(rect);
@@ -402,29 +434,8 @@ pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &
 
     if let Some(toast) = app.toast() {
         let undo = if toast.undo.is_some() { "  u undo" } else { "" };
-        let width = (toast.text.chars().count() + undo.len() + 4)
-            .min(body.width.saturating_sub(2) as usize) as u16;
-        if body.height < 5 || width < 8 {
+        let Some(rect) = toast_rect(toast, body) else {
             return;
-        }
-        // A long message wraps (up to four lines) instead of being cut off.
-        let need = toast.text.chars().count() + undo.len();
-        let inner_width = (width as usize).saturating_sub(4).max(1);
-        let lines = if need <= inner_width {
-            1
-        } else {
-            // Words break early: leave some slack.
-            need.div_ceil(inner_width.saturating_sub(8).max(1))
-        }
-        .clamp(1, 4)
-        .min(body.height.saturating_sub(4).max(1) as usize) as u16;
-        let height = lines + 2;
-        let rect = Rect {
-            // Inside the frame: one column and one row clear of the border.
-            x: body.right().saturating_sub(width + 2),
-            y: body.bottom().saturating_sub(height + 1),
-            width,
-            height,
         };
         f.render_widget(Clear, rect);
         let block = sym.block(look, if toast.bad { "Problem" } else { "Done" }, false);

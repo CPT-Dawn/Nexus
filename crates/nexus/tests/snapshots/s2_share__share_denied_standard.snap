@@ -12,13 +12,13 @@ expression: frame
 │     Rooftop-6E ▂▄▆█ wpa2   ││                                                                    │
 │   ── Saved, out of range   ││                                                                    │
 │ ▸   Parents House     auto ││                                                                    │
-│     Hotel Lobby  ╭ Share Parents House ───────────────────────────────────────╮                  │
-│                  │ NetworkManager did not authorize showing the password of   │                  │
-│                  │ Parents House. Approve the authorization request and try   │                  │
-│                  │ again.                                                     │                  │
-│                  │                                                            │                  │
-│                  │ enter try again   esc close                                │                  │
-│                  ╰────────────────────────────────────────────────────────────╯                  │
+│     Hotel Lobby     manual ││   ╭ Share Parents House ───────────────────────────────────────╮   │
+│                            ││   │ NetworkManager did not authorize showing the password of   │   │
+│                            ││   │ Parents House. Approve the authorization request and try   │   │
+│                            ││   │ again.                                                     │   │
+│                            ││   │                                                            │   │
+│                            ││   │ enter try again   esc close                                │   │
+│                            ││   ╰────────────────────────────────────────────────────────────╯   │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

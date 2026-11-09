@@ -3,14 +3,14 @@ source: crates/nexus/tests/s2_palette.rs
 expression: rig.text()
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
-╭ Connections ────╭ Command palette ─────────────────────────────────────────────╮─────────────────╮
-│ ▸ ○ Wi-Fi       │ : zzzzzz▏                                                    │░░░░░░           │
-│     Not connecte│ ──────────────────────────────────────────────────────────── │██████░░         │
-│   ○ Ethernet    │ No action matches that.                                      │██░░░░           │
-│     Not connecte│                                                              │████░░           │
-│   ○ VPN         ╰──────────────────────────────────────────────────────────────╯██░░░░           │
-│     Not connected          ││   ░░██░░░░██░░  ░░██░░  ░░██████░░██████░░██░░██░░██████░░         │
-│   ○ Hotspot                ││     ░░    ░░      ░░      ░░░░░░  ░░░░░░  ░░  ░░  ░░░░░░           │
+╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+│ ▸ ○ Wi-Fi                  ││  ╭ Command palette ─────────────────────────────────────────────╮  │
+│     Not connected          ││  │ : zzzzzz▏                                                    │  │
+│   ○ Ethernet               ││ ░│ ──────────────────────────────────────────────────────────── │  │
+│     Not connected          ││ ░│ No action matches that.                                      │  │
+│   ○ VPN                    ││ ░│                                                              │  │
+│     Not connected          ││  ╰──────────────────────────────────────────────────────────────╯  │
+│   ○ Hotspot                ││   ░░  ░    ░    ░░░░ ░░░  ░  ░ ░░░░                                │
 │     Not started            ││                                                                    │
 │                            ││ You're offline. No network is connected.                           │
 │                            ││ Internet: none  |  Backend: networkmanager 1.58.1                  │

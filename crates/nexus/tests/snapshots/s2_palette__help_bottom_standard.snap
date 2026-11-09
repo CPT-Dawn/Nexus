@@ -4,13 +4,13 @@ expression: bottom
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
 ╭ Connections ─────╭ All keys (j/k scroll) ─────────────────────────────────────╮──────────────────╮
-│ ▸ ○ Wi-Fi        │  o                    Open a Portal's login page           │ ░░░░░░           │
-│     Not connected│  f                    Overview: run the fix (asks first)   │░██████░░         │
-│   ○ Ethernet     │  ?                    Show or hide this help               │░██░░░░           │
-│     Not connected│  q                    Quit (Ctrl-C works anywhere)         │░████░░           │
-│   ○ VPN          │  Wi-Fi: Enter         Join the selected Network            █░██░░░░           │
-│     Not connected│  Wi-Fi: r             Rescan                               █░██████░░         │
-│   ○ Hotspot      │  Wi-Fi: x             Disconnect                           █ ░░░░░░           │
+│ ▸ ○ Wi-Fi        │  o                    Open a Portal's login page           │                  │
+│     Not connected│  f                    Overview: run the fix (asks first)   │                  │
+│   ○ Ethernet     │  ?                    Show or hide this help               │                  │
+│     Not connected│  q                    Quit (Ctrl-C works anywhere)         │                  │
+│   ○ VPN          │  Wi-Fi: Enter         Join the selected Network            █                  │
+│     Not connected│  Wi-Fi: r             Rescan                               █                  │
+│   ○ Hotspot      │  Wi-Fi: x             Disconnect                           █                  │
 │     Not started  │  Wi-Fi: f             Forget (asks first)                  █                  │
 │                  │  Wi-Fi: a             Toggle autoconnect                   █                  │
 │                  │  Wi-Fi: e             Edit the Profile's settings          █                  │

@@ -1,0 +1,38 @@
+---
+source: crates/nexus/tests/s2_effects.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
+╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+│ ▸ ● Wi-Fi                  ││   ████    ██    ██  ██        ██████    ██    ██  ████████         │
+│     Home-5G                ││ ██    ██  ████  ██  ██          ██      ████  ██  ██               │
+│   ○ Ethernet               ││ ██    ██  ████████  ██          ██      ████████  ██████           │
+│     Not connected          ││ ██    ██  ██  ████  ██          ██      ██  ████  ██               │
+│   ○ VPN                    ││   ████    ██    ██  ████████  ██████    ██    ██  ████████         │
+│     Not connected          ││                                                                    │
+│   ○ Hotspot                ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │
+│     Not started            ││ Internet: full  |  Backend: NetworkManager 1.50                    │
+│                            │╰────────────────────────────────────────────────────────────────────╯
+│                            │╭ Traffic ───────────────────────────────────────────────────────────╮
+│                            ││ ↓ 0 B/s          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                            ││ down             ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                            ││ ↑ 0 B/s          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                            ││ up               ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                            │╰────────────────────────────────────────────────────────────────────╯
+│                            │╭ Recent activity ───────────────────────────────────────────────────╮
+│                            ││ Nothing yet. Joins, losses, VPNs and sign-in pages show up here.   │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter open  h/l tab  : palette  ? help  q quit
+
+ 2334 cells  fg=- bg=- mods=[]
+    6 cells  fg=- bg=- mods=[bold,reversed]
+  284 cells  fg=- bg=- mods=[bold]
+  120 cells  fg=- bg=- mods=[dim]
+   56 cells  fg=- bg=- mods=[reversed]

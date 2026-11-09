@@ -12,13 +12,13 @@ expression: shown
 │     Rooftop-6E ▂▄▆█ wpa2   ││ Access points 1                                                    │
 │   ── Saved, out of range   ││ Adapter       wlan0                                                │
 │     Parents House     auto ││                                                                    │
-│     Hotel Lobby  ╭ Join Work-Secure ──────────────────────────────────────────╮ssword.           │
-│                  │ Password for Work-Secure                                   │                  │
-│                  │                                                            │                  │
-│                  │ Password  hunter22_                                        │                  │
-│                  │                                                            │                  │
-│                  │ enter join   ctrl-r show   esc cancel                      │                  │
-│                  ╰────────────────────────────────────────────────────────────╯                  │
+│     Hotel Lobby     manual ││ Pr╭ Join Work-Secure ──────────────────────────────────────────╮   │
+│                            ││   │ Password for Work-Secure                                   │   │
+│                            ││   │                                                            │   │
+│                            ││   │ Password  hunter22_                                        │   │
+│                            ││   │                                                            │   │
+│                            ││   │ enter join   ctrl-r show   esc cancel                      │   │
+│                            ││   ╰────────────────────────────────────────────────────────────╯   │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

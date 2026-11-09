@@ -11,6 +11,7 @@ mod client;
 mod doctor_view;
 mod eap_form;
 mod eap_ui;
+mod fx;
 mod graph;
 mod hits;
 mod layout;
@@ -19,6 +20,7 @@ mod overview;
 mod profile;
 mod profile_ui;
 mod share;
+mod surface;
 mod tether;
 mod tether_ui;
 mod theme;
@@ -42,6 +44,7 @@ use ratatui::buffer::Buffer;
 pub use app::{App, Conn, FixState, Layer, Msg, Palette, Tab};
 pub use caps::{Caps, ColorTier, Glyphs};
 pub use client::Client;
+pub use fx::Movement;
 pub use profile::{Editor, Phase, ProfileMsg, Row};
 pub use wifi::{PasswordField, Toast};
 
@@ -49,6 +52,25 @@ pub use wifi::{PasswordField, Toast};
 pub fn render(app: &App, width: u16, height: u16) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test backend");
     terminal.draw(|f| view::draw(f, app)).expect("draw");
+    terminal.backend().buffer().clone()
+}
+
+/// One frame as the person sees it: the views, then the effects over them.
+fn frame(f: &mut ratatui::Frame, app: &mut App) {
+    view::draw(f, app);
+    app.fx_frame(f.buffer_mut());
+}
+
+/// Draws `app` and runs its effects for `step` of virtual time, the way a
+/// frame `step` after the last one would look (what effect tests snapshot).
+pub fn render_fx(app: &mut App, width: u16, height: u16, step: std::time::Duration) -> Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test backend");
+    terminal
+        .draw(|f| {
+            view::draw(f, app);
+            app.fx_step(f.buffer_mut(), step);
+        })
+        .expect("draw");
     terminal.backend().buffer().clone()
 }
 
@@ -61,7 +83,7 @@ pub fn event_loop<B: Backend>(
     rx: &Receiver<Msg>,
     mut on_frame: impl FnMut(&App),
 ) -> Result<(), B::Error> {
-    terminal.draw(|f| view::draw(f, app))?;
+    terminal.draw(|f| frame(f, app))?;
     on_frame(app);
     while !app.should_quit() {
         let first = match app.next_tick() {
@@ -77,7 +99,7 @@ pub fn event_loop<B: Backend>(
             dirty |= app.update(msg);
         }
         if dirty {
-            terminal.draw(|f| view::draw(f, app))?;
+            terminal.draw(|f| frame(f, app))?;
             on_frame(app);
         }
     }
@@ -122,6 +144,15 @@ fn mouse_capture(on: bool) {
     }
 }
 
+/// Whether the environment asks for reduced motion: `NEXUS_REDUCE_MOTION` or
+/// the common `REDUCE_MOTION`, set to anything but empty or `0`.
+pub fn reduced_motion(env: impl Fn(&str) -> Option<String>) -> bool {
+    ["NEXUS_REDUCE_MOTION", "REDUCE_MOTION"]
+        .into_iter()
+        .filter_map(env)
+        .any(|v| !v.is_empty() && v != "0")
+}
+
 /// `nexus` with no subcommand: the TUI on the real terminal and socket.
 pub fn run(ascii: bool, nerd: bool) -> io::Result<()> {
     let Some(socket) = nexus_ipc::socket_path() else {
@@ -129,6 +160,7 @@ pub fn run(ascii: bool, nerd: bool) -> io::Result<()> {
         return Err(io::ErrorKind::NotFound.into());
     };
     let mut app = App::new(Caps::from_env(ascii, nerd));
+    app.reduce_motion(reduced_motion(|k| std::env::var(k).ok()));
     let (tx, rx) = mpsc::channel();
     let mut terminal = ratatui::try_init()?;
     mouse_capture(true);
