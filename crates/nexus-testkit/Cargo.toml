@@ -1,0 +1,20 @@
+[package]
+name = "nexus-testkit"
+description = "Test harness S1: private dbus-daemon, scriptable fake NetworkManager, real Daemon."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+nexus-ipc.workspace = true
+serde_json = "1"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+zbus = { version = "6", default-features = false, features = ["tokio", "service", "object-manager"] }
+
+[lints]
+workspace = true
