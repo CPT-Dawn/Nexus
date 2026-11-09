@@ -236,6 +236,19 @@ t_real_root_needs_root() {
   [ $rc != 0 ] && grep -qi 'root' <<<"$out"
 }
 
+# Real use leaves NEXUS_SWITCH_ROOT empty; the revert must still reach the end.
+t_real_root_revert_dry_run() {
+  setup
+  local out rc
+  unset NEXUS_SWITCH_ROOT
+  mkdir -p "$T/backup"
+  : >"$T/backup/units"
+  out=$(NEXUS_SWITCH_BACKUP=$T/backup "$SCRIPT" --dry-run --revert 2>&1)
+  rc=$?
+  teardown
+  [ $rc = 0 ] && grep -q '^+ rm -rf /etc/iwd$' <<<"$out" && grep -q '== Done' <<<"$out"
+}
+
 check "dry-run prints every step and changes nothing" t_dry_run_changes_nothing
 check "switch then revert restores previous state exactly" t_switch_then_revert_restores
 check "refuses partially configured state without confirmation" t_refuses_partial_state_without_confirmation
@@ -244,5 +257,6 @@ check "second switch refused without confirmation" t_second_switch_refused
 check "resume finishes an interrupted switch" t_resume_finishes_an_interrupted_switch
 check "resume without a backup fails" t_resume_without_backup_fails
 check "refuses to touch the real system unless root" t_real_root_needs_root
+check "revert dry-run works on the real root" t_real_root_revert_dry_run
 echo "$((total - fails))/$total passed"
 [ $fails = 0 ]

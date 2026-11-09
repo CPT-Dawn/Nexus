@@ -235,7 +235,7 @@ do_revert() {
   done <"$BACKUP/units"
   say "== Restoring files"
   for p in "${TRACKED[@]}"; do
-    run rm -rf "${ROOT:?}/$p"
+    run rm -rf "$ROOT/${p:?}"
     if [ -e "$BACKUP/files/$p" ] || [ -L "$BACKUP/files/$p" ]; then
       run mkdir -p "$ROOT/$(dirname "$p")"
       run cp -a -P "$BACKUP/files/$p" "$ROOT/$p"
