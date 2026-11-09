@@ -22,6 +22,12 @@ use crate::config::TrustConfig;
 
 /// `$XDG_STATE_HOME/nexus/trust.json`, else `~/.local/state/nexus/trust.json`.
 pub fn default_path() -> Option<PathBuf> {
+    Some(state_dir()?.join("trust.json"))
+}
+
+/// `$XDG_STATE_HOME/nexus`, else `~/.local/state/nexus`: where the Daemon keeps
+/// what it remembers.
+pub fn state_dir() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_STATE_HOME")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
@@ -30,7 +36,7 @@ pub fn default_path() -> Option<PathBuf> {
                 .filter(|v| !v.is_empty())
                 .map(|h| PathBuf::from(h).join(".local/state"))
         })?;
-    Some(base.join("nexus").join("trust.json"))
+    Some(base.join("nexus"))
 }
 
 /// What the user marked, by `WifiNetwork.id`.

@@ -26,12 +26,46 @@ use crate::backend::nm::NetworkManager;
 use crate::config::{self, Settings};
 use crate::secrets::Broker;
 
-/// `nexus daemon`.
-pub fn run() -> ExitCode {
+/// A log file grows to this size before it is set aside (once).
+const LOG_LIMIT: u64 = 1024 * 1024;
+
+/// Under systemd, stderr is the journal. Anywhere else the log goes to
+/// `$XDG_STATE_HOME/nexus/daemon.log` (the last run's file is kept as
+/// `daemon.log.1`), and to stderr when that file cannot be opened.
+fn init_logging() {
+    let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    let under_systemd = std::env::var_os("JOURNAL_STREAM").is_some();
+    if !under_systemd && let Some(file) = open_log_file() {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter())
+            .with_ansi(false)
+            .with_writer(std::sync::Mutex::new(file))
+            .init();
+        return;
+    }
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with_env_filter(filter())
         .with_writer(std::io::stderr)
         .init();
+}
+
+fn open_log_file() -> Option<std::fs::File> {
+    let dir = trust::state_dir()?;
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join("daemon.log");
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() > LOG_LIMIT) {
+        let _ = std::fs::rename(&path, dir.join("daemon.log.1"));
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .ok()
+}
+
+/// `nexus daemon`.
+pub fn run() -> ExitCode {
+    init_logging();
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

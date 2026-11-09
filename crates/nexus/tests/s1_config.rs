@@ -371,6 +371,35 @@ fn a_check_switched_off_in_networkmanager_is_not_switched_on_by_a_default_config
 }
 
 #[test]
+fn outside_systemd_the_daemon_logs_to_a_file_in_the_state_dir() {
+    let mut world = World::builder(NEXUS).daemon(false).start();
+    let mut cmd = world.nexus();
+    cmd.env_remove("JOURNAL_STREAM")
+        .env("XDG_STATE_HOME", world.dir().join("state"))
+        .arg("daemon")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    let child = cmd.spawn().expect("spawn nexus daemon");
+    world.adopt_daemon(child);
+    let log = world.dir().join("state/nexus/daemon.log");
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let text = std::fs::read_to_string(&log).unwrap_or_default();
+        if text.contains("listening") {
+            assert!(!text.contains('\u{1b}'), "colour codes in a log file");
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < until,
+            "no log line in {}",
+            log.display()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+#[test]
 fn config_get_reports_the_address_networkmanager_checks() {
     let world = World::start(NEXUS);
     world.nm.set_connectivity_uri("http://check.example/nm.txt");

@@ -288,7 +288,9 @@ echo "Connection '$name' ($uuid) successfully added.""#,
             .env("XDG_RUNTIME_DIR", self.runtime_dir())
             .env("DBUS_SYSTEM_BUS_ADDRESS", &self.nm_bus.address)
             .env("DBUS_SESSION_BUS_ADDRESS", self.session_address())
-            .env("NEXUS_VPN_PLUGIN_DIRS", self.tmp.path().join("plugins"));
+            .env("NEXUS_VPN_PLUGIN_DIRS", self.tmp.path().join("plugins"))
+            // Like a systemd user service: the Daemon logs to stderr (the world's daemon.log).
+            .env("JOURNAL_STREAM", "1:1");
         for (k, v) in &self.env {
             cmd.env(k, v);
         }
