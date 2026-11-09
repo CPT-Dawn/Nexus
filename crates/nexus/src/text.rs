@@ -942,3 +942,37 @@ mod tests {
         assert_eq!(f.message, "Wrong password for Home-5G.");
     }
 }
+
+// Portal, autoconnect and the activity log on the command line.
+
+pub fn autoconnect_set(ssid: &str, enabled: bool) -> String {
+    if enabled {
+        format!("{ssid} will be joined automatically.")
+    } else {
+        format!("{ssid} will only be joined when you ask.")
+    }
+}
+
+pub fn portal_line(portal: Option<&nexus_ipc::Portal>) -> String {
+    match portal {
+        Some(p) => format!(
+            "{} wants a login. Run `nexus portal open` to open {}.",
+            p.network, p.url
+        ),
+        None => "No login is being asked for.".into(),
+    }
+}
+
+pub fn portal_opened(url: &str) -> String {
+    format!("Opened {url} in your browser.")
+}
+
+/// `90` is `1 min ago`, `7300` is `2 h ago`.
+pub fn ago(secs: u64) -> String {
+    match secs {
+        0..=59 => "just now".into(),
+        60..=3599 => format!("{} min ago", secs / 60),
+        3600..=86_399 => format!("{} h ago", secs / 3600),
+        _ => format!("{} d ago", secs / 86_400),
+    }
+}

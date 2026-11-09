@@ -44,6 +44,8 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::UnknownPort => 28,
         // 29-31 are `nexus menu`'s launcher failures (`menu.rs`).
         ErrorCode::UnknownDevice => 32,
+        ErrorCode::NoPortal => 33,
+        ErrorCode::OpenFailed => 34,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -240,35 +242,8 @@ pub fn wifi_join_eap(
     json: bool,
     hex: bool,
 ) -> ExitCode {
-    eap.password = match source {
-        PasswordSource::Flag(p) => Some(Secret::new(p)),
-        PasswordSource::Stdin => {
-            let mut line = zeroize::Zeroizing::new(String::new());
-            if let Err(e) = std::io::stdin().read_line(&mut line) {
-                eprintln!("nexus: cannot read the password from stdin: {e}");
-                return ExitCode::FAILURE;
-            }
-            Some(Secret::new(line.trim_end_matches(['\n', '\r'])))
-        }
-        PasswordSource::None
-            if eap.method != nexus_ipc::EapMethod::Tls
-                && std::io::IsTerminal::is_terminal(&std::io::stdin()) =>
-        {
-            read_masked("Password")
-        }
-        PasswordSource::None => None,
-    };
-    let errors = eap.validate();
-    if !errors.is_empty() {
-        let failure = crate::text::invalid_eap(ssid, &errors);
-        eprintln!("nexus: {}", failure.message);
-        return ExitCode::from(exit_code(failure.code));
-    }
-    if eap.skips_validation() {
-        eprintln!(
-            "nexus: warning: not checking {ssid}'s certificate. Anyone nearby can pose as it \
-             and read your password."
-        );
+    if let Err(code) = prepare_eap(ssid, &mut eap, source) {
+        return code;
     }
     let network = match network_of(ssid, hex) {
         Ok(n) => n,
@@ -282,6 +257,47 @@ pub fn wifi_join_eap(
             println!("{}", crate::text::joined(&j.ssid));
         }
     })
+}
+
+/// Fills in the password of `eap` from `source` and checks the settings, so a
+/// bad form never costs a round trip. `name` is what the messages call the
+/// Network or port.
+fn prepare_eap(
+    name: &str,
+    eap: &mut nexus_ipc::Eap,
+    source: PasswordSource,
+) -> Result<(), ExitCode> {
+    eap.password = match source {
+        PasswordSource::Flag(p) => Some(Secret::new(p)),
+        PasswordSource::Stdin => {
+            let mut line = zeroize::Zeroizing::new(String::new());
+            if let Err(e) = std::io::stdin().read_line(&mut line) {
+                eprintln!("nexus: cannot read the password from stdin: {e}");
+                return Err(ExitCode::FAILURE);
+            }
+            Some(Secret::new(line.trim_end_matches(['\n', '\r'])))
+        }
+        PasswordSource::None
+            if eap.method != nexus_ipc::EapMethod::Tls
+                && std::io::IsTerminal::is_terminal(&std::io::stdin()) =>
+        {
+            read_masked("Password")
+        }
+        PasswordSource::None => None,
+    };
+    let errors = eap.validate();
+    if !errors.is_empty() {
+        let failure = crate::text::invalid_eap(name, &errors);
+        eprintln!("nexus: {}", failure.message);
+        return Err(ExitCode::from(exit_code(failure.code)));
+    }
+    if eap.skips_validation() {
+        eprintln!(
+            "nexus: warning: not checking {name}'s certificate. Anyone nearby can pose as it \
+             and read your password."
+        );
+    }
+    Ok(())
 }
 
 /// The Network id of what was typed: the SSID's own bytes, or with `hex` the
@@ -451,6 +467,71 @@ pub fn wifi_disconnect(json: bool) -> ExitCode {
     })
 }
 
+/// `nexus wifi autoconnect <ssid> on|off`.
+pub fn wifi_autoconnect(ssid: &str, enabled: bool, hex: bool, json: bool) -> ExitCode {
+    let network = match network_of(ssid, hex) {
+        Ok(n) => n,
+        Err(code) => return code,
+    };
+    wifi_call(Op::WifiAutoconnect { network, enabled }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(a) = serde_json::from_value::<nexus_ipc::AutoconnectSet>(value) {
+            println!("{}", crate::text::autoconnect_set(&a.ssid, a.enabled));
+        }
+    })
+}
+
+/// `nexus portal [status] [--json]`.
+pub fn portal_status(json: bool) -> ExitCode {
+    wifi_call(Op::Portal, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(p) = serde_json::from_value::<nexus_ipc::PortalState>(value) {
+            println!("{}", crate::text::portal_line(p.portal.as_ref()));
+        }
+    })
+}
+
+/// `nexus portal open [--json]`.
+pub fn portal_open(json: bool) -> ExitCode {
+    wifi_call(Op::PortalOpen, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(o) = serde_json::from_value::<nexus_ipc::PortalOpened>(value) {
+            println!("{}", crate::text::portal_opened(&o.url));
+        }
+    })
+}
+
+/// `nexus activity [--json]`.
+pub fn activity(json: bool) -> ExitCode {
+    wifi_call(Op::Activity, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::ActivityLog>(value) {
+            Ok(log) => {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs());
+                for entry in &log.entries {
+                    println!(
+                        "{:>8}  {}",
+                        crate::text::ago(now.saturating_sub(entry.at)),
+                        entry.text
+                    );
+                }
+                if log.entries.is_empty() {
+                    println!("Nothing has happened yet.");
+                }
+            }
+            Err(e) => eprintln!("nexus: undecodable activity log: {e}"),
+        }
+    })
+}
+
 /// `nexus wifi forget <ssid>`.
 pub fn wifi_forget(ssid: &str, hex: bool, json: bool) -> ExitCode {
     let network = match network_of(ssid, hex) {
@@ -563,6 +644,26 @@ pub fn ethernet_list(json: bool) -> ExitCode {
 /// `nexus ethernet connect [port]`.
 pub fn ethernet_connect(port: Option<String>, json: bool) -> ExitCode {
     wifi_call(Op::EthernetConnect { port }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(j) = serde_json::from_value::<nexus_ipc::EthernetJoined>(value) {
+            println!("{}", crate::text::ethernet_joined(&j.port));
+        }
+    })
+}
+
+/// `nexus ethernet connect [port] --eap ...`: sign in to an 802.1X port.
+pub fn ethernet_join_eap(
+    port: Option<String>,
+    mut eap: nexus_ipc::Eap,
+    source: PasswordSource,
+    json: bool,
+) -> ExitCode {
+    let name = port.as_deref().unwrap_or("the port");
+    if let Err(code) = prepare_eap(name, &mut eap, source) {
+        return code;
+    }
+    wifi_call(Op::EthernetJoinEap { port, eap }, |value| {
         if json {
             println!("{value}");
         } else if let Ok(j) = serde_json::from_value::<nexus_ipc::EthernetJoined>(value) {

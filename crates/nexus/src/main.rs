@@ -88,6 +88,20 @@ enum Command {
         #[command(subcommand)]
         action: TrustAction,
     },
+    /// The Network's login page (captive Portal): whether one is asked for, and open it.
+    Portal {
+        #[command(subcommand)]
+        action: Option<PortalAction>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// What the Daemon did lately: joins, drops, VPNs, Portals (newest first).
+    Activity {
+        /// Print the log as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Explain why the machine is or is not online, and how to fix it.
     Doctor {
         /// Print the findings as JSON.
@@ -120,6 +134,14 @@ enum Command {
     },
     /// Print the man page (roff) to stdout.
     Man,
+}
+
+#[derive(Subcommand)]
+enum PortalAction {
+    /// Say whether the Network is asking for a login (the default).
+    Status,
+    /// Open the login page in your browser.
+    Open,
 }
 
 #[derive(Subcommand)]
@@ -172,6 +194,20 @@ enum WifiAction {
     Forget {
         /// The Network's name (SSID).
         ssid: String,
+        /// `ssid` is the hex id from `wifi list --json` (for names that are not UTF-8).
+        #[arg(long)]
+        hex: bool,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Turn automatic joining of a saved Network on or off.
+    Autoconnect {
+        /// The Network's name (SSID).
+        ssid: String,
+        /// `on` joins it whenever it is in range; `off` only when you ask.
+        #[arg(value_enum)]
+        state: Switch,
         /// `ssid` is the hex id from `wifi list --json` (for names that are not UTF-8).
         #[arg(long)]
         hex: bool,
@@ -315,12 +351,21 @@ enum EthernetAction {
         json: bool,
     },
     /// Bring a port up with its Profile (a plain DHCP one is made if it has none).
+    /// With --eap, sign in to an 802.1X port.
     Connect {
         /// The port, e.g. enp3s0 (not needed when there is only one).
         port: Option<String>,
         /// Print the result as JSON.
         #[arg(long)]
         json: bool,
+        /// The password for --eap. Visible in the process list: prefer --password-stdin.
+        #[arg(long, requires = "eap", conflicts_with = "password_stdin")]
+        password: Option<String>,
+        /// Read the --eap password from the first line of stdin.
+        #[arg(long, requires = "eap")]
+        password_stdin: bool,
+        #[command(flatten)]
+        eap: EapArgs,
     },
     /// Drop a port's Link; its Profile stays.
     Disconnect {
@@ -441,6 +486,13 @@ struct JoinArgs {
     /// Print the result as JSON.
     #[arg(long)]
     json: bool,
+    #[command(flatten)]
+    eap: EapArgs,
+}
+
+/// The 802.1X flags shared by `wifi join` and `ethernet connect`.
+#[derive(ClapArgs)]
+struct EapArgs {
     /// Join a WPA-Enterprise Network (eduroam, office Wi-Fi) with this outer method.
     #[arg(long, value_enum)]
     eap: Option<EapKind>,
@@ -515,7 +567,7 @@ enum InnerKind {
     Md5,
 }
 
-impl JoinArgs {
+impl EapArgs {
     /// The 802.1X settings the flags describe, if `--eap` was given.
     fn eap(&self) -> Option<nexus_ipc::Eap> {
         use nexus_ipc::{Eap, EapMethod, Phase2};
@@ -588,7 +640,7 @@ fn main() -> ExitCode {
             action: WifiAction::Join(a),
         } => {
             let a = *a;
-            let eap = a.eap();
+            let eap = a.eap.eap();
             let source = match (a.password, a.password_stdin) {
                 (Some(p), _) => cli::PasswordSource::Flag(p),
                 (None, true) => cli::PasswordSource::Stdin,
@@ -668,7 +720,23 @@ fn main() -> ExitCode {
         },
         Command::Ethernet { action } => match action {
             EthernetAction::List { json } => cli::ethernet_list(json),
-            EthernetAction::Connect { port, json } => cli::ethernet_connect(port, json),
+            EthernetAction::Connect {
+                port,
+                json,
+                password,
+                password_stdin,
+                eap,
+            } => match eap.eap() {
+                Some(eap) => {
+                    let source = match (password, password_stdin) {
+                        (Some(p), _) => cli::PasswordSource::Flag(p),
+                        (None, true) => cli::PasswordSource::Stdin,
+                        (None, false) => cli::PasswordSource::None,
+                    };
+                    cli::ethernet_join_eap(port, eap, source, json)
+                }
+                None => cli::ethernet_connect(port, json),
+            },
             EthernetAction::Disconnect { port, json } => cli::ethernet_disconnect(port, json),
         },
         Command::Hotspot {
@@ -719,6 +787,20 @@ fn main() -> ExitCode {
         Command::Tether {
             action: TetherAction::Disconnect { json },
         } => cli::tether_disconnect(json),
+        Command::Portal { action, json } => match action.unwrap_or(PortalAction::Status) {
+            PortalAction::Status => cli::portal_status(json),
+            PortalAction::Open => cli::portal_open(json),
+        },
+        Command::Activity { json } => cli::activity(json),
+        Command::Wifi {
+            action:
+                WifiAction::Autoconnect {
+                    ssid,
+                    state,
+                    hex,
+                    json,
+                },
+        } => cli::wifi_autoconnect(&ssid, matches!(state, Switch::On), hex, json),
         Command::Doctor { json, fix } => cli::doctor(json, fix),
         Command::Config {
             action: ConfigAction::Get { key },
