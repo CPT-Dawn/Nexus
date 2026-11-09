@@ -9,11 +9,29 @@ const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
 /// A name no resolver will ever answer (RFC 6761).
 const NO_SUCH_HOST: &str = "http://nexus-doctor.invalid/";
 
+const LOCAL_CHECK: &str = "[connectivity]\nurl = \"http://localhost/check\"\n";
+const NO_CHECK: &str = "[connectivity]\nenabled = false\n";
+
+/// A world whose Daemon started with `config` in place (the config is
+/// reloaded lazily, so it has to exist before the Daemon does).
+fn world_with(config: &str, nm_running: bool) -> World {
+    let mut world = World::builder(NEXUS)
+        .nm_running(nm_running)
+        .daemon(false)
+        .start();
+    world.write_config(config);
+    world.start_daemon();
+    world
+}
+
 /// A world that is online over Wi-Fi with a reachable gateway, whose
 /// connectivity check host resolves from /etc/hosts.
 fn healthy() -> World {
-    let world = World::start(NEXUS);
-    world.write_config("[connectivity]\nurl = \"http://localhost/check\"\n");
+    healthy_with(LOCAL_CHECK)
+}
+
+fn healthy_with(config: &str) -> World {
+    let world = world_with(config, true);
     world.nm.set_primary(Some(ActiveConnection::wifi("Home")));
     world.nm.set_connectivity(NmConnectivity::Full);
     world.nm.set_state(NmState::ConnectedGlobal);
@@ -83,8 +101,7 @@ fn every_finding_explains_itself_in_words() {
 
 #[test]
 fn networkmanager_not_installed_says_what_to_install() {
-    let world = World::builder(NEXUS).nm_running(false).start();
-    world.write_config("[connectivity]\nenabled = false\n");
+    let world = world_with(NO_CHECK, false);
     let all = findings(&world);
     let nm = find(&all, "networkmanager");
     assert_eq!(nm["severity"], "problem");
@@ -103,8 +120,7 @@ fn networkmanager_not_installed_says_what_to_install() {
 
 #[test]
 fn a_stopped_networkmanager_next_to_networkd_gets_one_ordered_plan() {
-    let world = World::builder(NEXUS).nm_running(false).start();
-    world.write_config("[connectivity]\nenabled = false\n");
+    let world = world_with(NO_CHECK, false);
     world
         .systemd
         .set_unit("NetworkManager.service", Unit::Inactive);
@@ -140,8 +156,7 @@ fn a_stopped_networkmanager_next_to_networkd_gets_one_ordered_plan() {
 
 #[test]
 fn a_running_iwd_stays_and_becomes_networkmanagers_wifi_backend() {
-    let world = World::builder(NEXUS).nm_running(false).start();
-    world.write_config("[connectivity]\nenabled = false\n");
+    let world = world_with(NO_CHECK, false);
     world
         .systemd
         .set_unit("NetworkManager.service", Unit::Inactive);
@@ -225,8 +240,7 @@ fn offline_with_networkmanager_up_says_to_join_a_network() {
 
 #[test]
 fn a_name_that_does_not_resolve_is_a_dns_problem_and_names_the_host() {
-    let world = healthy();
-    world.write_config(&format!("[connectivity]\nurl = \"{NO_SUCH_HOST}\"\n"));
+    let world = healthy_with(&format!("[connectivity]\nurl = \"{NO_SUCH_HOST}\"\n"));
     world.nm.set_connectivity(NmConnectivity::Limited);
     let all = findings(&world);
     let dns = find(&all, "dns");
@@ -264,8 +278,7 @@ fn connected_with_working_dns_and_gateway_but_no_internet_blames_beyond_the_rout
 
 #[test]
 fn a_portal_is_named_and_blamed_instead_of_dns() {
-    let world = healthy();
-    world.write_config(&format!("[connectivity]\nurl = \"{NO_SUCH_HOST}\"\n"));
+    let world = healthy_with(&format!("[connectivity]\nurl = \"{NO_SUCH_HOST}\"\n"));
     world.nm.set_connectivity(NmConnectivity::Portal);
     let all = findings(&world);
     assert_eq!(find(&all, "portal")["severity"], "warning");
@@ -284,8 +297,7 @@ fn missing_ipv6_is_information_not_trouble() {
 
 #[test]
 fn a_switched_off_connectivity_check_is_said_and_nothing_is_resolved() {
-    let world = healthy();
-    world.write_config("[connectivity]\nenabled = false\n");
+    let world = healthy_with(NO_CHECK);
     let all = findings(&world);
     assert_eq!(find(&all, "connectivity-check")["severity"], "info");
     assert!(

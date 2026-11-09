@@ -364,8 +364,12 @@ fn a_missing_network_manager_is_a_status_not_a_crash() {
 /// in charge: the textbook first run. The connectivity check is off so no
 /// lookup depends on the host running the tests.
 fn first_run_rig() -> Rig {
-    let world = World::builder(NEXUS).nm_running(false).start();
+    let mut world = World::builder(NEXUS)
+        .nm_running(false)
+        .daemon(false)
+        .start();
     world.write_config("[connectivity]\nenabled = false\n");
+    world.start_daemon();
     world
         .systemd
         .set_unit("NetworkManager.service", Unit::Inactive);
