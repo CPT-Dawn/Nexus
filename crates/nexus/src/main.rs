@@ -13,8 +13,15 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Parser)]
 #[command(name = "nexus", version = VERSION, about = "A network manager for Wayland desktops.")]
 struct Args {
+    /// Draw with plain ASCII only (the TUI).
+    #[arg(long, global = true)]
+    ascii: bool,
+    /// Use Nerd Font icons (the TUI). Needs a patched font.
+    #[arg(long, global = true)]
+    nerd_font: bool,
+    /// Without a subcommand, `nexus` opens the TUI.
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -50,7 +57,17 @@ enum ConfigAction {
 }
 
 fn main() -> ExitCode {
-    match Args::parse().command {
+    let args = Args::parse();
+    let Some(command) = args.command else {
+        return match nexus_tui::tui::run(args.ascii, args.nerd_font) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("nexus: the TUI stopped: {e}");
+                ExitCode::FAILURE
+            }
+        };
+    };
+    match command {
         Command::Status { json } => cli::status(json),
         Command::Config {
             action: ConfigAction::Get { key },
