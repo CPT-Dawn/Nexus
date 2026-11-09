@@ -304,7 +304,8 @@ pub async fn connect(
     match bluetooth(conn).await {
         Bluetooth::On => {}
         Bluetooth::Off => return Ok(Err(text::bluetooth_off())),
-        Bluetooth::Absent => return Ok(Err(text::bluetooth_absent())),
+        // `Unknown` is a state from a newer daemon; it cannot reach this Backend.
+        _ => return Ok(Err(text::bluetooth_absent())),
     }
     let found = phones(conn).await?;
     if found.is_empty() {

@@ -263,3 +263,94 @@ fn wifi_reveal_is_an_op_and_reveal_denied_an_error_code() {
     let line = encode(&Response::err(Some(1), ErrorCode::RevealDenied, "no"));
     assert!(line.contains(r#""code":"reveal_denied""#), "{line}");
 }
+
+#[test]
+fn unknown_values_of_every_wire_enum_decode_as_unknown() {
+    use nexus_ipc::{Bluetooth, EapMethod, Phase2, ShareAuth, Trust, VpnKind, VpnState};
+    fn one<T: serde::de::DeserializeOwned>() -> T {
+        serde_json::from_value(json!("from_the_future")).unwrap()
+    }
+    assert_eq!(one::<Trust>(), Trust::Unknown);
+    assert_eq!(one::<ShareAuth>(), ShareAuth::Unknown);
+    assert_eq!(one::<VpnKind>(), VpnKind::Unknown);
+    assert_eq!(one::<VpnState>(), VpnState::Unknown);
+    assert_eq!(one::<Bluetooth>(), Bluetooth::Unknown);
+    assert_eq!(one::<EapMethod>(), EapMethod::Unknown);
+    assert_eq!(one::<Phase2>(), Phase2::Unknown);
+}
+
+#[test]
+fn a_vpn_that_is_deactivating_still_decodes() {
+    let event: EventLine = serde_json::from_str(
+        r#"{"v":1,"event":"vpns_changed","vpns":{"vpns":[
+            {"id":"u","name":"Work","kind":"wireguard","state":"deactivating"}]}}"#,
+    )
+    .unwrap();
+    match event.event {
+        Event::VpnsChanged { vpns } => {
+            assert_eq!(vpns.vpns[0].state, nexus_ipc::VpnState::Unknown);
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn an_unknown_value_inside_a_request_is_a_bad_request_not_an_unknown_op() {
+    for line in [
+        r#"{"v":1,"id":8,"op":"wifi_join_eap","network":"6162","eap":{"method":"leap","identity":"a"}}"#,
+        r#"{"v":1,"id":8,"op":"wifi_join_eap","network":"6162","eap":{"method":"peap","phase2":"x","identity":"a"}}"#,
+        r#"{"v":1,"id":8,"op":"ethernet_join_eap","eap":{"method":"leap","identity":"a"}}"#,
+        r#"{"v":1,"id":8,"op":"trust_set","network":"6162","trust":"maybe"}"#,
+    ] {
+        assert_eq!(err_of(line), (Some(8), ErrorCode::BadRequest), "{line}");
+    }
+    assert_eq!(
+        err_of(r#"{"v":1,"id":9,"op":"wifi_join_eap","network":"6162","eap":{"method":5}}"#),
+        (Some(9), ErrorCode::BadRequest)
+    );
+}
+
+#[test]
+fn an_unknown_eap_method_never_validates() {
+    use nexus_ipc::{Eap, EapField, EapMethod};
+    let mut eap = Eap::new(EapMethod::Peap);
+    eap.method = EapMethod::Unknown;
+    eap.identity = "a".into();
+    let problems = eap.validate();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].field, EapField::Method);
+}
+
+#[test]
+fn inventory_ops_parse() {
+    assert!(matches!(
+        parse(r#"{"v":1,"id":1,"op":"profile_list"}"#).unwrap().op,
+        Op::ProfileList
+    ));
+    assert!(matches!(
+        parse(r#"{"v":1,"id":1,"op":"device_list"}"#).unwrap().op,
+        Op::DeviceList
+    ));
+}
+
+#[test]
+fn a_line_that_is_not_an_event_is_reported_not_skipped() {
+    use std::io::Write as _;
+    use std::os::unix::net::UnixListener;
+    let dir = std::env::temp_dir().join(format!("nexus-wire-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("s.sock");
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().unwrap();
+        s.write_all(b"{\"v\":1,\"event\":\"vpns_changed\",\"vpns\":5}\n")
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    });
+    let mut conn = nexus_ipc::Connection::connect_to(&path).unwrap();
+    let err = conn
+        .next_event(std::time::Duration::from_secs(2))
+        .unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    server.join().unwrap();
+}

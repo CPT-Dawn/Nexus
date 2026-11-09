@@ -11,6 +11,7 @@ use serde_json::Value;
 mod doctor;
 mod eap;
 mod ethernet;
+mod inventory;
 pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
 pub use eap::{Eap, EapError, EapField, EapMethod, Phase2};
 pub use ethernet::{
@@ -18,6 +19,7 @@ pub use ethernet::{
     EthernetState, EthernetTrouble, speed_text, unplugged_message,
 };
 
+pub use inventory::{DeviceEntry, DeviceKind, DeviceList, ProfileEntry, ProfileKind, ProfileList};
 pub mod profile;
 pub use profile::{
     AddressEntry, Field, FieldError, Ipv4, Ipv4Method, Ipv6, Ipv6Method, MacMode, PendingChange,
@@ -197,6 +199,12 @@ pub enum Op {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         rollback_secs: Option<u32>,
     },
+    /// Every saved Profile, Wi-Fi (nearby or not) and Ethernet, in one list.
+    /// Result: [`ProfileList`].
+    ProfileList,
+    /// Every Device: the Wi-Fi cards, then the Ethernet ports.
+    /// Result: [`DeviceList`].
+    DeviceList,
     /// Keep a pending change (`pending` is `PendingChange.id`). Result `{}`;
     /// `nothing_pending` when it was confirmed, reverted or timed out already.
     ProfileConfirm { pending: u64 },
@@ -403,7 +411,8 @@ pub enum ErrorCode {
     PasswordRequired,
     /// No Network by that name is saved or nearby.
     UnknownNetwork,
-    /// There is no Wi-Fi Link to disconnect.
+    /// There is nothing to disconnect or stop: no Wi-Fi, Ethernet or tethering Link,
+    /// no running Hotspot, or a VPN that is not up.
     NotConnected,
     /// A hardware switch (not software) holds the radio off.
     HardBlocked,
@@ -1028,6 +1037,10 @@ pub enum Trust {
     #[default]
     Trusted,
     Untrusted,
+    /// A judgement from a newer daemon. Never sent; a Daemon rejects it in a
+    /// request.
+    #[serde(other)]
+    Unknown,
 }
 
 impl Trust {
@@ -1035,6 +1048,7 @@ impl Trust {
         match self {
             Trust::Trusted => "Trusted",
             Trust::Untrusted => "Untrusted",
+            Trust::Unknown => "Unknown",
         }
     }
 }
@@ -1147,6 +1161,7 @@ pub struct AutoconnectSet {
 /// How a Network authenticates, in the words of the Wi-Fi QR code format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ShareAuth {
     /// WPA or WPA2 with a passphrase.
     Wpa,
@@ -1155,6 +1170,9 @@ pub enum ShareAuth {
     Wep,
     /// No password (open, or OWE).
     Open,
+    /// An authentication from a newer daemon.
+    #[serde(other)]
+    Unknown,
 }
 
 /// The `wifi_reveal` result: the join details of a saved Network.
@@ -1188,6 +1206,9 @@ impl WifiShare {
             ShareAuth::Sae => "SAE",
             ShareAuth::Wep => "WEP",
             ShareAuth::Open => "nopass",
+            // A newer daemon's scheme: a password means the common WPA form.
+            ShareAuth::Unknown if self.password.is_some() => "WPA",
+            ShareAuth::Unknown => "nopass",
         };
         let mut out = zeroize::Zeroizing::new(format!("WIFI:T:{t};S:{};", field(&self.ssid)));
         if let Some(p) = &self.password {
@@ -1203,19 +1224,27 @@ impl WifiShare {
 /// What kind of VPN a Profile is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum VpnKind {
     Wireguard,
     /// A plugin VPN such as OpenVPN.
     Plugin,
+    /// A kind from a newer daemon.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Whether a VPN is carrying traffic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum VpnState {
     Down,
     Activating,
     Up,
+    /// A state from a newer daemon (`deactivating`, say).
+    #[serde(other)]
+    Unknown,
 }
 
 /// One VPN Profile.
@@ -1300,6 +1329,7 @@ pub struct NewTunnel {
 /// Whether Bluetooth can carry a Tethering Link right now.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Bluetooth {
     /// An adapter is powered.
     On,
@@ -1308,6 +1338,9 @@ pub enum Bluetooth {
     /// No adapter, or the Bluetooth service is not running.
     #[default]
     Absent,
+    /// A state from a newer daemon; read it as "can't tell".
+    #[serde(other)]
+    Unknown,
 }
 
 /// A paired phone that offers network access.
@@ -1421,14 +1454,46 @@ pub fn parse_request(line: &str) -> Result<Request, Response> {
         .and_then(Value::as_str)
         .unwrap_or("?")
         .to_owned();
-    serde_json::from_value::<Request>(value).map_err(|e| {
+    let request = serde_json::from_value::<Request>(value).map_err(|e| {
         let text = e.to_string();
-        if text.contains("unknown variant `") {
+        // Only the op itself can be an unknown op; an unknown value deeper in
+        // the request (an `eap.method` of "leap") is a bad request.
+        if text.starts_with(&format!("unknown variant `{op}`, expected")) {
             Response::err(id, ErrorCode::UnknownOp, format!("unknown op `{op}`"))
         } else {
             bad(id, &text)
         }
-    })
+    })?;
+    match unknown_value(&request.op) {
+        Some(what) => Err(bad(
+            id,
+            &format!("`{what}` is not a value this daemon knows"),
+        )),
+        None => Ok(request),
+    }
+}
+
+/// The wire enums decode a value they do not know as `Unknown`, so that a
+/// newer peer's answer still reads. In a *request* that would turn a typo
+/// (an `eap.method` of "leap") into a silent choice, so name it here.
+fn unknown_value(op: &Op) -> Option<&'static str> {
+    let eap = |eap: &Eap| {
+        if eap.method == EapMethod::Unknown {
+            Some("eap.method")
+        } else if eap.phase2 == Some(Phase2::Unknown) {
+            Some("eap.phase2")
+        } else {
+            None
+        }
+    };
+    match op {
+        Op::TrustSet {
+            trust: Trust::Unknown,
+            ..
+        } => Some("trust"),
+        Op::WifiJoinEap { eap: e, .. } | Op::EthernetJoinEap { eap: e, .. } => eap(e),
+        _ => None,
+    }
 }
 
 /// Blocking client for Front ends that do not need async.
@@ -1520,9 +1585,16 @@ impl Connection {
                 Ok(_) if !self.partial.ends_with('\n') => continue,
                 Ok(_) => {
                     let line = std::mem::take(&mut self.partial);
-                    if let Ok(line) = serde_json::from_str::<EventLine>(&line) {
-                        break Ok(Some(line.event));
-                    }
+                    // A line that is not an event at all is a protocol fault: say
+                    // so rather than skipping it (an unknown event or enum value
+                    // from a newer daemon decodes fine, as `Unknown`).
+                    break match serde_json::from_str::<EventLine>(&line) {
+                        Ok(line) => Ok(Some(line.event)),
+                        Err(e) => Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("undecodable event line: {e}"),
+                        )),
+                    };
                 }
                 Err(e)
                     if matches!(

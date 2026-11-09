@@ -17,7 +17,7 @@ pub fn bluetooth_line(b: Bluetooth) -> &'static str {
     match b {
         Bluetooth::On => "Bluetooth is on.",
         Bluetooth::Off => "Bluetooth is off.",
-        Bluetooth::Absent => "No Bluetooth adapter found, or the Bluetooth service is not running.",
+        _ => "No Bluetooth adapter found, or the Bluetooth service is not running.",
     }
 }
 
