@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_tether.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Tethering ─────────────────╮╭ Galaxy S24 Ultra of the whole family ──────────────────────────────╮
+│ ○ Bluetooth is off         ││ Paired                                                             │
+│                            ││                                                                    │
+│ ▸   Galaxy S24…     paired ││ Address     AA:BB:CC:DD:EE:03                                      │
+│     Pixel 8          saved ││ Bluetooth   off                                                    │
+│     Sam's iPho…     paired ││ Profile     none yet                                               │
+│                            ││                                                                    │
+│                            ││ Press enter to see how to turn Bluetooth on.                       │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╭ Problem ───────────────────────────────────────────────────────────────────────────────────────╮ │
+│ Bluetooth is off. Turn it on (`bluetoothctl power on`, or `rfkill unblock bluetooth`) and try  │ │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter tether  h/l tab  ? help  q quit

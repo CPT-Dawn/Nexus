@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_tether.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Tethering ─────────────────╮╭ Tethering ─────────────────────────────────────────────────────────╮
+│ ○ No Bluetooth             ││ No Bluetooth adapter was found, or the Bluetooth service is not    │
+│                            ││ running (systemctl start bluetooth).                               │
+│ No paired phone offers     ││                                                                    │
+│ network access.            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ h/l tab  ? help  q quit

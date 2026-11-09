@@ -63,3 +63,27 @@ pub fn wifi_with_open_prompt(world: &World) -> JoinHandle<()> {
         }));
     })
 }
+
+/// A world with Bluetooth (powered or not) and three paired phones that offer
+/// network access: `Pixel 8` (a Profile is saved, nothing connected),
+/// `Sam's iPhone` (paired only) and one with a name too long for a row. Shared
+/// by the S2 tests and `demo tether` / `demo tether-off`.
+pub fn tether_world(bin: impl Into<std::path::PathBuf>, powered: bool) -> World {
+    let mut world = World::builder(bin).bluez(true).start();
+    world.nm.add_phone("AA:BB:CC:DD:EE:01", "Pixel 8");
+    world.nm.add_phone("AA:BB:CC:DD:EE:02", "Sam's iPhone");
+    world
+        .nm
+        .add_phone("AA:BB:CC:DD:EE:03", "Galaxy S24 Ultra of the whole family");
+    // Tether once and let go, so Pixel 8 has a saved Profile.
+    let resp = world
+        .wire()
+        .call(json!({"op": "tether_connect", "phone": "AA:BB:CC:DD:EE:01"}));
+    assert!(resp.get("ok").is_some(), "tethering Pixel 8: {resp}");
+    let resp = world.wire().call(json!({"op": "tether_disconnect"}));
+    assert!(resp.get("ok").is_some(), "dropping the tether: {resp}");
+    if !powered {
+        world.bluez().set_powered(false);
+    }
+    world
+}
