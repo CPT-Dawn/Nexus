@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_hotspot.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Hotspot ───────────────────╮╭ Galaxy S24 Ultra of the whole family ──────────────────────────────╮
+│ ○ Not available            ││ Paired                                                             │
+│ This Wi-Fi card cannot     ││                                                                    │
+│ host a Hotspot: its driver ││ Address     AA:BB:CC:DD:EE:03                                      │
+│ has no access point mode   ││ Bluetooth   on                                                     │
+│ (a USB adapter that has    ││ Profile     none yet                                               │
+│ one would do; see `iw      ││                                                                    │
+│ list`).                    ││ Press enter to tether. Switch on Bluetooth tethering on the phone  │
+╰────────────────────────────╯│ first.                                                             │
+╭ Tethering ─────────────────╮│                                                                    │
+│ ● Bluetooth is on          ││                                                                    │
+│                            ││                                                                    │
+│ ▸   Galaxy S24…     paired ││                                                                    │
+│     Pixel 8          saved ││                                                                    │
+│     Sam's iPho…     paired ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter tether  h/l tab  : palette  ? help  q quit

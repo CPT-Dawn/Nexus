@@ -328,6 +328,12 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
 /// They show on any tab, because a Secret prompt can open anywhere.
 pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &Sym) {
     if app.field().is_none()
+        && let Some(form) = app.hotspot().form.as_ref()
+    {
+        super::hotspot_ui::form_view(f, form, body, look, sym);
+    }
+    if app.field().is_none()
+        && app.hotspot().form.is_none()
         && let Some(share) = app.share()
     {
         super::share::draw(f, share, body, look, sym);

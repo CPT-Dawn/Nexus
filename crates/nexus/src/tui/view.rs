@@ -3,7 +3,7 @@
 
 use nexus_ipc::{Connectivity, State, Status};
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::symbols::border;
 use ratatui::text::{Line, Span};
@@ -14,6 +14,7 @@ use super::caps::Glyphs;
 use super::doctor_view;
 use super::eap_ui;
 use super::hits::{Hit, hint_key};
+use super::hotspot_ui;
 use super::layout::{self, Areas, Mode};
 use super::overlays;
 use super::overview;
@@ -336,7 +337,15 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
         return vpn_ui::master(f, app, area, look, sym);
     }
     if app.tab() == Tab::Hotspot {
-        return tether_ui::master(f, app, area, look, sym);
+        // The Hotspot above the Tethering list: both are ways to share or
+        // reach a connection, and each fits in a few rows.
+        let room = area.height.saturating_sub(6);
+        let want = hotspot_ui::panel_height(app, area.width);
+        let top = want.min(room.max(hotspot_ui::PANEL_HEIGHT.min(area.height / 2)));
+        let [panel, list] =
+            Layout::vertical([Constraint::Length(top), Constraint::Min(0)]).areas(area);
+        hotspot_ui::panel(f, app, panel, look, sym);
+        return tether_ui::master(f, app, list, look, sym);
     }
     if app.tab().rows() > 0 {
         overview::cards_panel(f, app, area, look, sym, true);

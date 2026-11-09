@@ -317,6 +317,15 @@ pub fn card(app: &App, row: usize) -> (&'static str, String, bool) {
         ),
         _ => ("Hotspot", &[], "Not started"),
     };
+    if row == 3
+        && let Some(h) = app.hotspot().info()
+    {
+        return match (&h.ssid, h.on) {
+            (Some(ssid), true) => (name, ssid.clone(), true),
+            _ if !h.available => (name, "Not available".into(), false),
+            _ => (name, idle.into(), false),
+        };
+    }
     match link {
         Some(l) if kinds.contains(&l.kind) => (name, l.name.clone(), true),
         _ if app.status().is_none() => (name, "-".into(), false),

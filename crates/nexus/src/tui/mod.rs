@@ -13,6 +13,8 @@ mod eap_form;
 mod eap_ui;
 mod graph;
 mod hits;
+mod hotspot;
+mod hotspot_ui;
 mod layout;
 mod overlays;
 mod overview;

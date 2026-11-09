@@ -53,7 +53,7 @@ pub struct Verb {
 }
 
 /// Every table of Verbs, in the order the help overlay lists them.
-pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, VPN, TETHER, UNDO];
+pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, VPN, HOTSPOT, TETHER, UNDO];
 
 pub fn all() -> impl Iterator<Item = &'static Verb> {
     TABLES.iter().flat_map(|t| t.iter())
@@ -333,6 +333,68 @@ static VPN: &[Verb] = &[
         "Share a VPN's config as a QR code (asks first)",
         KeyCode::Char('s'),
         vpn_wireguard,
+    ),
+];
+
+// ---- Hotspot: sharing this machine's connection ---------------------------------
+
+fn can_start(app: &App) -> Result<(), &'static str> {
+    let tab = app.hotspot();
+    if !tab.has_data() {
+        Err("Still checking whether this machine can host a Hotspot.")
+    } else if !tab.available() {
+        Err("This machine cannot host a Hotspot; the Hotspot tab says why.")
+    } else if tab.on() {
+        Err("A Hotspot is already running.")
+    } else {
+        Ok(())
+    }
+}
+
+static HOTSPOT: &[Verb] = &[
+    hotspot(
+        "Start Hotspot",
+        "share connection wifi access point password generate",
+        "n",
+        "Share this connection with a made-up password",
+        KeyCode::Char('n'),
+        can_start,
+    ),
+    hotspot(
+        "Start Hotspot with my own name and password",
+        "share connection wifi access point custom ssid",
+        "c",
+        "Start a Hotspot with a name and password you choose",
+        KeyCode::Char('c'),
+        can_start,
+    ),
+    hotspot(
+        "Stop Hotspot",
+        "share connection wifi access point end off",
+        "S",
+        "Stop the Hotspot",
+        KeyCode::Char('S'),
+        |app| {
+            if app.hotspot().on() {
+                Ok(())
+            } else {
+                Err("No Hotspot is running.")
+            }
+        },
+    ),
+    hotspot(
+        "Share Hotspot as QR code",
+        "hotspot wifi password phone join",
+        "s",
+        "Show the Hotspot's QR code and password (asks first)",
+        KeyCode::Char('s'),
+        |app| {
+            if app.hotspot().ready() {
+                Ok(())
+            } else {
+                Err("No Hotspot is up to share.")
+            }
+        },
     ),
 ];
 

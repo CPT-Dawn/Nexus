@@ -179,6 +179,11 @@ impl World {
         self.runtime_dir().join("nexus").join("nexus.sock")
     }
 
+    /// The world's `$HOME`.
+    pub fn home(&self) -> PathBuf {
+        self.tmp.path().join("home")
+    }
+
     /// Where the user's optional `config.toml` lives in this world.
     pub fn config_path(&self) -> PathBuf {
         self.tmp.path().join("home/.config/nexus/config.toml")

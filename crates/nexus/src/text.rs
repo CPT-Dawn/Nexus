@@ -626,8 +626,8 @@ pub fn wifi_off_for_hotspot() -> Failure {
 pub fn card_cannot_host() -> Failure {
     fail(
         ErrorCode::HotspotUnsupported,
-        "This Wi-Fi card cannot host a Hotspot: its driver does not offer access point mode. \
-         A USB Wi-Fi adapter that does (check `iw list`) is the usual way around it.",
+        "This Wi-Fi card cannot host a Hotspot: its driver has no access point mode (a USB \
+         adapter that has one would do; see `iw list`).",
     )
 }
 

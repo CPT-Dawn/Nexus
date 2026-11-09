@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_hotspot.rs
+expression: ask
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Hotspot ───────────────────╮╭ Galaxy S24 Ultra of the whole family ──────────────────────────────╮
+│ ● Nexus-8NA4               ││ Paired                                                             │
+│ device count unknown       ││                                                                    │
+│ s QR code   S stop         ││ Address     AA:BB:CC:DD:EE:03                                      │
+│                            ││ Bluetooth   on                                                     │
+╰────────────────────────────╯│ Profile     none yet                                               │
+╭ Tethering ─────────────────╮│                                                                    │
+│ ● Bluetooth is on          ││ Press enter to tether. Switch on Bluetooth tethering on the phone  │
+│                            ││ first.                                                             │
+│ ▸   Galaxy S24…  ╭ Share Nexus-8NA4 ──────────────────────────────────────────╮                  │
+│     Pixel 8      │ Show the password and a QR code for a phone?               │                  │
+│     Sam's iPho…  │ Anyone who can see this screen can read them.              │                  │
+│                  │                                                            │                  │
+│                  │ enter reveal   esc cancel                                  │                  │
+│                  │                                                            │                  │
+│                  ╰────────────────────────────────────────────────────────────╯                  │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ enter reveal  esc cancel

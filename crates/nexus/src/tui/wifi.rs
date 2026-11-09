@@ -204,6 +204,19 @@ impl Runner {
         }
     }
 
+    /// Like [`Runner::reveal`], for the running Hotspot.
+    pub fn reveal_hotspot(&self) {
+        let (socket, tx) = (self.socket.clone(), self.tx.clone());
+        let spawned = thread::Builder::new()
+            .name("nexus-reveal".into())
+            .spawn(move || {
+                let _ = tx.send(Msg::Shared(fetch_hotspot_share(&socket)));
+            });
+        if let Err(e) = spawned {
+            tracing::warn!("cannot spawn a reveal thread: {e}");
+        }
+    }
+
     pub fn run(&self, cmd: Cmd) {
         let (socket, tx) = (self.socket.clone(), self.tx.clone());
         let spawned = thread::Builder::new()
@@ -248,10 +261,18 @@ impl Runner {
 }
 
 fn fetch_share(socket: &std::path::Path, network: String) -> Result<nexus_ipc::WifiShare, String> {
+    fetch(socket, Op::WifiReveal { network })
+}
+
+fn fetch_hotspot_share(socket: &std::path::Path) -> Result<nexus_ipc::WifiShare, String> {
+    fetch(socket, Op::HotspotReveal)
+}
+
+fn fetch(socket: &std::path::Path, op: Op) -> Result<nexus_ipc::WifiShare, String> {
     let mut conn =
         Connection::connect_to(socket).map_err(|_| "Can't reach the Nexus daemon.".to_string())?;
     let value = conn
-        .call(Op::WifiReveal { network })
+        .call(op)
         .map_err(|_| "Lost the Nexus daemon.".to_string())?
         .map_err(|f: Failure| f.message)?;
     serde_json::from_value(value)
