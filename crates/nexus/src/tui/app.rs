@@ -588,7 +588,10 @@ impl App {
     fn prompt_event(&mut self, event: Event) -> bool {
         match event {
             Event::SecretPromptOpened { prompt }
-                if matches!(prompt.kind, PromptKind::WifiPassword | PromptKind::VpnSecret) =>
+                if matches!(
+                    prompt.kind,
+                    PromptKind::WifiPassword | PromptKind::VpnSecret
+                ) =>
             {
                 self.palette = None;
                 self.field = Some(PasswordField::new(prompt));

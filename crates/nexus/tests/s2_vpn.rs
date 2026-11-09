@@ -436,7 +436,10 @@ fn a_vpn_that_wants_a_password_asks_in_the_tui() {
     rig.type_text("hunter2");
     let frame = rig.text(STANDARD);
     assert!(frame.contains("Password for Office"), "{frame}");
-    assert!(!frame.contains("hunter2"), "the password is masked: {frame}");
+    assert!(
+        !frame.contains("hunter2"),
+        "the password is masked: {frame}"
+    );
     insta::assert_snapshot!("vpn_prompt_standard", frame);
     rig.size(NARROW);
     insta::assert_snapshot!("vpn_prompt_narrow", rig.text(NARROW));

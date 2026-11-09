@@ -507,7 +507,7 @@ impl Backend for NetworkManager {
             super::vpn::import(&c, name.as_deref(), &config, plugin.as_deref()).await
         })
         .await?
-            .map_err(BackendError::Refused)
+        .map_err(BackendError::Refused)
     }
 
     async fn vpn_create(&self, tunnel: NewTunnel) -> Result<VpnAdded, BackendError> {

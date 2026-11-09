@@ -495,7 +495,10 @@ pub fn invalid_config(why: &str) -> Failure {
 }
 
 pub fn missing_plugin(plugin: &str) -> Failure {
-    fail(ErrorCode::MissingPlugin, nexus_tui::plugin::install_hint(plugin))
+    fail(
+        ErrorCode::MissingPlugin,
+        nexus_tui::plugin::install_hint(plugin),
+    )
 }
 
 pub fn invalid_provider_file(plugin: &str, why: &str) -> Failure {

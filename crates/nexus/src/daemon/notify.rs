@@ -274,7 +274,10 @@ impl Task {
             Event::PortalChanged { portal } => self.portal_changed(portal, config.portal).await,
             Event::SecretPromptOpened { prompt }
                 if config.secret_prompt
-                    && matches!(prompt.kind, PromptKind::WifiPassword | PromptKind::VpnSecret)
+                    && matches!(
+                        prompt.kind,
+                        PromptKind::WifiPassword | PromptKind::VpnSecret
+                    )
                     && self.frontends.count() == 0 =>
             {
                 let millis =

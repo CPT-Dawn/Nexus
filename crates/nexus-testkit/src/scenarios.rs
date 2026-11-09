@@ -137,7 +137,8 @@ pub fn vpn_busy(world: &World) {
 }
 
 /// An `.ovpn` the plugin scenario can import (documentation host).
-pub const OVPN_CONF: &str = "client\ndev tun\nproto udp\nremote vpn.branch.example 1194\nauth-user-pass\n";
+pub const OVPN_CONF: &str =
+    "client\ndev tun\nproto udp\nremote vpn.branch.example 1194\nauth-user-pass\n";
 
 /// Plugin VPNs: the OpenVPN plugin is installed, `Office OpenVPN` asks for a
 /// user name, a password and a one-time code when it starts, and `Legacy L2TP`

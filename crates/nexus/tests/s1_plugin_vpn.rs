@@ -21,9 +21,9 @@ fn world() -> World {
 }
 
 fn import(world: &World, name: &str, config: &str) -> Value {
-    world.wire().call(
-        json!({"op": "vpn_import", "name": name, "config": config, "plugin": "openvpn"}),
-    )
+    world
+        .wire()
+        .call(json!({"op": "vpn_import", "name": name, "config": config, "plugin": "openvpn"}))
 }
 
 fn list(world: &World) -> Value {
@@ -51,7 +51,10 @@ fn importing_an_ovpn_file_goes_through_nmcli_and_appears_as_a_plugin_profile() {
     let world = world();
     let resp = import(&world, "Office", OVPN);
     assert_eq!(resp["ok"]["name"], "Office", "{resp}");
-    assert_eq!(resp["ok"]["public_key"], "", "a plugin VPN has no key: {resp}");
+    assert_eq!(
+        resp["ok"]["public_key"], "",
+        "a plugin VPN has no key: {resp}"
+    );
     let uuid = world.nm.vpn_uuid("Office").expect("the Profile exists");
     assert_eq!(resp["ok"]["id"], uuid.as_str());
     assert_eq!(
@@ -85,16 +88,19 @@ fn a_file_nmcli_refuses_is_invalid_config_and_saves_nothing() {
     let message = resp["err"]["message"].as_str().unwrap();
     assert!(message.contains("OpenVPN"), "{message}");
     assert!(message.contains("missing remote"), "{message}");
-    assert!(!message.contains(".ovpn"), "no scratch path leaks: {message}");
+    assert!(
+        !message.contains(".ovpn"),
+        "no scratch path leaks: {message}"
+    );
     assert_eq!(list(&world), json!([]));
 }
 
 #[test]
 fn an_unknown_plugin_is_refused_before_anything_runs() {
     let world = world();
-    let resp = world.wire().call(
-        json!({"op": "vpn_import", "name": "x", "config": OVPN, "plugin": "../../bin/sh"}),
-    );
+    let resp = world
+        .wire()
+        .call(json!({"op": "vpn_import", "name": "x", "config": OVPN, "plugin": "../../bin/sh"}));
     assert_eq!(resp["err"]["code"], "invalid_config", "{resp}");
     assert_eq!(world.nmcli_log(), "");
 }
@@ -225,7 +231,10 @@ fn a_hint_from_the_plugin_becomes_the_prompt_sentence() {
         .add_plugin_vpn_of("uuid-ovpn", "Office", Some("openvpn"));
     world.nm.script_vpn_asks(
         "uuid-ovpn",
-        &["x-vpn-message:Enter the code from your authenticator", "otp"],
+        &[
+            "x-vpn-message:Enter the code from your authenticator",
+            "otp",
+        ],
     );
     let mut fe = front_end(&world);
     let up = up_in_background(&world, "uuid-ovpn");
@@ -246,10 +255,7 @@ fn the_cli_picks_the_plugin_from_the_extension_and_missing_plugins_exit_30() {
     std::fs::write(&file, OVPN).unwrap();
     let out = world.run_nexus(&["vpn", "import", file.to_str().unwrap()]);
     assert!(out.status.success(), "{out:?}");
-    assert_eq!(
-        String::from_utf8_lossy(&out.stdout).trim(),
-        "Saved Branch."
-    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "Saved Branch.");
     assert_eq!(list(&world)[0]["name"], "Branch");
 
     let bare = World::start(NEXUS);
