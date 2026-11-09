@@ -6,20 +6,20 @@ expression: rig.text(STANDARD)
 ╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
 │ ▸ ● Wi-Fi                  ││     ░░    ░░░░    ░░      ░░░░░░  ░░░░    ░░░░░░                   │
 │     Home-5G                ││   ░░██░░░░████░░░░██░░  ░░██████░░████░░░░██████░░                 │
-│   ○ Ethernet               ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░██░░░░                   │
-│     Not connected  ╭ All keys ──────────────────────────────────────────────╮░                   │
-│   ○ VPN            │  j / k, Down / Up     Move in the list                 │░                   │
-│     Not connected  │  g / G                Jump to top / bottom             │█░░                 │
-│   ○ Hotspot        │  h / l, Left / Right  Previous / next tab              │░                   │
-│     Not started    │  Tab / Shift-Tab      Next / previous tab              │                    │
-│                    │  1 - 6                Jump to a tab                    │ooks healthy.       │
-│                    │  Enter                Open the selected card's tab     │.1                  │
-│                    │  d                    Details sheet (small windows)    │────────────────────╯
-│                    │  Wi-Fi: Enter         Join the selected Network        │────────────────────╮
-│                    │  Wi-Fi: r             Rescan                           │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  Wi-Fi: x             Disconnect                       │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    │  Wi-Fi: f             Forget (asks first)              │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  Wi-Fi: a             Toggle autoconnect               │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│   ○ Ethernet       ╭ All keys ──────────────────────────────────────────────╮░                   │
+│     Not connected  │  j / k, Down / Up     Move in the list                 │░                   │
+│   ○ VPN            │  g / G                Jump to top / bottom             │░                   │
+│     Not connected  │  h / l, Left / Right  Previous / next tab              │█░░                 │
+│   ○ Hotspot        │  Tab / Shift-Tab      Next / previous tab              │░                   │
+│     Not started    │  1 - 6                Jump to a tab                    │                    │
+│                    │  Enter                Open the selected card's tab     │ooks healthy.       │
+│                    │  d                    Details sheet (small windows)    │.1                  │
+│                    │  Wi-Fi: Enter         Join the selected Network        │────────────────────╯
+│                    │  Wi-Fi: r             Rescan                           │────────────────────╮
+│                    │  Wi-Fi: x             Disconnect                       │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  Wi-Fi: f             Forget (asks first)              │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  Wi-Fi: a             Toggle autoconnect               │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  Wi-Fi: e             Edit the Profile's settings      │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
 │                    │  Wi-Fi: u             Undo the toast's action          │────────────────────╯
 │                    │  Esc                  Back out; never quits            │────────────────────╮
 │                    │  ?                    Show or hide this help           │                    │

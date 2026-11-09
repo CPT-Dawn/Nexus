@@ -328,7 +328,7 @@ pub fn profile_conflict(ssid: &str) -> Failure {
     fail(
         ErrorCode::Conflict,
         format!(
-            "{ssid} was changed by another program while you were editing. \
+            "{ssid} was changed elsewhere while you were editing. \
              Nothing was saved; open its settings again."
         ),
     )

@@ -50,6 +50,36 @@ pub fn wifi_busy(world: &World) -> DeviceId {
     wlan0
 }
 
+/// [`wifi_busy`], plus a saved Profile (Parents House) that already has its
+/// own settings: a static address, custom DNS, metered, a priority. The
+/// joined Home-5G has defaults, so editing it shows the checkpoint countdown.
+pub fn profile_busy(world: &World) -> DeviceId {
+    let wlan0 = wifi_busy(world);
+    let network = nexus_ipc::network_id(b"Parents House");
+    let view = world
+        .wire()
+        .call(json!({"op": "profile_get", "network": network}));
+    let resp = world.wire().call(json!({
+        "op": "profile_update",
+        "network": network,
+        "version": view["ok"]["version"],
+        "settings": {
+            "ipv4": {
+                "method": "manual",
+                "addresses": [{"address": "192.168.7.20", "prefix": 24}],
+                "gateway": "192.168.7.1",
+            },
+            "ipv6": {"method": "auto"},
+            "dns": ["9.9.9.9", "149.112.112.112"],
+            "mac": "per_network",
+            "metered": true,
+            "priority": 10,
+        },
+    }));
+    assert!(resp.get("ok").is_some(), "editing Parents House: {resp}");
+    wlan0
+}
+
 /// [`wifi_busy`], plus a join of `Work-Secure` that is waiting for its
 /// password: the Daemon holds an open Secret prompt for any Front end that
 /// subscribes. The returned thread ends when the prompt is answered.
