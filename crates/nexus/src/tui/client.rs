@@ -210,6 +210,17 @@ fn session(
     if let Ok(tethers) = conn.tethers()? {
         send(Msg::Tethers(tethers))?;
     }
+    if let Ok(got) = conn.call(Op::ConfigGet { key: None })?
+        && let Some(config) = got.get("value").cloned()
+    {
+        send(Msg::Config {
+            config,
+            warning: got
+                .get("warning")
+                .and_then(|w| w.as_str())
+                .map(String::from),
+        })?;
+    }
     send(Msg::Activity(
         conn.activity()?
             .map_err(|f| refused("activity", f))?
@@ -226,6 +237,9 @@ fn session(
             }
             Some(Event::Activity { entry }) => send(Msg::Happened(entry))?,
             Some(Event::DoctorFindings { findings }) => send(Msg::Findings(findings))?,
+            Some(Event::ConfigReloaded { config, warning }) => {
+                send(Msg::Config { config, warning })?
+            }
             Some(event @ (Event::ProfilePending { .. } | Event::ProfileSettled { .. })) => {
                 send(Msg::Profile(super::ProfileMsg::Event(event)))?
             }

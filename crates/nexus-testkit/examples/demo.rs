@@ -44,6 +44,13 @@
 //!   tethers, `x` drops the tether, `u` undoes. `d` opens details when narrow.
 //! - `tether-off`: the same, with Bluetooth switched off, so `enter` shows how
 //!   to turn it on.
+//! - `settings`: Press `6`. `j`/`k` move, `enter` changes the row (the theme
+//!   cycles through the seven built-ins and the custom `sunrise`; switches
+//!   flip), `r` resets it. The config file (with its comments) is edited in
+//!   place, so `nexus config get` in another shell agrees. `Lost` notifications
+//!   start switched off.
+//! - `settings-bad`: the same, but the config selects the mistaken theme
+//!   `broken`: the TUI falls back to Midnight Bloom and says why.
 //! - `profile`: `wifi`, where Parents House (saved, out of range) already has a
 //!   static address, custom DNS, metered and a priority. Press `2`, then `e`
 //!   on Home-5G (in use: Apply starts the 15 s "Keep these settings?"
@@ -82,7 +89,9 @@ fn main() {
     let scenario = args.next().unwrap_or_else(|| "online".into());
     let rest: Vec<String> = args.collect();
 
-    let world = if scenario.starts_with("tether") {
+    let world = if scenario.starts_with("settings") {
+        nexus_testkit::scenarios::settings_world(&bin, scenario == "settings-bad")
+    } else if scenario.starts_with("tether") {
         nexus_testkit::scenarios::tether_world(&bin, scenario == "tether")
     } else if scenario == "profile-keyring" {
         World::builder(&bin).keyring(true).start()
@@ -93,7 +102,7 @@ fn main() {
     let opened = world.dir().join("opened.log");
     let mut wlan0 = None;
     match scenario.as_str() {
-        "offline" | "tether" | "tether-off" => {}
+        "offline" | "tether" | "tether-off" | "settings" | "settings-bad" => {}
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.

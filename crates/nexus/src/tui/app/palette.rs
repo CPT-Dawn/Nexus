@@ -104,6 +104,7 @@ impl App {
             Run::Root(code) => self.root_key(plain(code)),
             Run::Key(Tab::WiFi, code) => self.wifi_key(plain(code)),
             Run::Key(Tab::Hotspot, code) => self.tether_key(plain(code)),
+            Run::Key(Tab::Settings, code) => self.settings_key(plain(code)),
             Run::Key(..) => false,
             Run::Go(tab) => self.go_tab(tab),
             Run::Call(f) => f(self),

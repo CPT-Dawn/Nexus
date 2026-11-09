@@ -18,6 +18,7 @@ use super::layout::{self, Areas, Mode};
 use super::overlays;
 use super::overview;
 use super::profile_ui;
+use super::settings_ui;
 use super::surface;
 use super::tether_ui;
 use super::theme::Look;
@@ -344,6 +345,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::Hotspot {
         return tether_ui::master(f, app, area, look, sym);
     }
+    if app.tab() == Tab::Settings {
+        return settings_ui::master(f, app, area, look, sym);
+    }
     if app.tab().rows() > 0 {
         overview::cards_panel(f, app, area, look, sym, true);
         return;
@@ -366,6 +370,9 @@ fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     }
     if app.tab() == Tab::Hotspot && app.conn() == Conn::Up {
         return tether_ui::detail(f, app, area, look, sym);
+    }
+    if app.tab() == Tab::Settings && app.conn() == Conn::Up {
+        return settings_ui::detail(f, app, area, look, sym);
     }
     let title = match app.tab() {
         Tab::Overview => "Status",

@@ -53,7 +53,7 @@ pub struct Verb {
 }
 
 /// Every table of Verbs, in the order the help overlay lists them.
-pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, VPN, TETHER, UNDO];
+pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, VPN, TETHER, SETTINGS, UNDO];
 
 pub fn all() -> impl Iterator<Item = &'static Verb> {
     TABLES.iter().flat_map(|t| t.iter())
@@ -395,6 +395,76 @@ static TETHER: &[Verb] = &[
             }
         },
     ),
+];
+
+// ---- Settings -------------------------------------------------------------------
+
+fn loaded(app: &App) -> Result<(), &'static str> {
+    if app.settings().has_data() {
+        Ok(())
+    } else {
+        Err("The daemon has not sent its settings yet.")
+    }
+}
+
+static SETTINGS: &[Verb] = &[
+    Verb {
+        verb: "Switch theme",
+        words: "colours colors palette look dark nord gruvbox catppuccin tokyo rose pine contrast",
+        key: "",
+        help: "Use the next theme",
+        scope: Scope::Any,
+        run: Run::Call(|app| app.change_setting_by_key("theme")),
+        ready: loaded,
+    },
+    Verb {
+        verb: "Toggle Nerd Font icons",
+        words: "icons glyphs font symbols",
+        key: "",
+        help: "",
+        scope: Scope::Any,
+        run: Run::Call(|app| app.change_setting_by_key("ui.nerd_font")),
+        ready: loaded,
+    },
+    Verb {
+        verb: "Toggle reduced motion",
+        words: "animation effects accessibility calm",
+        key: "",
+        help: "",
+        scope: Scope::Any,
+        run: Run::Call(|app| app.change_setting_by_key("ui.reduce_motion")),
+        ready: loaded,
+    },
+    Verb {
+        verb: "Change setting",
+        words: "toggle switch notification option",
+        key: "Enter",
+        help: "Settings: change the selected setting",
+        scope: Scope::Tab(Tab::Settings),
+        run: Run::Key(Tab::Settings, KeyCode::Enter),
+        ready: |app| {
+            if app.tab() != Tab::Settings {
+                Err("Open the Settings tab and pick a setting first.")
+            } else {
+                loaded(app)
+            }
+        },
+    },
+    Verb {
+        verb: "Reset setting",
+        words: "default restore",
+        key: "r",
+        help: "Settings: put the default back",
+        scope: Scope::Tab(Tab::Settings),
+        run: Run::Key(Tab::Settings, KeyCode::Char('r')),
+        ready: |app| {
+            if app.tab() != Tab::Settings {
+                Err("Open the Settings tab and pick a setting first.")
+            } else {
+                loaded(app)
+            }
+        },
+    },
 ];
 
 // ---- both lists -----------------------------------------------------------------

@@ -19,6 +19,8 @@ mod overlays;
 mod overview;
 mod profile;
 mod profile_ui;
+mod settings;
+mod settings_ui;
 mod share;
 mod surface;
 mod tether;
@@ -46,7 +48,19 @@ pub use caps::{Caps, ColorTier, Glyphs};
 pub use client::Client;
 pub use fx::Movement;
 pub use profile::{Editor, Phase, ProfileMsg, Row};
+pub use settings::SettingsTab;
+pub use theme::{Look, Theme};
 pub use wifi::{PasswordField, Toast};
+
+/// The labels of the Settings rows, top to bottom (what tests move to).
+pub fn settings_labels() -> Vec<&'static str> {
+    settings::ITEMS.iter().map(|i| i.label).collect()
+}
+
+/// A built-in theme by its config name.
+pub fn builtin_theme(name: &str) -> Option<Theme> {
+    Theme::builtin(name)
+}
 
 /// Draws `app` into a fresh buffer of the given size (what a snapshot sees).
 pub fn render(app: &App, width: u16, height: u16) -> Buffer {

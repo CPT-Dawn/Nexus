@@ -183,3 +183,32 @@ pub fn tether_world(bin: impl Into<std::path::PathBuf>, powered: bool) -> World 
     }
     world
 }
+
+/// The Settings tab's world: a config with comments, a custom theme
+/// (`sunrise`, from Gruvbox) and a mistaken one (`broken`). With `bad_theme`
+/// the config selects `broken`, so the TUI starts on the fallback with its
+/// warning. Press `6` in the demo.
+pub fn settings_world(bin: impl Into<std::path::PathBuf>, bad_theme: bool) -> World {
+    let mut world = World::builder(bin).daemon(false).start();
+    let theme = if bad_theme {
+        "broken"
+    } else {
+        "midnight-bloom"
+    };
+    world.write_config(&format!(
+        "# Nexus settings, edited by hand and by the Settings tab.\n\
+         theme = \"{theme}\"  # try `nexus config set theme nord`\n\
+         \n\
+         [notifications]\n\
+         lost = false  # too chatty on the train\n\
+         \n\
+         [themes.sunrise]\n\
+         base = \"gruvbox\"\n\
+         accent = \"#ff7a59\"\n\
+         \n\
+         [themes.broken]\n\
+         accent = \"teal\"\n"
+    ));
+    world.start_daemon();
+    world
+}
