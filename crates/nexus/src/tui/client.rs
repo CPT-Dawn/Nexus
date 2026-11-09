@@ -198,6 +198,10 @@ fn session(
         send(Msg::Status(status))
     };
     push(conn.status()?.map_err(|f| refused("status", f))?)?;
+    // Without a Backend there is no list yet; `networks_changed` brings it.
+    if let Ok(list) = conn.wifi_list()? {
+        send(Msg::Wifi(list))?;
+    }
     send(Msg::Activity(
         conn.activity()?
             .map_err(|f| refused("activity", f))?
@@ -206,6 +210,10 @@ fn session(
     while !stop.load(Ordering::SeqCst) {
         match conn.next_event(WAKE)? {
             Some(Event::StatusChanged { status }) => push(status)?,
+            Some(Event::NetworksChanged { wifi }) => send(Msg::Wifi(wifi))?,
+            Some(event @ (Event::SecretPromptOpened { .. } | Event::SecretPromptClosed { .. })) => {
+                send(Msg::Prompt(event))?
+            }
             Some(Event::Activity { entry }) => send(Msg::Happened(entry))?,
             Some(Event::DoctorFindings { findings }) => send(Msg::Findings(findings))?,
             Some(_) => {}

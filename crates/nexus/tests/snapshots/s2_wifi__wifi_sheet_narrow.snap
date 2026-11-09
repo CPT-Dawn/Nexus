@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_wifi.rs
+expression: sheet
+---
+ Nexus  Wi-Fi ▾  2/6                              ● Offline
+    ╭ Home-5G ─────────────────────────────────────────────╮
+    │ ● Connected                                          │
+    │                                                      │
+    │ Signal         82%  ▂▄▆█                             │
+    │ Security      WPA2 personal                          │
+    │ Band          5 GHz                                  │
+    │ Access points 1                                      │
+    │ Adapter       wlan0                                  │
+    │ Autoconnect   on                                     │
+    │                                                      │
+    │ Press x to disconnect.                               │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    ╰──────────────────────────────────────────────────────╯
+ esc back  r scan  ? help

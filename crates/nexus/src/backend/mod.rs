@@ -7,7 +7,9 @@ mod wifi;
 
 use std::future::Future;
 
-use nexus_ipc::{Disconnected, Forgotten, Joined, Radios, ScanOutcome, Secret, Status, WifiList};
+use nexus_ipc::{
+    AutoconnectSet, Disconnected, Forgotten, Joined, Radios, ScanOutcome, Secret, Status, WifiList,
+};
 
 use crate::text::Failure;
 
@@ -111,6 +113,13 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
     ) -> impl Future<Output = Result<Forgotten, BackendError>> + Send;
+
+    /// Turns automatic joining of a saved Network on or off.
+    fn wifi_autoconnect(
+        &self,
+        network: String,
+        enabled: bool,
+    ) -> impl Future<Output = Result<AutoconnectSet, BackendError>> + Send;
 
     /// Switches Wi-Fi on or off. Refused with `hard_blocked` while a hardware
     /// switch holds it off.

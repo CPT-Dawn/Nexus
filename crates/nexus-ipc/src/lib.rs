@@ -69,6 +69,10 @@ pub enum Op {
     /// Forget (delete the Profile of) a Wi-Fi Network by `WifiNetwork.id`.
     /// Result: [`Forgotten`]; `unknown_network` when nothing is saved for it.
     WifiForget { network: String },
+    /// Turn automatic joining of a saved Network on or off, by
+    /// `WifiNetwork.id`. Result: [`AutoconnectSet`]; `unknown_network` when
+    /// nothing is saved for it.
+    WifiAutoconnect { network: String, enabled: bool },
     /// Answer an open Secret prompt (`prompt` is the id from its `secret_prompt_opened`
     /// event). The only request besides `wifi_join` that carries a secret.
     /// Result `{}`; `unknown_prompt` when it is closed already.
@@ -635,6 +639,9 @@ pub struct WifiNetwork {
     /// UUID of the saved Profile for it, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+    /// Whether the saved Profile joins by itself; `None` without a Profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub autoconnect: Option<bool>,
 }
 
 /// A saved Wi-Fi Profile whose Network is not in range.
@@ -686,6 +693,13 @@ pub struct Disconnected {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Forgotten {
     pub ssid: String,
+}
+
+/// The `wifi_autoconnect` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutoconnectSet {
+    pub ssid: String,
+    pub enabled: bool,
 }
 
 /// Encodes a value as one line, newline included.
@@ -742,6 +756,8 @@ pub struct Connection {
     next_id: u64,
     /// Half a line read before a timeout.
     partial: String,
+    /// Events that arrived while `call` waited for its response.
+    parked: std::collections::VecDeque<Event>,
 }
 
 impl Connection {
@@ -757,6 +773,7 @@ impl Connection {
             reader: BufReader::new(UnixStream::connect(path)?),
             next_id: 1,
             partial: String::new(),
+            parked: std::collections::VecDeque::new(),
         })
     }
 
@@ -777,7 +794,11 @@ impl Connection {
                 return Err(io::ErrorKind::UnexpectedEof.into());
             }
             let Ok(resp) = serde_json::from_str::<Response>(&buf) else {
-                continue; // an event line, or noise
+                // An event line (kept for `next_event`), or noise.
+                if let Ok(line) = serde_json::from_str::<EventLine>(&buf) {
+                    self.parked.push_back(line.event);
+                }
+                continue;
             };
             if resp.id != Some(id) {
                 continue;
@@ -793,6 +814,9 @@ impl Connection {
     /// `None` means nothing arrived in time. Call `Op::Subscribe` first or
     /// none will come.
     pub fn next_event(&mut self, wait: Duration) -> io::Result<Option<Event>> {
+        if let Some(event) = self.parked.pop_front() {
+            return Ok(Some(event));
+        }
         self.reader.get_ref().set_read_timeout(Some(wait))?;
         let result = loop {
             match self.reader.read_line(&mut self.partial) {

@@ -12,6 +12,7 @@
 mod bus;
 mod fake_nm;
 mod fake_systemd;
+pub mod scenarios;
 mod world;
 
 pub use bus::Bus;

@@ -15,6 +15,7 @@ use super::doctor_view;
 use super::layout::{self, Areas, Mode};
 use super::overview;
 use super::theme::Look;
+use super::wifi_ui;
 use super::words;
 
 /// The symbols for one glyph set.
@@ -121,6 +122,12 @@ pub fn draw(f: &mut Frame, app: &App) {
     header(f, app, &a, &look, &sym);
     body(f, app, &a, &look, &sym);
     footer(f, app, &a, &look);
+    let body = Rect {
+        y: a.header.bottom(),
+        height: a.footer.y.saturating_sub(a.header.bottom()),
+        ..a.header
+    };
+    wifi_ui::overlays(f, app, body, &look, &sym);
     if app.layer() == Layer::Help {
         help(f, area, &look, &sym);
     }
@@ -251,6 +258,9 @@ fn body(f: &mut Frame, app: &App, a: &Areas, look: &Look, sym: &Sym) {
 }
 
 fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
+    if app.tab() == Tab::WiFi {
+        return wifi_ui::master(f, app, area, look, sym);
+    }
     if app.tab().rows() > 0 {
         overview::cards_panel(f, app, area, look, sym, true);
         return;
@@ -265,6 +275,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
 }
 
 fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
+    if app.tab() == Tab::WiFi && app.conn() == Conn::Up {
+        return wifi_ui::detail(f, app, area, look, sym);
+    }
     let title = match app.tab() {
         Tab::Overview => "Status",
         other => other.title(),
@@ -302,13 +315,20 @@ fn daemon_lines(app: &App, look: &Look) -> Vec<Line<'static>> {
 }
 
 fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
-    const KEYS: [(&str, &str); 9] = [
+    const KEYS: [(&str, &str); 16] = [
         ("j / k, Down / Up", "Move in the list"),
         ("g / G", "Jump to top / bottom"),
         ("h / l, Left / Right", "Previous / next tab"),
         ("Tab / Shift-Tab", "Next / previous tab"),
         ("1 - 6", "Jump to a tab"),
         ("Enter", "Open the selected card's tab"),
+        ("d", "Details sheet (small windows)"),
+        ("Wi-Fi: Enter", "Join the selected Network"),
+        ("Wi-Fi: r", "Rescan"),
+        ("Wi-Fi: x", "Disconnect"),
+        ("Wi-Fi: f", "Forget (asks first)"),
+        ("Wi-Fi: a", "Toggle autoconnect"),
+        ("Wi-Fi: u", "Undo the toast's action"),
         ("Esc", "Back out; never quits"),
         ("?", "Show or hide this help"),
         ("q, Ctrl-C", "Quit"),

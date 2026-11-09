@@ -3,13 +3,17 @@
 //!
 //! ```text
 //! cargo build -p nexus
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt]
 //! ```
 //!
 //! Scenarios:
 //! - `online`: joined to Home-5G, no traffic.
 //! - `offline`: nothing connected.
 //! - `portal`: joined to CafeGuest behind a sign-in page.
+//! - `wifi`: six Wi-Fi Networks in range (Home-5G joined), two saved ones out
+//!   of range. Press `2` for the Wi-Fi tab; `r` rescans, `enter` joins, `x`
+//!   disconnects, `f` forgets, `a` toggles autoconnect, `u` undoes.
+//! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -29,9 +33,23 @@ fn main() {
     let rest: Vec<String> = args.collect();
 
     let world = World::start(&bin);
+    let mut _prompt = None;
     let mut wlan0 = None;
     match scenario.as_str() {
         "offline" => {}
+        // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
+        // two saved ones out of range; r rescans, f forgets, a toggles
+        // autoconnect, x disconnects, u undoes.
+        "wifi" | "wifi-prompt" => {
+            if scenario == "wifi" {
+                nexus_testkit::scenarios::wifi_busy(&world);
+            } else {
+                // Same, plus a password prompt for Work-Secure, already open.
+                _prompt = Some(nexus_testkit::scenarios::wifi_with_open_prompt(&world));
+            }
+            world.nm.set_connectivity(NmConnectivity::Full);
+            world.nm.set_state(NmState::ConnectedGlobal);
+        }
         "portal" => {
             world
                 .nm
@@ -86,5 +104,6 @@ fn main() {
         status
     });
     drop(world);
+    drop(_prompt);
     std::process::exit(status.code().unwrap_or(1));
 }
