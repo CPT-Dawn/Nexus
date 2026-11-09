@@ -12,11 +12,12 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
     ActivityEntry, ActivityKind, Connectivity, Event, Finding, Op, PromptClosed, PromptKind,
-    Secret, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
+    Secret, State, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
 use super::eap_form::{EapForm, Typed};
+use super::fx::{self, Fx};
 use super::hits::Hit;
 use super::profile::{Action, Editor, ProfileMsg};
 use super::share::{Share, Stage};
@@ -216,14 +217,18 @@ pub struct App {
     palette: Option<Palette>,
     /// First help row shown (the overlay scrolls).
     help_scroll: usize,
+    /// Event-driven effects (ADR-0003); empty, and so silent, when idle.
+    fx: Fx,
     /// Clickable rectangles of the last frame (see `hits.rs`).
     hits: std::cell::RefCell<Vec<(ratatui::layout::Rect, Hit)>>,
 }
 
 impl App {
     pub fn new(caps: Caps) -> App {
+        let look = Look::new(Theme::MIDNIGHT_BLOOM, caps);
         App {
-            look: Look::new(Theme::MIDNIGHT_BLOOM, caps),
+            look,
+            fx: Fx::new(&look),
             tab: Tab::Overview,
             selected: 0,
             layer: Layer::Root,
@@ -447,10 +452,79 @@ impl App {
             .toast
             .as_ref()
             .map(|t| t.until.saturating_duration_since(Instant::now()));
-        match (sweep, toast) {
+        let wait = match (sweep, toast) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        // A running effect wants its next frame; once the last one ends this
+        // is None again and the loop sleeps (ADR-0003).
+        match (wait, self.fx.running().then_some(fx::FRAME)) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         }
+    }
+
+    /// Whether an effect is still running (frames are being asked for).
+    pub fn animating(&self) -> bool {
+        self.fx.running()
+    }
+
+    /// How much motion this App allows (off on 16 colours and below).
+    pub fn movement(&self) -> super::fx::Movement {
+        self.fx.motion()
+    }
+
+    /// Reduced motion: no gliding, sliding, shaking or pulsing; the colour
+    /// changes that say what happened stay.
+    pub fn reduce_motion(&mut self, on: bool) {
+        self.fx.reduce(on);
+    }
+
+    /// Runs the effects over the frame just drawn into `buf`, advancing them
+    /// by the real time since the last frame.
+    pub fn fx_frame(&mut self, buf: &mut ratatui::buffer::Buffer) {
+        let step = self.fx.step_from_clock();
+        self.fx.process(step, buf);
+    }
+
+    /// Like [`App::fx_frame`] with the clock in the caller's hands (tests).
+    pub fn fx_step(&mut self, buf: &mut ratatui::buffer::Buffer, step: Duration) {
+        self.fx.process(step, buf);
+    }
+
+    fn layout(&self) -> super::layout::Areas {
+        super::layout::areas(ratatui::layout::Rect::new(0, 0, self.size.0, self.size.1))
+    }
+
+    /// The room between the header and the footer.
+    fn body_rect(&self) -> ratatui::layout::Rect {
+        let a = self.layout();
+        ratatui::layout::Rect {
+            y: a.header.bottom(),
+            height: a.footer.y.saturating_sub(a.header.bottom()),
+            ..a.header
+        }
+    }
+
+    /// Starts or stops the connecting pulse on what the person is looking at:
+    /// the header's status, and the hero on the Overview.
+    fn sync_pulse(&mut self) {
+        let connecting = self
+            .status
+            .as_ref()
+            .is_some_and(|s| s.state == State::Connecting);
+        let a = self.layout();
+        let mut focal = vec![ratatui::layout::Rect {
+            x: a.header.x + a.header.width / 2,
+            width: a.header.width - a.header.width / 2,
+            ..a.header
+        }];
+        if self.tab == Tab::Overview
+            && let Some(status) = &self.status
+        {
+            focal.push(super::overview::hero_rect(status, &a, &self.look));
+        }
+        self.fx.connecting(connecting, &focal);
     }
 
     /// Applies one message. Returns whether the screen needs a redraw: an
@@ -485,6 +559,7 @@ impl App {
                 let online = entry.kind == ActivityKind::Online;
                 if online {
                     self.say("You're online.", false, None);
+                    self.bloom();
                 }
                 self.activity.insert(0, entry);
                 self.activity.truncate(ACTIVITY);
@@ -506,6 +581,9 @@ impl App {
             Msg::Mouse(ev) => self.mouse(ev),
             Msg::Resize(w, h) => {
                 self.size = (w, h);
+                // Every effect area is stale now; the pulse restarts below.
+                self.fx.clear();
+                self.sync_pulse();
                 if !self.narrow() && self.layer == Layer::Sheet {
                     self.layer = Layer::Root;
                 }
@@ -513,8 +591,20 @@ impl App {
             }
             Msg::Status(status) => {
                 let changed = self.conn != Conn::Up || self.status.as_ref() != Some(&status);
+                let was = self
+                    .status
+                    .as_ref()
+                    .is_some_and(|s| s.state == State::Connecting);
                 self.conn = Conn::Up;
                 self.status = Some(status);
+                if was
+                    != self
+                        .status
+                        .as_ref()
+                        .is_some_and(|s| s.state == State::Connecting)
+                {
+                    self.sync_pulse();
+                }
                 changed
             }
             Msg::Wifi(list) => self.wifi.refresh(list),
@@ -553,7 +643,8 @@ impl App {
                 changed
             }
             Msg::Tick => {
-                let mut dirty = self.wifi.tick();
+                // A running effect needs its next frame.
+                let mut dirty = self.fx.running() | self.wifi.tick();
                 if let Some(editor) = self.editor.as_mut() {
                     dirty |= editor.tick(Instant::now());
                 }
@@ -583,6 +674,18 @@ impl App {
             undo,
             until: Instant::now() + TOAST_FOR,
         });
+        if let Some(toast) = &self.toast {
+            let body = self.body_rect();
+            if let Some(rect) = super::wifi_ui::toast_rect(toast, body) {
+                self.fx.toast(rect, toast.bad, body);
+            }
+        }
+    }
+
+    /// A joined Network blooms across the body.
+    fn bloom(&mut self) {
+        let body = self.body_rect();
+        self.fx.joined(body);
     }
 
     fn prompt_event(&mut self, event: Event) -> bool {
@@ -624,7 +727,10 @@ impl App {
             (Cmd::Join { ssid, .. }, result) => {
                 self.wifi.busy = None;
                 match result {
-                    Ok(_) => self.say(format!("Joined {ssid}."), false, None),
+                    Ok(_) => {
+                        self.say(format!("Joined {ssid}."), false, None);
+                        self.bloom();
+                    }
                     Err(message) => self.say(message, true, None),
                 }
             }
@@ -636,7 +742,10 @@ impl App {
             ) => {
                 self.wifi.busy = None;
                 match result {
-                    Ok(_) => self.say(format!("Joined {ssid}."), false, None),
+                    Ok(_) => {
+                        self.say(format!("Joined {ssid}."), false, None);
+                        self.bloom();
+                    }
                     // Back to the form, nothing typed lost, to try again.
                     Err(message) => {
                         self.eap = Some(EapForm::reopened(
@@ -1193,6 +1302,10 @@ impl App {
         let changed = tab != self.tab;
         self.tab = tab;
         self.selected = 0;
+        if changed {
+            self.fx.tab_changed(self.body_rect());
+            self.sync_pulse();
+        }
         changed
     }
 

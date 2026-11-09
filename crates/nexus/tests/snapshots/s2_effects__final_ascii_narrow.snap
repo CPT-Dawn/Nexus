@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_effects.rs
+expression: frame
+---
+ Nexus  Overview v  1/6                            * Online
++ Status --------------------------------------------------+
+| * Online                                                 |
+| You're online via Wi-Fi (Home-5G). Everything looks      |
+| healthy.                                                 |
++----------------------------------------------------------+
++ Traffic -------------------------------------------------+
+| v 0 B/s          _______________________________________ |
+| ^ 0 B/s          _______________________________________ |
++----------------------------------------------------------+
++ Connections ---------------------------------------------+
+| > * Wi-Fi    Home-5G                                     |
+|   o Ethernet Not connected                               |
+|   o VPN      Not connected                               |
+|   o Hotspot  Not started                                 |
++----------------------------------------------------------+
++ Recent activity -----------------------------------------+
+| Nothing yet. Joins, losses, VPNs and sign-in pages show  |
++----------------------------------------------------------+
+ j/k move  enter open  h/l tab  : palette  ? help  q quit

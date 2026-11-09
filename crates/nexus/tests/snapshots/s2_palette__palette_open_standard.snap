@@ -3,22 +3,22 @@ source: crates/nexus/tests/s2_palette.rs
 expression: rig.text()
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
-╭ Connections ────╭ Command palette ─────────────────────────────────────────────╮─────────────────╮
-│ ▸ ○ Wi-Fi       │ : ▏                                                          │░░░░░░           │
-│     Not connecte│ ──────────────────────────────────────────────────────────── │██████░░         │
-│   ○ Ethernet    │ ▸ Go to Overview                                           1 │██░░░░           │
-│     Not connecte│   Go to Wi-Fi                                              2 │████░░           │
-│   ○ VPN         │   Go to Ethernet                                           3 │██░░░░           │
-│     Not connecte│   Go to VPN                                                4 │██████░░         │
-│   ○ Hotspot     │   Go to Hotspot                                            5 │░░░░░░           │
-│     Not started │   Go to Settings                                           6 │                 │
-│                 │   Show all keys                                            ? │                 │
-│                 │   Quit Nexus                                               q │                 │
-│                 │   Rescan Wi-Fi                                             r │─────────────────╯
-│                 │   Open login page                                          o │─────────────────╮
-│                 │                                                              │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                 ╰──────────────────────────────────────────────────────────────╯⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                            ││ ↑ 0 B/s          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+│ ▸ ○ Wi-Fi                  ││  ╭ Command palette ─────────────────────────────────────────────╮  │
+│     Not connected          ││  │ : ▏                                                          │  │
+│   ○ Ethernet               ││ ░│ ──────────────────────────────────────────────────────────── │  │
+│     Not connected          ││ ░│ ▸ Go to Overview                                           1 │  │
+│   ○ VPN                    ││ ░│   Go to Wi-Fi                                              2 │  │
+│     Not connected          ││  │   Go to Ethernet                                           3 │  │
+│   ○ Hotspot                ││  │   Go to VPN                                                4 │  │
+│     Not started            ││  │   Go to Hotspot                                            5 │  │
+│                            ││ Y│   Go to Settings                                           6 │  │
+│                            ││ I│   Show all keys                                            ? │  │
+│                            │╰──│   Quit Nexus                                               q │──╯
+│                            │╭ T│   Rescan Wi-Fi                                             r │──╮
+│                            ││ ↓│   Open login page                                          o │⠀ │
+│                            ││ d│                                                              │⣀ │
+│                            ││ ↑╰──────────────────────────────────────────────────────────────╯⠀ │
 │                            ││ up               ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
 │                            │╰────────────────────────────────────────────────────────────────────╯
 │                            │╭ Recent activity ───────────────────────────────────────────────────╮

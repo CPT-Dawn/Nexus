@@ -4,13 +4,13 @@ expression: styled_of(&rig.buffer(STANDARD))
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
 ╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
-│ ▸ ● Wi-Fi                  ││     ░░    ░░░░    ░░      ░░░░░░  ░░░░    ░░░░░░                   │
-│     Home-5G                ││   ░░██░░░░████░░░░██░░  ░░██████░░████░░░░██████░░                 │
-│   ○ Ethernet               ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░██░░░░                   │
-│     Not connected          ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░████░░                   │
-│   ○ VPN                    ││ ░░██░░██░░██░░██░░██░░░░  ░░██░░░░██░░██░░██░░░░                   │
-│     Not connected          ││   ░░██░░░░██░░██░░██████░░██████░░██░░██░░██████░░                 │
-│   ○ Hotspot                ││     ░░    ░░  ░░  ░░░░░░  ░░░░░░  ░░  ░░  ░░░░░░                   │
+│ ▸ ● Wi-Fi                  ││     ░░░░    ░░    ░░  ░░        ░░░░░░    ░░    ░░  ░░░░░░░░       │
+│     Home-5G                ││   ░░████░░░░██░░░░██░░██░░    ░░██████░░░░██░░░░██░░████████░░     │
+│   ○ Ethernet               ││ ░░██░░░░██░░████░░██░░██░░      ░░██░░  ░░████░░██░░██░░░░░░       │
+│     Not connected          ││ ░░██░░░░██░░████████░░██░░      ░░██░░  ░░████████░░██████░░       │
+│   ○ VPN                    ││ ░░██░░░░██░░██░░████░░██░░░░░░  ░░██░░  ░░██░░████░░██░░░░░░       │
+│     Not connected          ││   ░░████░░░░██░░░░██░░████████░░██████░░░░██░░░░██░░████████░░     │
+│   ○ Hotspot                ││     ░░░░    ░░    ░░  ░░░░░░░░  ░░░░░░    ░░    ░░  ░░░░░░░░       │
 │     Not started            ││                                                                    │
 │                            ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │
 │                            ││ Internet: full  |  Backend: networkmanager 1.58.1                  │
@@ -33,12 +33,30 @@ expression: styled_of(&rig.buffer(STANDARD))
 
   426 cells  fg=#2c4a4c bg=- mods=[]
    58 cells  fg=#5d7377 bg=- mods=[]
-  209 cells  fg=#8de3dc bg=- mods=[]
-    7 cells  fg=#8de3dc bg=- mods=[bold]
-  157 cells  fg=#9db4b5 bg=- mods=[]
-  211 cells  fg=#9ece6a bg=- mods=[]
-  172 cells  fg=#9ece6a bg=- mods=[dim]
+    6 cells  fg=#8de3b2 bg=- mods=[]
+   16 cells  fg=#8de3b9 bg=- mods=[]
+   16 cells  fg=#8de3c0 bg=- mods=[]
+   13 cells  fg=#8de3c7 bg=- mods=[]
+   19 cells  fg=#8de3ce bg=- mods=[]
+   20 cells  fg=#8de3d5 bg=- mods=[]
+    1 cells  fg=#8de3dc bg=#182724 mods=[bold]
+   11 cells  fg=#8de3dc bg=#182727 mods=[]
+  108 cells  fg=#8de3dc bg=- mods=[]
+    6 cells  fg=#8de3dc bg=- mods=[bold]
+   12 cells  fg=#9db4b5 bg=#182725 mods=[]
+   14 cells  fg=#9db4b5 bg=#182727 mods=[]
+    4 cells  fg=#9db4b5 bg=#182728 mods=[]
+  127 cells  fg=#9db4b5 bg=- mods=[]
+  239 cells  fg=#9ece6a bg=- mods=[]
+  202 cells  fg=#9ece6a bg=- mods=[dim]
    62 cells  fg=#e4f2f0 bg=#17302f mods=[bold]
+    1 cells  fg=#e4f2f0 bg=#182724 mods=[bold]
+    1 cells  fg=#e4f2f0 bg=#182725 mods=[bold]
   100 cells  fg=#e4f2f0 bg=- mods=[]
-   68 cells  fg=#e4f2f0 bg=- mods=[bold]
- 1330 cells  fg=- bg=- mods=[]
+   66 cells  fg=#e4f2f0 bg=- mods=[bold]
+    5 cells  fg=- bg=#182724 mods=[]
+   16 cells  fg=- bg=#182725 mods=[]
+   13 cells  fg=- bg=#182726 mods=[]
+   38 cells  fg=- bg=#182727 mods=[]
+    3 cells  fg=- bg=#182728 mods=[]
+ 1197 cells  fg=- bg=- mods=[]

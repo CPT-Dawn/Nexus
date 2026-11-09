@@ -4,13 +4,13 @@ expression: top
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
 ╭ Connections ─────────────────────────╭ All keys (j/k scroll) ─────────────────────────────────────╮──────────────────────────────────────╮
-│ ▸ ○ Wi-Fi                            │  :                    Open the command palette             █                                      │
-│     Not connected                    │  j / k, Down / Up     Move in the list                     █                                      │
-│   ○ Ethernet                         │  g / G                Jump to top / bottom                 █                                      │
-│     Not connected                    │  h / l, Left / Right  Previous / next tab                  █                                      │
-│   ○ VPN                              │  Tab / Shift-Tab      Next / previous tab                  █                                      │
-│     Not connected                    │  1 - 6                Jump to a tab                        █                                      │
-│   ○ Hotspot                          │  Enter                Open the selected card's tab         █                                      │
+│ ▸ ○ Wi-Fi                            │  :                    Open the command palette             █░  ░░░░░░░░                           │
+│     Not connected                    │  j / k, Down / Up     Move in the list                     ██░░████████░░                         │
+│   ○ Ethernet                         │  g / G                Jump to top / bottom                 ██░░██░░░░░░                           │
+│     Not connected                    │  h / l, Left / Right  Previous / next tab                  ██░░██████░░                           │
+│   ○ VPN                              │  Tab / Shift-Tab      Next / previous tab                  ██░░██░░░░░░                           │
+│     Not connected                    │  1 - 6                Jump to a tab                        ██░░████████░░                         │
+│   ○ Hotspot                          │  Enter                Open the selected card's tab         █░  ░░░░░░░░                           │
 │     Not started                      │  d                    Details sheet (small windows)        █                                      │
 │                                      │  Esc                  Back out; never quits                █                                      │
 │                                      │  o                    Open a Portal's login page           █                                      │

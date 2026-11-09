@@ -164,7 +164,7 @@ impl Look {
 }
 
 /// The xterm-256 index closest to an RGB colour (cube or grey ramp).
-fn nearest_xterm((r, g, b): (u8, u8, u8)) -> u8 {
+pub(super) fn nearest_xterm((r, g, b): (u8, u8, u8)) -> u8 {
     const LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
     let near = |v: u8| {
         (0..6)

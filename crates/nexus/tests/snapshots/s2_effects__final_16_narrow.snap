@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_effects.rs
+expression: frame
+---
+ Nexus  Overview ▾  1/6                            ● Online
+╭ Status ──────────────────────────────────────────────────╮
+│ ● Online                                                 │
+│ You're online via Wi-Fi (Home-5G). Everything looks      │
+│ healthy.                                                 │
+╰──────────────────────────────────────────────────────────╯
+╭ Traffic ─────────────────────────────────────────────────╮
+│ ↓ 0 B/s          ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│ ↑ 0 B/s          ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+╰──────────────────────────────────────────────────────────╯
+╭ Connections ─────────────────────────────────────────────╮
+│ ▸ ● Wi-Fi    Home-5G                                     │
+│   ○ Ethernet Not connected                               │
+│   ○ VPN      Not connected                               │
+│   ○ Hotspot  Not started                                 │
+╰──────────────────────────────────────────────────────────╯
+╭ Recent activity ─────────────────────────────────────────╮
+│ Nothing yet. Joins, losses, VPNs and sign-in pages show  │
+╰──────────────────────────────────────────────────────────╯
+ j/k move  enter open  h/l tab  : palette  ? help  q quit

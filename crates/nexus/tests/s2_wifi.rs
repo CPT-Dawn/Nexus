@@ -362,6 +362,10 @@ fn a_rescan_is_when_the_order_is_redone_and_the_cursor_still_follows_its_row() {
 fn a_rescan_shows_the_sweep_until_the_new_list_arrives() {
     let mut rig = Rig::busy();
     rig.world.nm.set_last_scan_ago(rig.dev(), 60_000);
+    // The tab change glided in; this test never draws, so play it out.
+    while rig.app.animating() {
+        tui::render_fx(&mut rig.app, 100, 28, std::time::Duration::from_millis(400));
+    }
     assert_eq!(rig.app.next_tick(), None, "nothing animates while idle");
     rig.key(KeyCode::Char('r'));
     let frame = rig.text(STANDARD);

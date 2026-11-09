@@ -13,12 +13,12 @@ expression: frame
 │   ── Saved, out of range   ││                                                                    │
 │ ▸   Parents House     auto ││                                                                    │
 │     Hotel Lobby     manual ││                                                                    │
-│                       ╭ Forget ──────────────────────────────────────────╮                       │
-│                       │ Forget Parents House?                            │                       │
-│                       │ Its saved password goes with it.                 │                       │
-│                       │                                                  │                       │
-│                       │ y forget   esc keep                              │                       │
-│                       ╰──────────────────────────────────────────────────╯                       │
+│                            ││        ╭ Forget ──────────────────────────────────────────╮        │
+│                            ││        │ Forget Parents House?                            │        │
+│                            ││        │ Its saved password goes with it.                 │        │
+│                            ││        │                                                  │        │
+│                            ││        │ y forget   esc keep                              │        │
+│                            ││        ╰──────────────────────────────────────────────────╯        │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

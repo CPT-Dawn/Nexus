@@ -18,6 +18,7 @@ use super::layout::{self, Areas, Mode};
 use super::overlays;
 use super::overview;
 use super::profile_ui;
+use super::surface;
 use super::tether_ui;
 use super::theme::Look;
 use super::vpn_ui;
@@ -154,7 +155,10 @@ pub fn draw(f: &mut Frame, app: &App) {
         height: a.footer.y.saturating_sub(a.header.bottom()),
         ..a.header
     };
-    wifi_ui::overlays(f, app, body, &look, &sym);
+    // Dialogs sit over the detail pane when there is one, so they never
+    // cover the list beside it.
+    let modal = a.detail.unwrap_or(body);
+    wifi_ui::overlays(f, app, body, modal, &look, &sym);
     vpn_ui::overlays(f, app, body, &look, &sym);
     if let Some(form) = app.eap_form() {
         eap_ui::draw(f, form, body, &look, &sym);
@@ -163,10 +167,12 @@ pub fn draw(f: &mut Frame, app: &App) {
     if app.layer() == Layer::Help {
         overlays::help(f, app, body, &look, &sym);
     }
-    overlays::palette(f, app, area, &look, &sym);
+    overlays::palette(f, app, a.detail.unwrap_or(area), &look, &sym);
     if app.layer() == Layer::Confirm {
         doctor_view::confirm(f, app, area, &look, &sym);
     }
+    // Last: gradient borders and glow over everything drawn.
+    surface::finish(f.buffer_mut(), &look);
 }
 
 fn too_small(f: &mut Frame, area: Rect, look: &Look) {
