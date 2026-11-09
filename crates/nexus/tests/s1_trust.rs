@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use nexus_testkit::{ActiveConnection, Ap, DeviceId, NmConnectivity, NmState, World};
+use nexus_testkit::{ActiveConnection, Ap, DeviceId, NmConnectivity, NmState, Wire, World};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
@@ -82,8 +82,29 @@ fn wait_vpn_up(world: &World) {
     }
 }
 
-fn settle() {
-    std::thread::sleep(Duration::from_millis(700));
+/// A Front end that sees the Daemon's events, subscribed before anything happens.
+fn front_end(world: &World) -> Wire {
+    let mut fe = world.wire();
+    fe.subscribe();
+    fe
+}
+
+/// Proof that the Daemon has re-read and applied everything NetworkManager did
+/// before this call: it handles changes in order, so once a change made now
+/// (Home's signal, to `marker`) is pushed, the Trust policy has already decided
+/// about the earlier ones. Use a new `marker` for every call on one world.
+fn sentinel(world: &World, fe: &mut Wire, marker: u8) {
+    world.nm.set_strength_of("Home", marker);
+    loop {
+        let ev = fe.next_event("networks_changed");
+        let seen = ev["wifi"]["networks"].as_array().is_some_and(|nets| {
+            nets.iter()
+                .any(|n| n["ssid"] == "Home" && n["signal"] == marker)
+        });
+        if seen {
+            return;
+        }
+    }
 }
 
 #[test]
@@ -156,9 +177,10 @@ fn joining_an_untrusted_network_brings_up_the_chosen_vpn_and_says_so() {
 #[test]
 fn the_vpn_waits_for_the_portal_login() {
     let (world, _) = world(&format!("{QUIET}[trust]\nauto_vpn = \"Work\"\n"));
+    let mut fe = front_end(&world);
     join(&world, "Cafe", None);
     go_online(&world, "Cafe", NmConnectivity::Portal);
-    settle();
+    sentinel(&world, &mut fe, 41);
     assert_ne!(vpn_state(&world), ACTIVATED, "still behind the Portal");
     world.nm.set_connectivity(NmConnectivity::Full);
     wait_vpn_up(&world);
@@ -169,9 +191,10 @@ fn a_trusted_network_is_left_untouched() {
     let (world, _) = world(&format!(
         "{QUIET}[trust]\nauto_vpn = \"Work\"\nmetered = true\n"
     ));
+    let mut fe = front_end(&world);
     join(&world, "Home", Some("hunter22hunter22"));
     go_online(&world, "Home", NmConnectivity::Full);
-    settle();
+    sentinel(&world, &mut fe, 41);
     assert_ne!(vpn_state(&world), ACTIVATED);
     let notes = world.notifications.as_ref().unwrap();
     assert_eq!(notes.count(), 0, "{:?}", notes.all());
@@ -187,7 +210,7 @@ fn a_trusted_network_is_left_untouched() {
         .call(json!({"op": "trust_set", "network": id("Cafe"), "trust": "trusted"}));
     join(&world, "Cafe", None);
     go_online(&world, "Cafe", NmConnectivity::Full);
-    settle();
+    sentinel(&world, &mut fe, 42);
     assert_ne!(vpn_state(&world), ACTIVATED);
     assert_eq!(notes.count(), 0, "{:?}", notes.all());
 }
@@ -216,11 +239,22 @@ fn policy_notifications_can_be_switched_off_and_the_activity_log_keeps_the_line(
     let (world, _) = world(
         "[notifications]\njoined = false\nlost = false\npolicy = false\n[trust]\nauto_vpn = \"Work\"\n",
     );
+    let mut fe = front_end(&world);
     join(&world, "Cafe", None);
     go_online(&world, "Cafe", NmConnectivity::Full);
     wait_vpn_up(&world);
     let notes = world.notifications.as_ref().unwrap();
-    settle();
+    // The policy's activity line comes right before its (switched off) toast.
+    loop {
+        let ev = fe.next_event("activity");
+        if ev["entry"]["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("brought up the VPN"))
+        {
+            break;
+        }
+    }
+    sentinel(&world, &mut fe, 41);
     assert_eq!(notes.count(), 0, "{:?}", notes.all());
     let log = world.wire().call(json!({"op": "activity"}));
     let lines: Vec<&str> = log["ok"]["entries"]
