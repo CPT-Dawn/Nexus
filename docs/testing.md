@@ -49,3 +49,12 @@ Run: `cargo test --workspace`.
 - S1 (`crates/nexus/tests/s1_overview.rs`): `{"op":"traffic"}` and `{"op":"activity"}` over the wire, plus `activity` events. Script counters with `nm.set_traffic(dev, rx_bytes, tx_bytes)` (the first device added carries the primary connection); `nm.statistics_reads()` proves whether anyone asked NetworkManager for them.
 - S2: `rig.traffic(rx_bps, tx_bps)` injects a scripted sample so graph snapshots do not depend on a clock; `rig.sync_watch()` does what `nexus` does after each frame (poll traffic only while `App::traffic_visible()`). Tests that need the Daemon's own rates pump until `app.traffic_samples()` / `traffic_now()` show them.
 - Demo: `... --example demo -- target/debug/nexus busy` shows the moving graphs and activity strip.
+
+## S3: Performance budgets (ticket #31)
+
+`crates/nexus/tests/s3_budgets.rs` measures real release processes against the fake NetworkManager: the Daemon after a busy scenario (40 Networks, 200 rounds of every op, a subscriber), and the real `nexus` TUI on a pty (`rustix` openpt, 120x32). Budgets: Daemon peak RSS (`VmHWM`) < 15 MiB, TUI first frame < 50 ms (spawn to the first ` Nexus ` header byte, best of 5), idle CPU over 5 s (sum of `/proc/<pid>/task/*/schedstat`) < 0.1% Daemon, < 0.2% TUI.
+
+- They are `#[ignore]`d (debug numbers mean nothing). Run: `cargo test --release -p nexus --test s3_budgets -- --ignored --test-threads=1 --nocapture`. Each test prints what it measured; a failure names the budget and the value.
+- CI: `.github/workflows/bench.yml` runs that command on every push and PR touching `crates/**`, and writes the numbers to the job summary.
+- Reference numbers (dev laptop, release): Daemon 7.3 MiB, TUI first frame ~1 ms, idle CPU Daemon 0.000% / TUI 0.07%.
+- To budget a new thing: add a test there; use `World::daemon_pid()` for the Daemon and `Tui::start(&world, &[markers])` + `wait_for` for the TUI.

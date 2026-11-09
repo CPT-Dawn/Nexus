@@ -1,0 +1,44 @@
+name: Benchmark
+
+# Seam S3: the Performance budgets, measured on real release processes against
+# the fake NetworkManager (crates/nexus/tests/s3_budgets.rs). The job fails when
+# a budget is exceeded and the log and job summary carry the measured values.
+# Budgets: Daemon resident memory < 15 MB, TUI first frame < 50 ms, 0% idle CPU
+# for Daemon and TUI. See docs/testing.md.
+
+on:
+  push:
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/bench.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  bench:
+    name: budgets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus
+      - name: Measure the budgets (release build)
+        shell: bash
+        run: |
+          echo '### Performance budgets (GitHub runner, release build)' >> "$GITHUB_STEP_SUMMARY"
+          cargo test --release --locked -p nexus --test s3_budgets \
+            -- --ignored --test-threads=1 --nocapture

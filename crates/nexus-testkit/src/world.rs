@@ -88,6 +88,12 @@ impl World {
         Self::builder(bin).start()
     }
 
+    /// The process id of the Daemon this world started, if one runs. With
+    /// socket activation under a wrapper it is the wrapper's, not the Daemon's.
+    pub fn daemon_pid(&self) -> Option<u32> {
+        self.daemon.as_ref().map(Child::id)
+    }
+
     pub fn runtime_dir(&self) -> PathBuf {
         self.tmp.path().join("run")
     }
