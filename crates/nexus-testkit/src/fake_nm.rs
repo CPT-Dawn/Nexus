@@ -15,6 +15,14 @@
 //! `RequestScan` is refused inside NetworkManager's rate-limit window, like
 //! the real one.
 //!
+//! Joining (ticket #7): `Manager.AddAndActivateConnection2` and
+//! `ActivateConnection`, `Device.State`/`Disconnect`/`StateChanged`,
+//! `Wireless.ActiveAccessPoint`, `Settings.Connection.Save`/`Delete`. A join
+//! walks the Device through NetworkManager's real state sequence on its own
+//! task; [`FakeNm::set_psk`] and [`FakeNm::script_join_failure`] decide how it
+//! ends. A profile added with `persist: "memory"` stays out of the saved set
+//! until `Save`.
+//!
 //! To add a scenario for a new ticket: add the member to the interface below,
 //! keep its value in [`Model`], and expose a `set_*` method on [`FakeNm`] that
 //! mutates the model and then calls [`FakeNm::emit`]-style change signals.
@@ -120,6 +128,9 @@ struct DeviceModel {
     /// `CLOCK_BOOTTIME` ms of the last finished scan; -1 never.
     last_scan: i64,
     aps: Vec<u32>,
+    /// `NMDeviceState`.
+    state: u32,
+    active_ap: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -128,6 +139,8 @@ struct ProfileModel {
     id: String,
     ssid: Vec<u8>,
     autoconnect: bool,
+    /// False while the profile only lives in NetworkManager's memory.
+    persisted: bool,
 }
 
 /// `NMState`.
@@ -189,7 +202,12 @@ struct Model {
     devices: Vec<DeviceModel>,
     aps: HashMap<u32, Ap>,
     next_ap: u32,
-    profiles: Vec<ProfileModel>,
+    /// Slots keep their object path for good; `None` is a deleted profile.
+    profiles: Vec<Option<ProfileModel>>,
+    /// The password a Network wants; a join with another one fails.
+    psks: HashMap<Vec<u8>, String>,
+    /// Joins that die on purpose: `(NMDeviceState died in, reason)`.
+    join_failures: HashMap<Vec<u8>, (u32, u32)>,
     /// `RequestScan` calls NetworkManager accepted.
     scan_requests: u32,
     /// Refuse every `RequestScan`, whatever `LastScan` says.
@@ -233,6 +251,88 @@ impl Manager {
             .collect()
     }
 
+    async fn add_and_activate_connection2(
+        &self,
+        connection: HashMap<String, HashMap<String, OwnedVariant>>,
+        device: OwnedObjectPath,
+        _specific_object: OwnedObjectPath,
+        options: HashMap<String, OwnedVariant>,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(object_server)] os: &zbus::ObjectServer,
+    ) -> zbus::fdo::Result<(
+        OwnedObjectPath,
+        OwnedObjectPath,
+        HashMap<String, OwnedVariant>,
+    )> {
+        let text = |section: &str, key: &str| -> Option<String> {
+            connection
+                .get(section)?
+                .get(key)?
+                .try_clone()
+                .ok()?
+                .try_into()
+                .ok()
+        };
+        let ssid: Vec<u8> = connection
+            .get("802-11-wireless")
+            .and_then(|w| w.get("ssid"))
+            .and_then(|v| v.try_clone().ok()?.try_into().ok())
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no ssid".into()))?;
+        let persist: Option<String> = options
+            .get("persist")
+            .and_then(|v| v.try_clone().ok()?.try_into().ok());
+        let n = {
+            let mut m = self.0.lock().unwrap();
+            m.profiles.push(Some(ProfileModel {
+                uuid: text("connection", "uuid").unwrap_or_default(),
+                id: text("connection", "id").unwrap_or_default(),
+                ssid: ssid.clone(),
+                autoconnect: true,
+                persisted: persist.as_deref() == Some("disk"),
+            }));
+            m.profiles.len() - 1
+        };
+        os.at(profile_path(n), Profile(self.0.clone(), n)).await?;
+        let dev = device_index(device.as_str())?;
+        let given = text("802-11-wireless-security", "psk").unwrap_or_default();
+        tokio::spawn(activate(
+            conn.clone(),
+            self.0.clone(),
+            dev,
+            ssid,
+            Some(given),
+        ));
+        Ok((opath(&profile_path(n)), opath(ACTIVE_PATH), HashMap::new()))
+    }
+
+    async fn activate_connection(
+        &self,
+        connection: OwnedObjectPath,
+        device: OwnedObjectPath,
+        _specific_object: OwnedObjectPath,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<OwnedObjectPath> {
+        let n: usize = connection
+            .as_str()
+            .rsplit('/')
+            .next()
+            .and_then(|n| n.parse().ok())
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("bad connection path".into()))?;
+        let ssid = self
+            .0
+            .lock()
+            .unwrap()
+            .profiles
+            .get(n)
+            .and_then(|p| p.as_ref())
+            .map(|p| p.ssid.clone())
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no such connection".into()))?;
+        let dev = device_index(device.as_str())?;
+        // A saved profile brings its own (right) secrets.
+        tokio::spawn(activate(conn.clone(), self.0.clone(), dev, ssid, None));
+        Ok(opath(ACTIVE_PATH))
+    }
+
     #[zbus(signal, name = "StateChanged")]
     async fn nm_state_changed(emitter: &SignalEmitter<'_>, state: u32) -> zbus::Result<()>;
 }
@@ -269,6 +369,7 @@ enum DeviceError {
     #[zbus(error)]
     ZBus(zbus::Error),
     NotAllowed(String),
+    NotActive(String),
 }
 
 struct Device(Shared, usize);
@@ -284,6 +385,118 @@ impl Device {
     fn device_type(&self) -> u32 {
         2 // NM_DEVICE_TYPE_WIFI
     }
+
+    #[zbus(property)]
+    fn state(&self) -> u32 {
+        self.0.lock().unwrap().devices[self.1].state
+    }
+
+    async fn disconnect(&self, #[zbus(connection)] conn: &Connection) -> Result<(), DeviceError> {
+        let state = self.0.lock().unwrap().devices[self.1].state;
+        if state <= 30 {
+            return Err(DeviceError::NotActive("Device is not active".into()));
+        }
+        set_device_state(conn, &self.0, self.1, 30, 39).await; // USER_REQUESTED
+        Ok(())
+    }
+
+    #[zbus(signal, name = "StateChanged")]
+    async fn device_state_changed(
+        emitter: &SignalEmitter<'_>,
+        new_state: u32,
+        old_state: u32,
+        reason: u32,
+    ) -> zbus::Result<()>;
+}
+
+fn device_index(path: &str) -> zbus::fdo::Result<usize> {
+    path.rsplit('/')
+        .next()
+        .and_then(|n| n.parse().ok())
+        .ok_or_else(|| zbus::fdo::Error::InvalidArgs("bad device path".into()))
+}
+
+/// Moves a Device to `new`, like NetworkManager: model first, then the
+/// `StateChanged` signal and the property change. Reaching 30 or 120 drops the
+/// joined access point.
+async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u32, reason: u32) {
+    let (old, dropped_ap) = {
+        let mut m = model.lock().unwrap();
+        let old = m.devices[dev].state;
+        m.devices[dev].state = new;
+        let dropped = (new == 30 || new == 120) && m.devices[dev].active_ap.take().is_some();
+        (old, dropped)
+    };
+    let os = conn.object_server();
+    if dropped_ap && let Ok(i) = os.interface::<_, Wireless>(device_path(dev)).await {
+        let _ = i
+            .get()
+            .await
+            .active_access_point_changed(i.signal_emitter())
+            .await;
+    }
+    if let Ok(i) = os.interface::<_, Device>(device_path(dev)).await {
+        let _ = i.get().await.state_changed(i.signal_emitter()).await;
+        let _ = Device::device_state_changed(i.signal_emitter(), new, old, reason).await;
+    }
+}
+
+/// The life of one activation. `given` is the password sent with a new
+/// profile; `None` means a saved profile with its stored (correct) secret.
+async fn activate(
+    conn: Connection,
+    model: Shared,
+    dev: usize,
+    ssid: Vec<u8>,
+    given: Option<String>,
+) {
+    let step = std::time::Duration::from_millis(15);
+    let (script, wanted, ap) = {
+        let m = model.lock().unwrap();
+        let ap = m.devices[dev]
+            .aps
+            .iter()
+            .copied()
+            .find(|id| m.aps[id].ssid == ssid);
+        (
+            m.join_failures.get(&ssid).copied(),
+            m.psks.get(&ssid).cloned(),
+            ap,
+        )
+    };
+    // (state to die in, reason), or a clean run.
+    let failure = script.or_else(|| match (&wanted, &given) {
+        (Some(want), Some(got)) if want != got => Some((60, 7)), // NEED_AUTH, NO_SECRETS
+        _ => None,
+    });
+    for s in [40, 50, 60, 70] {
+        tokio::time::sleep(step).await;
+        if s == 60 && failure.map(|f| f.0) != Some(60) {
+            continue; // only a failed password visits NEED_AUTH
+        }
+        set_device_state(&conn, &model, dev, s, 0).await;
+        if let Some((died_in, reason)) = failure
+            && died_in == s
+        {
+            tokio::time::sleep(step).await;
+            set_device_state(&conn, &model, dev, 120, reason).await;
+            return;
+        }
+    }
+    tokio::time::sleep(step).await;
+    model.lock().unwrap().devices[dev].active_ap = ap;
+    if let Ok(i) = conn
+        .object_server()
+        .interface::<_, Wireless>(device_path(dev))
+        .await
+    {
+        let _ = i
+            .get()
+            .await
+            .active_access_point_changed(i.signal_emitter())
+            .await;
+    }
+    set_device_state(&conn, &model, dev, 100, 0).await;
 }
 
 struct Wireless(Shared, usize);
@@ -298,6 +511,15 @@ impl Wireless {
     #[zbus(property)]
     fn last_scan(&self) -> i64 {
         self.0.lock().unwrap().devices[self.1].last_scan
+    }
+
+    #[zbus(property)]
+    fn active_access_point(&self) -> OwnedObjectPath {
+        let m = self.0.lock().unwrap();
+        match m.devices[self.1].active_ap {
+            Some(id) => opath(&ap_path(id)),
+            None => opath("/"),
+        }
     }
 
     fn get_all_access_points(&self) -> Vec<OwnedObjectPath> {
@@ -401,6 +623,7 @@ impl Settings {
     fn list_connections(&self) -> Vec<OwnedObjectPath> {
         let m = self.0.lock().unwrap();
         (0..m.profiles.len())
+            .filter(|n| m.profiles[*n].is_some())
             .map(|n| opath(&profile_path(n)))
             .collect()
     }
@@ -412,7 +635,7 @@ struct Profile(Shared, usize);
 impl Profile {
     fn get_settings(&self) -> HashMap<String, HashMap<String, OwnedVariant>> {
         let m = self.0.lock().unwrap();
-        let p = &m.profiles[self.1];
+        let p = m.profiles[self.1].as_ref().expect("served profile exists");
         let v = |v: Variant<'_>| OwnedVariant::try_from(v).expect("plain value");
         let mut connection = HashMap::new();
         connection.insert("id".to_owned(), v(Variant::from(p.id.clone())));
@@ -426,6 +649,44 @@ impl Profile {
             ("802-11-wireless".to_owned(), wireless),
         ])
     }
+
+    fn save(&self) {
+        if let Some(p) = self.0.lock().unwrap().profiles[self.1].as_mut() {
+            p.persisted = true;
+        }
+    }
+
+    async fn delete(
+        &self,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+        #[zbus(object_server)] os: &zbus::ObjectServer,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<()> {
+        // Like NetworkManager, deleting a Profile in use drops its Link.
+        let in_use: Vec<usize> = {
+            let mut m = self.0.lock().unwrap();
+            let ssid = m.profiles[self.1]
+                .take()
+                .map(|p| p.ssid)
+                .unwrap_or_default();
+            (0..m.devices.len())
+                .filter(|d| {
+                    m.devices[*d]
+                        .active_ap
+                        .is_some_and(|ap| m.aps[&ap].ssid == ssid)
+                })
+                .collect()
+        };
+        for dev in in_use {
+            set_device_state(conn, &self.0, dev, 30, 38).await; // CONNECTION_REMOVED
+        }
+        Self::removed(&emitter).await?;
+        os.remove::<Profile, _>(profile_path(self.1)).await?;
+        Ok(())
+    }
+
+    #[zbus(signal)]
+    async fn removed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
 /// Handle on the fake. Methods are synchronous so tests read like prose; the
@@ -455,6 +716,8 @@ impl FakeNm {
             aps: HashMap::new(),
             next_ap: 1,
             profiles: Vec::new(),
+            psks: HashMap::new(),
+            join_failures: HashMap::new(),
             scan_requests: 0,
             refuse_scans: false,
         }));
@@ -490,7 +753,12 @@ impl FakeNm {
                 (
                     m.devices.len(),
                     m.aps.keys().copied().collect::<Vec<_>>(),
-                    m.profiles.len(),
+                    m.profiles
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, p)| p.is_some())
+                        .map(|(n, _)| n)
+                        .collect::<Vec<_>>(),
                 )
             };
             let mut b = connection::Builder::address(address.as_str())
@@ -506,7 +774,7 @@ impl FakeNm {
             for id in aps {
                 b = b.serve_at(ap_path(id), AccessPoint(model.clone(), id));
             }
-            for n in 0..profiles {
+            for n in profiles {
                 b = b.serve_at(profile_path(n), Profile(model.clone(), n));
             }
             b.name(NAME)
@@ -552,6 +820,8 @@ impl FakeNm {
                 interface: interface.into(),
                 last_scan: -1,
                 aps: Vec::new(),
+                state: 30, // NM_DEVICE_STATE_DISCONNECTED
+                active_ap: None,
             });
             m.devices.len() - 1
         };
@@ -651,12 +921,13 @@ impl FakeNm {
     pub fn add_wifi_profile(&self, uuid: &str, id: &str, ssid: &[u8], autoconnect: bool) {
         let n = {
             let mut m = self.model.lock().unwrap();
-            m.profiles.push(ProfileModel {
+            m.profiles.push(Some(ProfileModel {
                 uuid: uuid.into(),
                 id: id.into(),
                 ssid: ssid.to_vec(),
                 autoconnect,
-            });
+                persisted: true,
+            }));
             m.profiles.len() - 1
         };
         let model = self.model.clone();
@@ -666,6 +937,44 @@ impl FakeNm {
                 .at(profile_path(n), Profile(model, n))
                 .await;
         });
+    }
+
+    /// Makes joining `ssid` need `psk`; any other password fails like a wrong one.
+    pub fn set_psk(&self, ssid: &str, psk: &str) {
+        self.model
+            .lock()
+            .unwrap()
+            .psks
+            .insert(ssid.as_bytes().to_vec(), psk.into());
+    }
+
+    /// Makes every join of `ssid` die: the Device walks up to `died_in`
+    /// (an `NMDeviceState`: 40, 50, 60 or 70) and then fails with `reason`
+    /// (an `NMDeviceStateReason`).
+    pub fn script_join_failure(&self, ssid: &str, died_in: u32, reason: u32) {
+        self.model
+            .lock()
+            .unwrap()
+            .join_failures
+            .insert(ssid.as_bytes().to_vec(), (died_in, reason));
+    }
+
+    /// Profiles NetworkManager would keep across a restart.
+    pub fn persisted_profiles(&self) -> usize {
+        let m = self.model.lock().unwrap();
+        m.profiles.iter().flatten().filter(|p| p.persisted).count()
+    }
+
+    /// Profiles that exist at all, in memory or on disk.
+    pub fn profile_count(&self) -> usize {
+        self.model.lock().unwrap().profiles.iter().flatten().count()
+    }
+
+    /// The SSID `device` is associated with, if any.
+    pub fn joined_ssid(&self, device: DeviceId) -> Option<String> {
+        let m = self.model.lock().unwrap();
+        let id = m.devices[device.0].active_ap?;
+        Some(String::from_utf8_lossy(&m.aps[&id].ssid).into_owned())
     }
 
     fn with_conn<F, Fut>(&self, f: F)
