@@ -15,7 +15,7 @@ expression: bottom
 │  Hotspot: Enter       Use the selected phone's data      █
 │  Hotspot: x           Drop the phone's tether            █
 │  u                    Wi-Fi, Hotspot: undo the toast     █
-│                                                          █
+│                                                          │
 │  Login page won't show? A browser with secure DNS (DNS   │
 │  over HTTPS) hides the Portal by skipping the network's  │
 │  resolver. Turn it off until you have signed in, or      │

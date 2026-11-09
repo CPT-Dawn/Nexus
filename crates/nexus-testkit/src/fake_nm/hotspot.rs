@@ -202,6 +202,7 @@ pub(super) async fn add_and_activate(
             settings: Default::default(),
             version: 1,
             bdaddr: None,
+            wired: false,
             vpn: None,
             hotspot: Some(HotspotModel {
                 settings: clone_settings(&connection),

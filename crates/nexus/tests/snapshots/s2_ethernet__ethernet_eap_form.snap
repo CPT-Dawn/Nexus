@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_ethernet.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Ethernet ──╭ Sign in to enp3s0 ─────────────────────────────────────────────────────╮────────────╮
+│ ▸ ! enp3s0 │   Method         ‹ PEAP ›                                              │            │
+│   ○ enp4s0 │   Inner method   ‹ MSCHAPv2 ›                                          │            │
+│            │ ▸ Identity       _                                                     │ address    │
+│            │   Anonymous id   e.g. anonymous@uni.example (optional)                 │t an        │
+│            │   Password                                                             │ampus port  │
+│            │   CA certificate empty: use the system CAs                             │            │
+│            │   Server name    e.g. radius.uni.example                               │            │
+│            │   Skip check     [ ] check the server (recommended)                    │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │rofile      │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │ tab next  ←→ change  ^r show  enter join  esc cancel                   │            │
+╰────────────╰────────────────────────────────────────────────────────────────────────╯────────────╯
+ tab next  enter join  esc cancel

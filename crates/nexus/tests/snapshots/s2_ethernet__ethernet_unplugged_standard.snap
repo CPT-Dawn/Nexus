@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_ethernet.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Ethernet ──────────────────╮╭ enp4s0 ────────────────────────────────────────────────────────────╮
+│   ! enp3s0         problem ││ ○ Cable unplugged                                                  │
+│ ▸ ○ enp4s0       unplugged ││                                                                    │
+│                            ││ No cable detected on enp4s0. Plug one in, and check that the other │
+│                            ││ end is connected to a switch or router that is on.                 │
+│                            ││                                                                    │
+│                            ││ MAC       52:54:00:00:00:01                                        │
+│                            ││                                                                    │
+│                            ││ Nothing to join until a cable is in.                               │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  h/l tab  : palette  ? help  q quit

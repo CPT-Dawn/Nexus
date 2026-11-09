@@ -108,6 +108,7 @@ fn bad(message: &str) -> ExitCode {
 fn read(conn: &mut Connection, ssid: &str) -> Result<ProfileView, ExitCode> {
     let value = match conn.call(Op::ProfileGet {
         network: network(ssid),
+        profile: None,
     }) {
         Err(e) => return Err(unreachable(&e)),
         Ok(Err(f)) => return Err(refused(&f)),
@@ -274,6 +275,7 @@ pub fn set(args: SetArgs) -> ExitCode {
     }
     let value = match conn.call(Op::ProfileUpdate {
         network: network(&args.ssid),
+        profile: None,
         version: view.version,
         settings,
         rollback_secs: args.rollback_secs,

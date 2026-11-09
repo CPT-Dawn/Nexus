@@ -40,6 +40,9 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::MissingPlugin => 24,
         ErrorCode::KeyringUnavailable => 25,
         ErrorCode::HotspotUnsupported => 26,
+        ErrorCode::Unplugged => 27,
+        ErrorCode::UnknownPort => 28,
+        // 29-31 are `nexus menu`'s launcher failures (`menu.rs`).
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -492,6 +495,42 @@ pub fn tether_disconnect(json: bool) -> ExitCode {
     })
 }
 
+/// `nexus ethernet list [--json]`.
+pub fn ethernet_list(json: bool) -> ExitCode {
+    wifi_call(Op::EthernetList, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::EthernetList>(value) {
+            Ok(list) => print!("{}", crate::ethernet_view::table(&list)),
+            Err(e) => eprintln!("nexus: undecodable list: {e}"),
+        }
+    })
+}
+
+/// `nexus ethernet connect [port]`.
+pub fn ethernet_connect(port: Option<String>, json: bool) -> ExitCode {
+    wifi_call(Op::EthernetConnect { port }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(j) = serde_json::from_value::<nexus_ipc::EthernetJoined>(value) {
+            println!("{}", crate::text::ethernet_joined(&j.port));
+        }
+    })
+}
+
+/// `nexus ethernet disconnect [port]`.
+pub fn ethernet_disconnect(port: Option<String>, json: bool) -> ExitCode {
+    wifi_call(Op::EthernetDisconnect { port }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(d) = serde_json::from_value::<nexus_ipc::EthernetDropped>(value) {
+            println!("{}", crate::text::ethernet_dropped(&d.port));
+        }
+    })
+}
+
 /// `nexus hotspot status [--json]`.
 pub fn hotspot_status(json: bool) -> ExitCode {
     wifi_call(Op::Hotspot, |value| {
@@ -681,6 +720,8 @@ mod tests {
             ErrorCode::UnknownVpn,
             ErrorCode::InvalidConfig,
             ErrorCode::VpnFailed,
+            ErrorCode::Unplugged,
+            ErrorCode::UnknownPort,
             ErrorCode::MissingPlugin,
             ErrorCode::HotspotUnsupported,
             ErrorCode::BluetoothOff,
@@ -690,10 +731,16 @@ mod tests {
             ErrorCode::Conflict,
             ErrorCode::NothingPending,
             ErrorCode::KeyringUnavailable,
+            ErrorCode::RevealDenied,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);
         codes.push(EXIT_DAEMON_ERROR);
+        codes.extend([
+            crate::menu::EXIT_NO_LAUNCHER,
+            crate::menu::EXIT_LAUNCHER_FAILED,
+            crate::menu::EXIT_UNKNOWN_LAUNCHER,
+        ]);
         let n = codes.len();
         codes.sort_unstable();
         codes.dedup();

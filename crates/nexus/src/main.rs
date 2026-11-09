@@ -1,14 +1,18 @@
 mod backend;
+mod bar_cli;
 mod cli;
 mod config;
 mod daemon;
 mod doctor;
+mod ethernet_view;
 mod keyring;
+mod menu;
 mod profile_cli;
 mod secrets;
 mod tether_view;
 mod text;
 mod vpn_cli;
+mod waybar;
 mod wifi_view;
 mod wireguard;
 
@@ -38,9 +42,17 @@ enum Command {
     /// Show the overall network state and the primary Link.
     Status {
         /// Print the status object as JSON.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "waybar")]
         json: bool,
+        /// Print Waybar custom-module JSON (text, tooltip, class, alt).
+        #[arg(long)]
+        waybar: bool,
+        /// With --waybar: keep running and print a line whenever it changes.
+        #[arg(long, requires = "waybar")]
+        follow: bool,
     },
+    /// Pick a Network or VPN in your launcher (fuzzel, walker, rofi, tofi).
+    Menu,
     /// Nearby Wi-Fi Networks and scanning.
     Wifi {
         #[command(subcommand)]
@@ -50,6 +62,11 @@ enum Command {
     Vpn {
         #[command(subcommand)]
         action: VpnAction,
+    },
+    /// Ethernet ports: Link details, plug state, bring up and down.
+    Ethernet {
+        #[command(subcommand)]
+        action: EthernetAction,
     },
     /// Get online through a paired phone over Bluetooth.
     Tether {
@@ -275,6 +292,32 @@ enum TrustLevel {
 }
 
 #[derive(Subcommand)]
+enum EthernetAction {
+    /// List the Ethernet ports: whether a cable is in, the speed, addresses, and what is wrong.
+    List {
+        /// Print the list as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Bring a port up with its Profile (a plain DHCP one is made if it has none).
+    Connect {
+        /// The port, e.g. enp3s0 (not needed when there is only one).
+        port: Option<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Drop a port's Link; its Profile stays.
+    Disconnect {
+        /// The port, e.g. enp3s0 (not needed when there is only one).
+        port: Option<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum TetherAction {
     /// List paired phones that offer network access, and whether Bluetooth is on.
     List {
@@ -476,7 +519,14 @@ fn main() -> ExitCode {
         };
     };
     match command {
-        Command::Status { json } => cli::status(json),
+        Command::Status {
+            waybar: true,
+            follow: true,
+            ..
+        } => bar_cli::follow(),
+        Command::Status { waybar: true, .. } => bar_cli::once(),
+        Command::Status { json, .. } => cli::status(json),
+        Command::Menu => menu::run(),
         Command::Wifi {
             action: WifiAction::List { json },
         } => cli::wifi_list(json),
@@ -553,6 +603,11 @@ fn main() -> ExitCode {
             }),
             VpnAction::Key { name, json } => vpn_cli::key(&name, json),
             VpnAction::Share { name, qr, json } => vpn_cli::share(&name, qr, json),
+        },
+        Command::Ethernet { action } => match action {
+            EthernetAction::List { json } => cli::ethernet_list(json),
+            EthernetAction::Connect { port, json } => cli::ethernet_connect(port, json),
+            EthernetAction::Disconnect { port, json } => cli::ethernet_disconnect(port, json),
         },
         Command::Hotspot {
             action: HotspotAction::Status { json },

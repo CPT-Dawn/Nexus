@@ -12,10 +12,10 @@ use std::time::Duration;
 use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
-    AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Hotspot, HotspotStarted,
-    HotspotStopped, Joined, Link, LinkKind, NewTunnel, Radio, Radios, ScanOutcome, Secret, State,
-    Status, Tethered, Tethers, Untethered, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled,
-    WifiList, WifiShare,
+    AutoconnectSet, BackendInfo, Connectivity, Disconnected, EthernetDropped, EthernetJoined,
+    EthernetList, Forgotten, Hotspot, HotspotStarted, HotspotStopped, Joined, Link, LinkKind,
+    NewTunnel, ProfileKey, Radio, Radios, ScanOutcome, Secret, State, Status, Tethered, Tethers,
+    Untethered, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
 };
 use std::pin::Pin;
 
@@ -445,22 +445,22 @@ impl Backend for NetworkManager {
             .map_err(BackendError::Refused)
     }
 
-    async fn profile_get(&self, network: String) -> Result<nexus_ipc::ProfileView, BackendError> {
-        self.with_bus(|c| async move { super::wifi::profile::get(&c, &network).await })
+    async fn profile_get(&self, key: ProfileKey) -> Result<nexus_ipc::ProfileView, BackendError> {
+        self.with_bus(|c| async move { super::wifi::profile::get(&c, &key).await })
             .await?
             .map_err(BackendError::Refused)
     }
 
     async fn profile_update(
         &self,
-        network: String,
+        key: ProfileKey,
         version: u64,
         settings: nexus_ipc::ProfileSettings,
         rollback_secs: u32,
     ) -> Result<super::ProfileChanged, BackendError> {
         let changed = self
             .with_bus(|c| async move {
-                super::wifi::profile::update(&c, &network, version, &settings, rollback_secs).await
+                super::wifi::profile::update(&c, &key, version, &settings, rollback_secs).await
             })
             .await?
             .map_err(BackendError::Refused)?;
@@ -548,6 +548,36 @@ impl Backend for NetworkManager {
 
     async fn tether_disconnect(&self) -> Result<Untethered, BackendError> {
         self.with_bus(|c| async move { super::tether::disconnect(&c).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn ethernet_list(&self) -> Result<EthernetList, BackendError> {
+        self.with_bus(|c| async move { super::ethernet::list(&c).await })
+            .await
+    }
+
+    async fn ethernet_connect(&self, port: Option<String>) -> Result<EthernetJoined, BackendError> {
+        self.with_bus(|c| async move { super::ethernet::connect(&c, port.as_deref()).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn ethernet_join_eap(
+        &self,
+        port: Option<String>,
+        eap: nexus_ipc::Eap,
+    ) -> Result<EthernetJoined, BackendError> {
+        self.with_bus(|c| async move { super::ethernet::join_eap(&c, port.as_deref(), &eap).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn ethernet_disconnect(
+        &self,
+        port: Option<String>,
+    ) -> Result<EthernetDropped, BackendError> {
+        self.with_bus(|c| async move { super::ethernet::disconnect(&c, port.as_deref()).await })
             .await?
             .map_err(BackendError::Refused)
     }

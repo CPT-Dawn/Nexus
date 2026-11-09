@@ -2,6 +2,7 @@
 //! arrive as [`Msg`]s, and `update` says whether the screen changed. The only
 //! I/O is [`Runner`] sending the commands the person asked for.
 
+mod eth_keys;
 mod hotspot_keys;
 mod vpn_keys;
 
@@ -12,12 +13,14 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
-    ActivityEntry, ActivityKind, Connectivity, Event, Finding, Hotspot, Op, PromptClosed,
-    PromptKind, Secret, State, Status, Tethers, Traffic, Trust, VpnList, WifiList, WifiShare,
+    ActivityEntry, ActivityKind, Connectivity, EthernetList, Event, Finding, Hotspot, Op,
+    PromptClosed, PromptKind, Secret, State, Status, Tethers, Traffic, Trust, VpnList, WifiList,
+    WifiShare,
 };
 
 use super::caps::Caps;
 use super::eap_form::{EapForm, Typed};
+use super::ethernet::{self, EthernetTab};
 use super::fx::{self, Fx};
 use super::hits::Hit;
 use super::hotspot::{self, HotspotTab};
@@ -53,6 +56,10 @@ pub enum Msg {
     Vpn(Box<vpn::Done>),
     /// The Daemon's picture of Bluetooth and the paired phones.
     Tethers(Tethers),
+    /// The Ethernet ports (first connect or `ethernet_changed`).
+    Ethernet(EthernetList),
+    /// An Ethernet command the person gave has finished.
+    Wired(Box<ethernet::Done>),
     /// Whether this machine can host a Hotspot, and the one that runs.
     Hotspot(Hotspot),
     /// A Hotspot start or stop the person asked for has finished.
@@ -208,6 +215,7 @@ pub struct App {
     vpn: VpnTab,
     vpn_runner: Option<vpn::Runner>,
     tether: TetherTab,
+    ethernet: EthernetTab,
     hotspot: HotspotTab,
     /// An open Secret prompt: it has the keys until answered or cancelled.
     field: Option<PasswordField>,
@@ -253,6 +261,7 @@ impl App {
             vpn: VpnTab::default(),
             vpn_runner: None,
             tether: TetherTab::default(),
+            ethernet: EthernetTab::default(),
             hotspot: HotspotTab::default(),
             field: None,
             confirm: None,
@@ -288,6 +297,7 @@ impl App {
             Tab::WiFi => self.wifi.cursor(),
             Tab::Vpn => self.vpn.cursor(),
             Tab::Hotspot => self.tether.cursor(),
+            Tab::Ethernet => self.ethernet.cursor(),
             _ => self.selected,
         }
     }
@@ -298,6 +308,7 @@ impl App {
             Tab::WiFi => self.wifi.len(),
             Tab::Vpn => self.vpn.len(),
             Tab::Hotspot => self.tether.len(),
+            Tab::Ethernet => self.ethernet.len(),
             other => other.rows(),
         }
     }
@@ -312,6 +323,10 @@ impl App {
 
     pub fn tether(&self) -> &TetherTab {
         &self.tether
+    }
+
+    pub fn ethernet(&self) -> &EthernetTab {
+        &self.ethernet
     }
 
     pub fn hotspot(&self) -> &HotspotTab {
@@ -623,6 +638,8 @@ impl App {
             Msg::Vpns(list) => self.vpn.refresh(list) && self.tab == Tab::Vpn,
             Msg::Vpn(done) => self.vpn_done(*done),
             Msg::Tethers(tethers) => self.tether.refresh(tethers),
+            Msg::Ethernet(list) => self.ethernet.refresh(list),
+            Msg::Wired(done) => self.eth_done(*done),
             Msg::Hotspot(info) => {
                 let changed = self.hotspot.refresh(info);
                 // The details of a Hotspot that went away are not worth showing.
@@ -879,8 +896,15 @@ impl App {
                 Typed::Cancel => self.eap = None,
                 Typed::Submit(eap) => {
                     if let Some(form) = self.eap.take() {
-                        let (network, ssid) = (form.network.clone(), form.name.clone());
-                        self.run_wifi(Cmd::JoinEap { network, ssid, eap });
+                        if form.wired {
+                            self.run_eth(ethernet::Cmd::SignIn {
+                                port: form.network.clone(),
+                                eap,
+                            });
+                        } else {
+                            let (network, ssid) = (form.network.clone(), form.name.clone());
+                            self.run_wifi(Cmd::JoinEap { network, ssid, eap });
+                        }
                     }
                 }
             }
@@ -1079,7 +1103,11 @@ impl App {
                 self.go_tab(Tab::ALL[1 + self.selected.min(3)])
             }
             KeyCode::Enter
-                if self.narrow() && !matches!(self.tab, Tab::WiFi | Tab::Vpn | Tab::Hotspot) =>
+                if self.narrow()
+                    && !matches!(
+                        self.tab,
+                        Tab::WiFi | Tab::Ethernet | Tab::Vpn | Tab::Hotspot
+                    ) =>
             {
                 self.layer = Layer::Sheet;
                 true
@@ -1098,6 +1126,7 @@ impl App {
         match self.tab {
             Tab::WiFi => self.wifi_key(key),
             Tab::Vpn => self.vpn_key(key),
+            Tab::Ethernet => self.eth_key(key),
             Tab::Hotspot => self.hotspot_tab_key(key),
             _ => false,
         }
@@ -1216,10 +1245,16 @@ impl App {
     }
 
     fn open_editor(&mut self, network: String, ssid: String) {
+        self.start_editor(Editor::loading(network, ssid));
+    }
+
+    /// Opens the Profile editor on `editor` and asks the Daemon for its Profile.
+    fn start_editor(&mut self, editor: Editor) {
         self.toast = None;
-        self.editor = Some(Editor::loading(network.clone(), ssid));
+        let op = editor.get_op();
+        self.editor = Some(editor);
         if let Some(runner) = &self.runner {
-            runner.call(Op::ProfileGet { network }, |r| {
+            runner.call(op, |r| {
                 Msg::Profile(ProfileMsg::Loaded(r.and_then(|v| {
                     serde_json::from_value(v)
                         .map_err(|_| "The daemon sent a Profile this nexus cannot read.".into())
@@ -1356,6 +1391,9 @@ impl App {
         if self.tab == Tab::Hotspot {
             return self.tether.move_to(row);
         }
+        if self.tab == Tab::Ethernet {
+            return self.ethernet.move_to(row);
+        }
         let changed = row != self.selected;
         self.selected = row;
         changed
@@ -1435,6 +1473,8 @@ impl App {
                     v.extend(self.vpn_hints(false));
                 } else if self.tab == Tab::Hotspot {
                     v.extend(self.tether_hints());
+                } else if self.tab == Tab::Ethernet {
+                    v.extend(self.eth_hints());
                 }
                 v.push(("?", "help"));
                 v
@@ -1452,6 +1492,11 @@ impl App {
                     v.extend(self.vpn_hints(!narrow));
                 } else if self.tab == Tab::Hotspot {
                     v.extend(self.tether_hints());
+                    if narrow && self.rows() > 0 {
+                        v.push(("d", "details"));
+                    }
+                } else if self.tab == Tab::Ethernet {
+                    v.extend(self.eth_hints());
                     if narrow && self.rows() > 0 {
                         v.push(("d", "details"));
                     }
