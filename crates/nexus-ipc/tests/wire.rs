@@ -125,12 +125,33 @@ fn join_ops_round_trip_and_the_password_stays_out_of_debug() {
     let req = parse(line).unwrap();
     assert!(!format!("{req:?}").contains("hunter2"));
     match req.op {
-        Op::WifiJoin { network, password } => {
+        Op::WifiJoin {
+            network,
+            password,
+            device,
+            hidden,
+        } => {
             assert_eq!(network, "486f6d65");
             assert_eq!(password.unwrap().expose(), "hunter2hunter2");
+            assert_eq!((device, hidden), (None, None));
         }
         other => panic!("{other:?}"),
     }
+    // A hidden join on a chosen card.
+    let line = r#"{"v":1,"id":4,"op":"wifi_join","network":"486f6d65","device":"wlan1","hidden":"wpa3_transition"}"#;
+    match parse(line).unwrap().op {
+        Op::WifiJoin { device, hidden, .. } => {
+            assert_eq!(device.as_deref(), Some("wlan1"));
+            assert_eq!(hidden, Some(nexus_ipc::Security::Wpa3Transition));
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(
+        parse(r#"{"v":1,"id":1,"op":"wifi_aps","network":"486f6d65"}"#)
+            .unwrap()
+            .op,
+        Op::WifiAps { .. }
+    ));
     assert!(matches!(
         parse(r#"{"v":1,"id":1,"op":"wifi_disconnect"}"#)
             .unwrap()

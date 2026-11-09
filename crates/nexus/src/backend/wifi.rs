@@ -10,9 +10,11 @@
 use std::collections::{HashMap, HashSet};
 
 use nexus_ipc::{
-    AutoconnectSet, Band, Disconnected, Eap, Forgotten, Joined, SavedWifi, ScanOutcome, Secret,
-    Security, ShareAuth, WifiDevice, WifiList, WifiNetwork, WifiShare,
+    ApInfo, ApList, AutoconnectSet, Band, Disconnected, Eap, Forgotten, Joined, SavedWifi,
+    ScanOutcome, Secret, Security, ShareAuth, WifiDevice, WifiList, WifiNetwork, WifiShare,
 };
+
+use super::JoinTarget;
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
@@ -83,6 +85,11 @@ trait AccessPoint {
     fn wpa_flags(&self) -> zbus::Result<u32>;
     #[zbus(property)]
     fn rsn_flags(&self) -> zbus::Result<u32>;
+    #[zbus(property)]
+    fn hw_address(&self) -> zbus::Result<String>;
+    /// Best link rate, in kbit/s.
+    #[zbus(property)]
+    fn max_bitrate(&self) -> zbus::Result<u32>;
 }
 
 #[zbus::proxy(
@@ -111,7 +118,13 @@ pub(super) trait SettingsConnection {
 #[derive(Debug, Clone)]
 struct Ap {
     device: String,
+    /// The object path, to tell which one a Device is associated with.
+    path: String,
     ssid: Vec<u8>,
+    bssid: String,
+    mhz: u32,
+    /// `MaxBitrate` in kbit/s; 0 when unknown.
+    kbps: u32,
     strength: u8,
     security: Security,
     band: Band,
@@ -162,14 +175,45 @@ async fn radios(conn: &Connection) -> zbus::Result<Vec<Radio>> {
     Ok(out)
 }
 
-pub async fn list(conn: &Connection) -> zbus::Result<WifiList> {
+/// Everything the radios can hear right now.
+struct Survey {
+    radios: Vec<Radio>,
+    aps: Vec<Ap>,
+    /// SSIDs a Device is associated with.
+    joined: HashSet<Vec<u8>>,
+    /// Object paths of the access points a Device is associated with.
+    active: HashSet<String>,
+}
+
+impl Survey {
+    fn devices(&self) -> Vec<WifiDevice> {
+        self.radios
+            .iter()
+            .map(|r| WifiDevice {
+                id: r.path.to_string(),
+                name: r.name.clone(),
+            })
+            .collect()
+    }
+
+    /// The Device called `key`: its id (object path) or its interface name.
+    fn device(&self, key: &str) -> Option<&Radio> {
+        self.radios
+            .iter()
+            .find(|r| r.path.as_str() == key || r.name == key)
+    }
+}
+
+async fn survey(conn: &Connection) -> zbus::Result<Survey> {
     let radios = radios(conn).await?;
     let mut aps = Vec::new();
     let mut joined = HashSet::new();
+    let mut active = HashSet::new();
     for radio in &radios {
         let wireless = no_cache!(WirelessProxy, conn, radio.path.as_str());
-        if let Some(ssid) = active_ssid(conn, &wireless).await {
+        if let Some((path, ssid)) = active_ap(conn, &wireless).await {
             joined.insert(ssid);
+            active.insert(path);
         }
         let Ok(paths) = wireless.get_all_access_points().await else {
             continue;
@@ -180,19 +224,69 @@ pub async fn list(conn: &Connection) -> zbus::Result<WifiList> {
             }
         }
     }
+    Ok(Survey {
+        radios,
+        aps,
+        joined,
+        active,
+    })
+}
+
+pub async fn list(conn: &Connection) -> zbus::Result<WifiList> {
+    let survey = survey(conn).await?;
     let profiles = profiles(conn).await?;
-    let devices = radios
-        .into_iter()
-        .map(|r| WifiDevice {
-            id: r.path.to_string(),
-            name: r.name,
+    let devices = survey.devices();
+    Ok(assemble(devices, survey.aps, profiles, &survey.joined))
+}
+
+/// The access points that broadcast a Network, strongest first.
+pub async fn access_points(
+    conn: &Connection,
+    network: &str,
+) -> zbus::Result<Result<ApList, Failure>> {
+    let Some(ssid) = nexus_ipc::parse_network_id(network) else {
+        return Ok(Err(text::bad_network_id()));
+    };
+    let survey = survey(conn).await?;
+    let mut aps: Vec<ApInfo> = survey
+        .aps
+        .iter()
+        .filter(|ap| ap.ssid == ssid)
+        .map(|ap| ApInfo {
+            bssid: ap.bssid.clone(),
+            channel: nexus_ipc::channel_of(ap.mhz),
+            frequency_mhz: ap.mhz,
+            band: ap.band,
+            signal: ap.strength.min(100),
+            rate_mbps: ap.kbps / 1000,
+            device: survey
+                .radios
+                .iter()
+                .find(|r| r.path.as_str() == ap.device)
+                .map(|r| r.name.clone())
+                .unwrap_or_default(),
+            joined: survey.active.contains(&ap.path),
         })
         .collect();
-    Ok(assemble(devices, aps, profiles, &joined))
+    let name = nexus_ipc::display_ssid(&ssid);
+    if aps.is_empty() {
+        return Ok(Err(text::out_of_range(&name)));
+    }
+    aps.sort_by(|a, b| {
+        b.signal
+            .cmp(&a.signal)
+            .then_with(|| a.bssid.cmp(&b.bssid))
+    });
+    Ok(Ok(ApList { ssid: name, aps }))
 }
 
 /// The SSID `wireless` is associated with, if any.
 async fn active_ssid(conn: &Connection, wireless: &WirelessProxy<'_>) -> Option<Vec<u8>> {
+    active_ap(conn, wireless).await.map(|(_, ssid)| ssid)
+}
+
+/// The access point `wireless` is associated with: its path and SSID.
+async fn active_ap(conn: &Connection, wireless: &WirelessProxy<'_>) -> Option<(String, Vec<u8>)> {
     let path = wireless.active_access_point().await.ok()?;
     if path.as_str() == "/" {
         return None;
@@ -203,7 +297,8 @@ async fn active_ssid(conn: &Connection, wireless: &WirelessProxy<'_>) -> Option<
         .build()
         .await
         .ok()?;
-    ap.ssid().await.ok().filter(|s| !s.is_empty())
+    let ssid = ap.ssid().await.ok().filter(|s| !s.is_empty())?;
+    Some((path.to_string(), ssid))
 }
 
 /// Reads one access point; `None` if it vanished or hides its SSID.
@@ -218,11 +313,16 @@ async fn read_ap(conn: &Connection, device: &str, path: &str) -> Option<Ap> {
     if ssid.is_empty() {
         return None; // hidden: it cannot be shown or joined from a list
     }
+    let mhz = ap.frequency().await.ok()?;
     Some(Ap {
         device: device.to_owned(),
+        path: path.to_owned(),
         ssid,
+        bssid: ap.hw_address().await.unwrap_or_default(),
+        mhz,
+        kbps: ap.max_bitrate().await.unwrap_or(0),
         strength: ap.strength().await.ok()?,
-        band: band(ap.frequency().await.ok()?),
+        band: band(mhz),
         security: security(
             ap.flags().await.ok()?,
             ap.wpa_flags().await.ok()?,
@@ -340,7 +440,7 @@ fn assemble(
         .into_iter()
         .map(|(ssid, (best, access_points))| WifiNetwork {
             id: hex(&ssid),
-            ssid: String::from_utf8_lossy(&ssid).into_owned(),
+            ssid: nexus_ipc::display_ssid(&ssid),
             signal: best.strength.min(100),
             security: best.security,
             band: best.band,
@@ -367,7 +467,7 @@ fn assemble(
         .map(|p| SavedWifi {
             uuid: p.uuid.clone(),
             id: p.id.clone(),
-            ssid: String::from_utf8_lossy(&p.ssid).into_owned(),
+            ssid: nexus_ipc::display_ssid(&p.ssid),
             autoconnect: p.autoconnect,
         })
         .collect();
@@ -465,6 +565,7 @@ fn new_profile(
     security: Security,
     password: Option<&str>,
     eap: Option<&Eap>,
+    hidden: bool,
 ) -> Settings {
     let mut connection = HashMap::new();
     connection.insert("id".to_owned(), variant(name));
@@ -474,6 +575,10 @@ fn new_profile(
     let mut wireless = HashMap::new();
     wireless.insert("ssid".to_owned(), variant(ssid.to_vec()));
     wireless.insert("mode".to_owned(), variant("infrastructure"));
+    if hidden {
+        // NetworkManager then probes for the name instead of waiting to hear it.
+        wireless.insert("hidden".to_owned(), variant(true));
+    }
     let auto = |_: &str| HashMap::from([("method".to_owned(), variant("auto"))]);
     let mut all = HashMap::from([
         ("connection".to_owned(), connection),
@@ -518,10 +623,11 @@ pub async fn join(
     network: &str,
     password: Option<&Secret>,
     eap: Option<&Eap>,
+    target: &JoinTarget,
 ) -> zbus::Result<Result<Joined, Failure>> {
     broker.forget_ended(network);
     loop {
-        let result = join_once(conn, broker, network, password, eap).await?;
+        let result = join_once(conn, broker, network, password, eap, target).await?;
         let Err(failure) = &result else {
             return Ok(result);
         };
@@ -529,7 +635,7 @@ pub async fn join(
             return Ok(result);
         }
         let name = nexus_ipc::parse_network_id(network)
-            .map(|s| String::from_utf8_lossy(&s).into_owned())
+            .map(|s| nexus_ipc::display_ssid(&s))
             .unwrap_or_default();
         match broker.take_ended(network) {
             Some(Ended::Cancelled) => return Ok(Err(text::prompt_cancelled(&name))),
@@ -547,34 +653,86 @@ async fn join_once(
     network: &str,
     password: Option<&Secret>,
     eap: Option<&Eap>,
+    target: &JoinTarget,
 ) -> zbus::Result<Result<Joined, Failure>> {
     let Some(ssid) = nexus_ipc::parse_network_id(network) else {
         return Ok(Err(text::bad_network_id()));
     };
-    let name = String::from_utf8_lossy(&ssid).into_owned();
+    let name = nexus_ipc::display_ssid(&ssid);
     if let Some(eap) = eap {
         let errors = eap.validate();
         if !errors.is_empty() {
             return Ok(Err(text::invalid_eap(&name, &errors)));
         }
     }
-    let list = list(conn).await?;
-    let Some(net) = list.networks.iter().find(|n| n.id == network) else {
-        return Ok(Err(text::out_of_range(&name)));
-    };
-    if eap.is_some() && net.security != Security::Enterprise {
-        return Ok(Err(text::not_enterprise(&name, net.security.label())));
+    if let Some(sec) = target.hidden
+        && !matches!(
+            sec,
+            Security::Open
+                | Security::Owe
+                | Security::Wpa
+                | Security::Wpa2
+                | Security::Wpa3
+                | Security::Wpa3Transition
+        )
+    {
+        return Ok(Err(text::hidden_security(&name, sec.label())));
     }
-    let secured = !matches!(net.security, Security::Open | Security::Owe);
-    let device_path = net.device.clone();
-    let saved = match &net.profile {
-        Some(uuid) => profiles(conn)
-            .await?
-            .into_iter()
-            .find(|p| &p.uuid == uuid)
-            .map(|p| (p.path, p.uuid)),
+    let survey = survey(conn).await?;
+    let chosen = match &target.device {
+        Some(key) => match survey.device(key) {
+            Some(radio) => Some((radio.path.to_string(), radio.name.clone())),
+            None => return Ok(Err(text::unknown_device(key))),
+        },
         None => None,
     };
+    let all_profiles = profiles(conn).await?;
+    let devices = survey.devices();
+    // With a card chosen, only what that card hears counts.
+    let heard: Vec<Ap> = match &chosen {
+        Some((path, _)) => survey
+            .aps
+            .iter()
+            .filter(|ap| &ap.device == path)
+            .cloned()
+            .collect(),
+        None => survey.aps.clone(),
+    };
+    let list = assemble(devices.clone(), heard, all_profiles, &survey.joined);
+    let listed = list.networks.iter().find(|n| n.id == network);
+    let (security, device_path, hidden) = match (listed, target.hidden) {
+        (_, Some(sec)) => {
+            // Named by the person: it need not be in the list at all.
+            let device = listed
+                .map(|n| n.device.clone())
+                .or_else(|| chosen.as_ref().map(|(p, _)| p.clone()))
+                .or_else(|| survey.radios.first().map(|r| r.path.to_string()));
+            let Some(device) = device else {
+                return Ok(Err(text::out_of_range(&name)));
+            };
+            (sec, device, true)
+        }
+        (Some(n), None) => (n.security, n.device.clone(), false),
+        (None, None) => {
+            // Heard by another card than the chosen one?
+            if let Some((_, card)) = &chosen
+                && survey.aps.iter().any(|ap| ap.ssid == ssid)
+            {
+                return Ok(Err(text::not_heard_by(&name, card)));
+            }
+            return Ok(Err(text::out_of_range(&name)));
+        }
+    };
+    if eap.is_some() && security != Security::Enterprise {
+        return Ok(Err(text::not_enterprise(&name, security.label())));
+    }
+    let secured = !matches!(security, Security::Open | Security::Owe);
+    // One Profile per SSID is enough; the first one wins, as in the list.
+    let saved = profiles(conn)
+        .await?
+        .into_iter()
+        .find(|p| p.ssid == ssid)
+        .map(|p| (p.path, p.uuid));
     let nm = super::nm::NetworkManagerProxy::builder(conn)
         .cache_properties(CacheProperties::No)
         .build()
@@ -600,25 +758,25 @@ async fn join_once(
             (path, uuid, false)
         }
         None => {
-            match net.security {
+            match security {
                 Security::Enterprise if eap.is_none() => {
                     return Ok(Err(text::needs_eap(&name)));
                 }
                 Security::Wep | Security::Unknown => {
-                    return Ok(Err(text::unsupported_security(&name, net.security.label())));
+                    return Ok(Err(text::unsupported_security(&name, security.label())));
                 }
                 _ => {}
             }
             let password = password.map(Secret::expose).filter(|_| secured);
             if let Some(pw) = password
-                && net.security != Security::Wpa3
+                && security != Security::Wpa3
                 && !(8..=63).contains(&pw.chars().count())
             {
                 return Ok(Err(text::bad_passphrase_length(&name)));
             }
             let uuid = new_uuid();
             inline = password.map(|_| broker.inline_password(&uuid));
-            let settings = new_profile(&ssid, &name, &uuid, net.security, password, eap);
+            let settings = new_profile(&ssid, &name, &uuid, security, password, eap, hidden);
             let options = HashMap::from([("persist".to_owned(), variant("memory"))]);
             match nm
                 .add_and_activate_connection2(settings, &device_obj, &none, options)
@@ -708,10 +866,7 @@ pub async fn disconnect(conn: &Connection) -> zbus::Result<Result<Disconnected, 
         let wireless = no_cache!(WirelessProxy, conn, radio.path.as_str());
         let ssid = active_ssid(conn, &wireless).await;
         if device.disconnect().await.is_ok() {
-            let name = ssid.map_or_else(
-                || radio.name.clone(),
-                |s| String::from_utf8_lossy(&s).into_owned(),
-            );
+            let name = ssid.map_or_else(|| radio.name.clone(), |s| nexus_ipc::display_ssid(&s));
             dropped.get_or_insert(name);
         }
     }
@@ -726,7 +881,7 @@ pub async fn forget(conn: &Connection, network: &str) -> zbus::Result<Result<For
     let Some(ssid) = nexus_ipc::parse_network_id(network) else {
         return Ok(Err(text::bad_network_id()));
     };
-    let name = String::from_utf8_lossy(&ssid).into_owned();
+    let name = nexus_ipc::display_ssid(&ssid);
     let mut removed = 0;
     for p in profiles(conn).await?.into_iter().filter(|p| p.ssid == ssid) {
         let proxy = no_cache!(SettingsConnectionProxy, conn, p.path.as_str());
@@ -752,7 +907,7 @@ pub async fn set_autoconnect(
     let Some(ssid) = nexus_ipc::parse_network_id(network) else {
         return Ok(Err(text::bad_network_id()));
     };
-    let name = String::from_utf8_lossy(&ssid).into_owned();
+    let name = nexus_ipc::display_ssid(&ssid);
     let mut changed = 0;
     for p in profiles(conn).await?.into_iter().filter(|p| p.ssid == ssid) {
         let proxy = no_cache!(SettingsConnectionProxy, conn, p.path.as_str());
@@ -795,7 +950,7 @@ pub async fn reveal(conn: &Connection, network: &str) -> zbus::Result<Result<Wif
     let Some(ssid) = nexus_ipc::parse_network_id(network) else {
         return Ok(Err(text::bad_network_id()));
     };
-    let name = String::from_utf8_lossy(&ssid).into_owned();
+    let name = nexus_ipc::display_ssid(&ssid);
     let Some(p) = profiles(conn).await?.into_iter().find(|p| p.ssid == ssid) else {
         return Ok(Err(text::unknown_network(&name)));
     };
@@ -866,6 +1021,22 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn modern_security_reads_from_the_key_management_bits() {
+        let ccmp = 0x8;
+        assert_eq!(security(1, 0, KEY_OWE | ccmp), Security::Owe);
+        // The open half of an OWE transition pair is joined as OWE too.
+        assert_eq!(security(1, 0, KEY_OWE_TM | ccmp), Security::Owe);
+        assert_eq!(security(1, 0, KEY_SAE | ccmp), Security::Wpa3);
+        assert_eq!(
+            security(1, 0, KEY_SAE | KEY_PSK | ccmp),
+            Security::Wpa3Transition
+        );
+        assert_eq!(security(1, 0, KEY_PSK | ccmp), Security::Wpa2);
+        assert_eq!(security(1, 0, KEY_EAP_SUITE_B_192), Security::Enterprise);
+        assert_eq!(security(0, 0, 0), Security::Open);
+    }
 
     #[test]
     fn band_edges() {

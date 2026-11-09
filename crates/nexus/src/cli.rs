@@ -39,6 +39,7 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::VpnFailed => 23,
         ErrorCode::MissingPlugin => 24,
         ErrorCode::KeyringUnavailable => 25,
+        ErrorCode::UnknownDevice => 40,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -156,6 +157,24 @@ pub fn wifi_list(json: bool) -> ExitCode {
     })
 }
 
+/// `nexus wifi aps <ssid> [--json]`: the access points behind a Network.
+pub fn wifi_aps(ssid: &str, hex: bool, json: bool) -> ExitCode {
+    let network = match network_of(ssid, hex) {
+        Ok(n) => n,
+        Err(code) => return code,
+    };
+    wifi_call(Op::WifiAps { network }, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::ApList>(value) {
+            Ok(list) => print!("{}", crate::wifi_view::aps_table(&list)),
+            Err(e) => eprintln!("nexus: undecodable access point list: {e}"),
+        }
+    })
+}
+
 /// `nexus wifi scan [--json]`.
 pub fn wifi_scan(json: bool) -> ExitCode {
     wifi_call(Op::WifiScan, |value| {
@@ -184,6 +203,7 @@ pub fn wifi_join_eap(
     mut eap: nexus_ipc::Eap,
     source: PasswordSource,
     json: bool,
+    hex: bool,
 ) -> ExitCode {
     eap.password = match source {
         PasswordSource::Flag(p) => Some(Secret::new(p)),
@@ -215,10 +235,11 @@ pub fn wifi_join_eap(
              and read your password."
         );
     }
-    let op = Op::WifiJoinEap {
-        network: nexus_ipc::network_id(ssid.as_bytes()),
-        eap,
+    let network = match network_of(ssid, hex) {
+        Ok(n) => n,
+        Err(code) => return code,
     };
+    let op = Op::WifiJoinEap { network, eap };
     wifi_call(op, |value| {
         if json {
             println!("{value}");
@@ -228,9 +249,35 @@ pub fn wifi_join_eap(
     })
 }
 
+/// The Network id of what was typed: the SSID's own bytes, or with `hex` the
+/// id as `wifi list --json` prints it (how SSIDs that are not UTF-8 are named).
+pub fn network_of(ssid: &str, hex: bool) -> Result<String, ExitCode> {
+    if !hex {
+        return Ok(nexus_ipc::network_id(ssid.as_bytes()));
+    }
+    match nexus_ipc::parse_network_id(ssid) {
+        Some(bytes) if !bytes.is_empty() => Ok(nexus_ipc::network_id(&bytes)),
+        _ => {
+            eprintln!("nexus: `{ssid}` is not an SSID in hex (two digits per byte).");
+            Err(ExitCode::from(2))
+        }
+    }
+}
+
+/// Where a join happens, beyond the Network's name.
+#[derive(Default)]
+pub struct JoinWhere {
+    /// `ssid` is the hex id, not the name.
+    pub hex: bool,
+    /// The Wi-Fi Device to join through (interface name or id).
+    pub device: Option<String>,
+    /// The Network is hidden; authenticate with this security.
+    pub hidden: Option<nexus_ipc::Security>,
+}
+
 /// `nexus wifi join <ssid>`. The SSID's bytes are its Network id, so no
 /// lookup is needed.
-pub fn wifi_join(ssid: &str, source: PasswordSource, json: bool) -> ExitCode {
+pub fn wifi_join(ssid: &str, source: PasswordSource, json: bool, at: JoinWhere) -> ExitCode {
     let password = match source {
         PasswordSource::None => None,
         PasswordSource::Flag(p) => Some(Secret::new(p)),
@@ -243,10 +290,15 @@ pub fn wifi_join(ssid: &str, source: PasswordSource, json: bool) -> ExitCode {
             Some(Secret::new(line.trim_end_matches(['\n', '\r'])))
         }
     };
-    let network = nexus_ipc::network_id(ssid.as_bytes());
+    let network = match network_of(ssid, at.hex) {
+        Ok(n) => n,
+        Err(code) => return code,
+    };
     let op = Op::WifiJoin {
         network: network.clone(),
         password: password.clone(),
+        device: at.device,
+        hidden: at.hidden,
     };
     let show = |value: Value| {
         if json {
@@ -365,11 +417,13 @@ pub fn wifi_disconnect(json: bool) -> ExitCode {
 }
 
 /// `nexus wifi forget <ssid>`.
-pub fn wifi_forget(ssid: &str, json: bool) -> ExitCode {
+pub fn wifi_forget(ssid: &str, hex: bool, json: bool) -> ExitCode {
+    let network = match network_of(ssid, hex) {
+        Ok(n) => n,
+        Err(code) => return code,
+    };
     wifi_call(
-        Op::WifiForget {
-            network: nexus_ipc::network_id(ssid.as_bytes()),
-        },
+        Op::WifiForget { network },
         |value| {
             if json {
                 println!("{value}");
@@ -565,6 +619,7 @@ mod tests {
             ErrorCode::Conflict,
             ErrorCode::NothingPending,
             ErrorCode::KeyringUnavailable,
+            ErrorCode::UnknownDevice,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

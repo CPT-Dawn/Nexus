@@ -11,8 +11,8 @@ mod wifi;
 use std::future::Future;
 
 use nexus_ipc::{
-    AutoconnectSet, Disconnected, Forgotten, Joined, NewTunnel, ProfileSettings, ProfileView,
-    Radios, ScanOutcome, Secret, Status, Tethered, Tethers, Untethered, VpnAdded, VpnKey, VpnList,
+    ApList, AutoconnectSet, Disconnected, Forgotten, Joined, NewTunnel, ProfileSettings, ProfileView,
+    Radios, ScanOutcome, Secret, Security, Status, Tethered, Tethers, Untethered, VpnAdded, VpnKey, VpnList,
     VpnShare, VpnToggled, WifiList, WifiShare,
 };
 
@@ -26,6 +26,16 @@ pub struct Capabilities {
     pub connectivity_check: bool,
     /// Can tell a Portal from a plain outage.
     pub portal_detection: bool,
+}
+
+/// Where and how a join happens, beyond the Network itself.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct JoinTarget {
+    /// The Wi-Fi Device to join through (id or interface name); by default
+    /// the one that hears the Network best.
+    pub device: Option<String>,
+    /// Set when the Network is hidden: the security to authenticate with.
+    pub hidden: Option<Security>,
 }
 
 /// Byte counters of the Device carrying the primary Link.
@@ -108,7 +118,14 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
         password: Option<Secret>,
+        target: JoinTarget,
     ) -> impl Future<Output = Result<Joined, BackendError>> + Send;
+
+    /// The access points behind a Network, strongest first.
+    fn wifi_aps(
+        &self,
+        network: String,
+    ) -> impl Future<Output = Result<ApList, BackendError>> + Send;
 
     /// Joins a WPA-Enterprise (802.1X) Network with `eap`, otherwise like
     /// [`Backend::wifi_join`].

@@ -136,6 +136,8 @@ impl Cmd {
             Cmd::Join { network, .. } => Op::WifiJoin {
                 network: network.clone(),
                 password: None,
+                device: None,
+                hidden: None,
             },
             Cmd::JoinEap { network, eap, .. } => Op::WifiJoinEap {
                 network: network.clone(),
