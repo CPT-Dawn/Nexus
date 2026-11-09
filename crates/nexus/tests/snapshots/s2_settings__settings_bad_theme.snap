@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_settings.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Settings ──────────────────╮╭ Theme ─────────────────────────────────────────────────────────────╮
+│ ▸ Theme     Midnight Bloom ││ The colours of the TUI. Enter picks the next one.                  │
+│   Nerd Font icons      off ││                                                                    │
+│   Reduced motion       off ││   ████████ Midnight Bloom                                          │
+│   Notify: joined        on ││   ████████ Catppuccin                                              │
+│   Notify: lost         off ││   ████████ Gruvbox                                                 │
+│   Notify: bad password  on ││   ████████ Nord                                                    │
+│   Notify: prompt        on ││   ████████ Tokyo Night                                             │
+│   Notify: login         on ││   ████████ Rosé Pine                                               │
+│   Notify: VPN drop      on ││   ████████ High contrast                                           │
+│   Notify: untrusted     on ││   broken (has a mistake, see below)                                │
+│   Untrusted: metered   off ││   ████████ sunrise (custom)                                        │
+│                            ││                                                                    │
+│                            ││ Make your own in config.toml:                                      │
+│                            ││   [themes.mine]                                                    │
+│                            ││   base = "nord"                                                    │
+│                            ││   accent = "#ff8800"                                               │
+│                            ││                                                                    │
+│                            ││ enter changes it, r puts the default back.                         │
+│                            ││                                                                    │
+│                            ││ theme `broken`: `accent = teal` is not a #rrggbb colour            │
+│                            ││                                                                    │
+│               ╭ Problem ───────────────────────────────────────────────────────────────────────╮ │
+│               │ theme `broken`: `accent = teal` is not a #rrggbb colour. Using Midnight Bloom. │ │
+│               ╰────────────────────────────────────────────────────────────────────────────────╯ │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter change  r reset  h/l tab  : palette  ? help  q quit

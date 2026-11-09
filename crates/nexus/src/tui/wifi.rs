@@ -97,6 +97,16 @@ pub enum Cmd {
     Join {
         network: String,
         ssid: String,
+        /// The Wi-Fi Device to join through, if the person picked one.
+        device: Option<String>,
+    },
+    /// Join a hidden Network by name and security. Without a password the
+    /// Daemon opens a Secret prompt for it.
+    JoinHidden {
+        ssid: String,
+        security: nexus_ipc::Security,
+        password: Option<Secret>,
+        device: Option<String>,
     },
     /// Join an enterprise Network with the form's settings.
     JoinEap {
@@ -148,9 +158,24 @@ impl Cmd {
     fn op(&self) -> Op {
         match self {
             Cmd::Scan => Op::WifiScan,
-            Cmd::Join { network, .. } => Op::WifiJoin {
+            Cmd::Join {
+                network, device, ..
+            } => Op::WifiJoin {
                 network: network.clone(),
                 password: None,
+                device: device.clone(),
+                hidden: None,
+            },
+            Cmd::JoinHidden {
+                ssid,
+                security,
+                password,
+                device,
+            } => Op::WifiJoin {
+                network: nexus_ipc::network_id(ssid.as_bytes()),
+                password: password.clone(),
+                device: device.clone(),
+                hidden: Some(*security),
             },
             Cmd::JoinEap { network, eap, .. } => Op::WifiJoinEap {
                 network: network.clone(),
@@ -388,6 +413,9 @@ pub struct WifiTab {
     phase: usize,
     /// The SSID being joined.
     pub busy: Option<String>,
+    /// The Wi-Fi Device (id) joins go through; `None` lets the Daemon pick
+    /// the one that hears the Network best.
+    card: Option<String>,
 }
 
 impl WifiTab {
@@ -414,6 +442,41 @@ impl WifiTab {
     /// Index of the first saved-out-of-range row, if any.
     pub fn saved_start(&self) -> Option<usize> {
         self.rows.iter().position(|e| matches!(e, Entry::Saved(_)))
+    }
+
+    /// The Wi-Fi Devices, when there is a choice between several.
+    pub fn cards(&self) -> &[nexus_ipc::WifiDevice] {
+        match &self.list {
+            Some(l) if l.devices.len() > 1 => &l.devices,
+            _ => &[],
+        }
+    }
+
+    /// The Device joins are pinned to.
+    pub fn card(&self) -> Option<&str> {
+        self.card.as_deref()
+    }
+
+    /// Its interface name.
+    pub fn card_name(&self) -> Option<&str> {
+        self.card().and_then(|c| self.adapter_name(c))
+    }
+
+    /// Steps through "any card", then each card in turn. False with no choice.
+    pub fn cycle_card(&mut self) -> bool {
+        let cards = self.cards();
+        if cards.is_empty() {
+            return false;
+        }
+        let at = self
+            .card
+            .as_deref()
+            .and_then(|c| cards.iter().position(|d| d.id == c));
+        self.card = match at {
+            None => Some(cards[0].id.clone()),
+            Some(i) => cards.get(i + 1).map(|d| d.id.clone()),
+        };
+        true
     }
 
     pub fn adapter_name(&self, device: &str) -> Option<&str> {
@@ -474,6 +537,14 @@ impl WifiTab {
         let mut rows = self.settle(nets, resort);
         rows.extend(self.settle(saved, resort));
         self.rows = rows;
+        // A card that went away no longer pins joins.
+        if self
+            .card
+            .as_deref()
+            .is_some_and(|c| !list.devices.iter().any(|d| d.id == c))
+        {
+            self.card = None;
+        }
         self.list = Some(list);
 
         self.cursor = keep

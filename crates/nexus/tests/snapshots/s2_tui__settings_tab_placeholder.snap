@@ -3,23 +3,23 @@ source: crates/nexus/tests/s2_tui.rs
 expression: rig.text(STANDARD)
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
-╭ Settings ──────────────────╮╭ Settings ──────────────────────────────────────────────────────────╮
-│ Nothing to list yet.       ││ Settings arrives in a later release.                               │
+╭ Settings ──────────────────╮╭ Theme ─────────────────────────────────────────────────────────────╮
+│ ▸ Theme     Midnight Bloom ││ The colours of the TUI. Enter picks the next one.                  │
+│   Nerd Font icons      off ││                                                                    │
+│   Reduced motion       off ││ ● ████████ Midnight Bloom                                          │
+│   Notify: joined        on ││   ████████ Catppuccin                                              │
+│   Notify: lost          on ││   ████████ Gruvbox                                                 │
+│   Notify: bad password  on ││   ████████ Nord                                                    │
+│   Notify: prompt        on ││   ████████ Tokyo Night                                             │
+│   Notify: login         on ││   ████████ Rosé Pine                                               │
+│   Notify: VPN drop      on ││   ████████ High contrast                                           │
+│   Notify: untrusted     on ││                                                                    │
+│   Untrusted: metered   off ││ Make your own in config.toml:                                      │
+│                            ││   [themes.mine]                                                    │
+│                            ││   base = "nord"                                                    │
+│                            ││   accent = "#ff8800"                                               │
 │                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
+│                            ││ enter changes it, r puts the default back.                         │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
@@ -29,4 +29,4 @@ expression: rig.text(STANDARD)
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- h/l tab  : palette  ? help  q quit
+ j/k move  enter change  r reset  h/l tab  : palette  ? help  q quit

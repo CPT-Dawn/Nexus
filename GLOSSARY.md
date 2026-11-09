@@ -108,5 +108,24 @@ A short animation the TUI plays because something happened: a tab glides in, a j
 _Avoid_: animation, transition, ambient motion
 
 **Reduced motion**:
-The mode (`NEXUS_REDUCE_MOTION=1` or `REDUCE_MOTION=1`) in which nothing moves: tabs change at once, toasts appear in place, no pulse, no shake. The colour changes that say what happened stay. Terminals with 16 colours or none play no Effects at all.
+The mode (`NEXUS_REDUCE_MOTION=1`, `REDUCE_MOTION=1`, or `ui.reduce_motion = true` in the config; any one turns it on) in which nothing moves: tabs change at once, toasts appear in place, no pulse, no shake. The colour changes that say what happened stay. Terminals with 16 colours or none play no Effects at all.
 _Avoid_: no-animation mode, calm mode
+
+**Hidden Network**:
+A Wi-Fi Network that does not broadcast its name, so it is never in the list. It is joined by typing its name and saying how it is protected (open, OWE, WPA2, WPA3 or WPA2/WPA3); the Profile is marked hidden so the Backend probes for it. Joining one nobody answers for fails as out of range and saves nothing.
+_Avoid_: unlisted network, stealth network
+
+**Access point details**:
+What `nexus wifi aps` and `i` on the Wi-Fi tab show for a Network: each access point behind it with its address (BSSID), channel, frequency, band (6 GHz where the Backend reports it), best link rate and signal. A Network is one row; its access points are the radios that broadcast it.
+
+**Card**:
+In Wi-Fi context, a Device. When a machine has several, the person can pin joins to one (`--device` on the CLI, `c` in the TUI); otherwise the card that hears the Network best joins. A card that cannot hear the Network refuses the join with a sentence naming it.
+_Avoid_: adapter (user-facing), interface
+
+**Theme**:
+A named set of semantic colour tokens (bg, fg, muted, dim, accent, ok, warn, err, border, selection) the TUI paints with; views never name a colour. Seven are built in (Midnight Bloom, Catppuccin, Gruvbox, Nord, Tokyo Night, Rose Pine, High contrast). A custom Theme is a `[themes.<name>]` table of `#rrggbb` tokens, optionally on a built-in `base`; one with a mistake falls back to Midnight Bloom with a warning, it never stops the TUI or the Daemon. The focused-pane gradient and glow are derived from the accent, so every Theme gets them.
+_Avoid_: skin, colour scheme, palette (the palette is the `:` Verb search)
+
+**Settings tab**:
+The TUI tab that edits `config.toml` through the Daemon (`config_set`), so the user's comments and ordering survive. It changes nothing on screen itself: the Daemon's `config_reloaded` event does, which means an edit by hand and an edit from the tab take the same path.
+_Avoid_: preferences, options screen

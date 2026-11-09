@@ -4,6 +4,7 @@
 
 mod eth_keys;
 mod hotspot_keys;
+mod settings_keys;
 mod vpn_keys;
 
 use std::collections::VecDeque;
@@ -13,18 +14,21 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
-    ActivityEntry, ActivityKind, Connectivity, EthernetList, Event, Finding, Hotspot, Op,
+    ActivityEntry, ActivityKind, ApList, Connectivity, EthernetList, Event, Finding, Hotspot, Op,
     PromptClosed, PromptKind, Secret, State, Status, Tethers, Traffic, Trust, VpnList, WifiList,
     WifiShare,
 };
 
+use super::aps::{Aps, Stage as ApsStage};
 use super::caps::Caps;
 use super::eap_form::{EapForm, Typed};
 use super::ethernet::{self, EthernetTab};
 use super::fx::{self, Fx};
+use super::hidden::{HiddenForm, Typed as HiddenTyped};
 use super::hits::Hit;
 use super::hotspot::{self, HotspotTab};
 use super::profile::{Action, Editor, ProfileMsg};
+use super::settings::SettingsTab;
 use super::share::{Share, Stage};
 use super::tether::TetherTab;
 use super::theme::{Look, Theme};
@@ -70,6 +74,8 @@ pub enum Msg {
     Done(Done),
     /// The Daemon answered a reveal for the share view.
     Shared(Result<WifiShare, String>),
+    /// The Daemon answered for the access point details.
+    Aps(Result<ApList, String>),
     /// A traffic sample, asked for only while the graphs are visible.
     Traffic(Traffic),
     /// The Daemon's whole activity log (on connect), newest first.
@@ -82,6 +88,14 @@ pub enum Msg {
     FixDone(Result<(), String>),
     /// Something about the Profile settings editor.
     Profile(ProfileMsg),
+    /// The Daemon's config (first connect, or `config_reloaded`), with the
+    /// reason it is being ignored, if it is.
+    Config {
+        config: serde_json::Value,
+        warning: Option<String>,
+    },
+    /// A setting the person changed was refused (`Err`) or taken.
+    Setting(Result<(), String>),
     /// The Daemon cannot be reached (never connected, or the link dropped).
     Down,
     /// A running effect asked for a frame.
@@ -128,6 +142,7 @@ impl Tab {
     pub fn rows(self) -> usize {
         match self {
             Tab::Overview => 4,
+            Tab::Settings => super::settings::ITEMS.len(),
             _ => 0,
         }
     }
@@ -215,6 +230,13 @@ pub struct App {
     vpn: VpnTab,
     vpn_runner: Option<vpn::Runner>,
     tether: TetherTab,
+    settings: SettingsTab,
+    /// What the flags and terminal allowed before the config had a say.
+    flag_caps: Caps,
+    /// The environment asked for reduced motion.
+    env_motion: bool,
+    /// Why the configured theme is not in force, if it is not.
+    theme_note: Option<String>,
     ethernet: EthernetTab,
     hotspot: HotspotTab,
     /// An open Secret prompt: it has the keys until answered or cancelled.
@@ -222,6 +244,10 @@ pub struct App {
     confirm: Option<Confirm>,
     /// The 802.1X sign-in form: while open it has the keys.
     eap: Option<EapForm>,
+    /// The hidden-network form: while open it has the keys.
+    hidden: Option<HiddenForm>,
+    /// The access point details of a Network, while open.
+    aps: Option<Aps>,
     /// The Profile settings editor, while open: it has the keys.
     editor: Option<Editor>,
     /// The share view (QR code) of a saved Network.
@@ -261,11 +287,17 @@ impl App {
             vpn: VpnTab::default(),
             vpn_runner: None,
             tether: TetherTab::default(),
+            settings: SettingsTab::default(),
+            flag_caps: caps,
+            env_motion: false,
+            theme_note: None,
             ethernet: EthernetTab::default(),
             hotspot: HotspotTab::default(),
             field: None,
             confirm: None,
             eap: None,
+            hidden: None,
+            aps: None,
             editor: None,
             share: None,
             toast: None,
@@ -321,6 +353,10 @@ impl App {
         &self.wifi
     }
 
+    pub fn settings(&self) -> &SettingsTab {
+        &self.settings
+    }
+
     pub fn tether(&self) -> &TetherTab {
         &self.tether
     }
@@ -339,6 +375,14 @@ impl App {
 
     pub fn eap_form(&self) -> Option<&EapForm> {
         self.eap.as_ref()
+    }
+
+    pub fn hidden_form(&self) -> Option<&HiddenForm> {
+        self.hidden.as_ref()
+    }
+
+    pub(super) fn aps(&self) -> Option<&Aps> {
+        self.aps.as_ref()
     }
 
     pub fn editor(&self) -> Option<&Editor> {
@@ -504,7 +548,8 @@ impl App {
     /// Reduced motion: no gliding, sliding, shaking or pulsing; the colour
     /// changes that say what happened stay.
     pub fn reduce_motion(&mut self, on: bool) {
-        self.fx.reduce(on);
+        self.env_motion = on;
+        self.fx.reduce(self.env_motion || self.settings_motion());
     }
 
     /// Runs the effects over the frame just drawn into `buf`, advancing them
@@ -638,6 +683,12 @@ impl App {
             Msg::Vpns(list) => self.vpn.refresh(list) && self.tab == Tab::Vpn,
             Msg::Vpn(done) => self.vpn_done(*done),
             Msg::Tethers(tethers) => self.tether.refresh(tethers),
+            Msg::Config { config, warning } => self.apply_config(config, warning),
+            Msg::Setting(Err(message)) => {
+                self.say(message, true, None);
+                true
+            }
+            Msg::Setting(Ok(())) => false,
             Msg::Ethernet(list) => self.ethernet.refresh(list),
             Msg::Wired(done) => self.eth_done(*done),
             Msg::Hotspot(info) => {
@@ -653,6 +704,16 @@ impl App {
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
             Msg::Profile(m) => self.profile_msg(m),
+            Msg::Aps(result) => match self.aps.as_mut() {
+                Some(aps) if matches!(aps.stage, ApsStage::Loading) => {
+                    aps.stage = match result {
+                        Ok(list) => ApsStage::Shown(list),
+                        Err(message) => ApsStage::Failed(message),
+                    };
+                    true
+                }
+                _ => false, // closed meanwhile
+            },
             Msg::Shared(result) => match self.share.as_mut() {
                 Some(share) if matches!(share.stage, Stage::Reading) => {
                     share.arrived(result);
@@ -779,6 +840,32 @@ impl App {
                 }
             }
             (
+                Cmd::JoinHidden {
+                    ssid,
+                    security,
+                    password,
+                    ..
+                },
+                result,
+            ) => {
+                self.wifi.busy = None;
+                match result {
+                    Ok(_) => {
+                        self.say(format!("Joined {ssid}."), false, None);
+                        self.bloom();
+                    }
+                    // Back to the form, nothing typed lost, to try again.
+                    Err(message) => {
+                        self.hidden = Some(HiddenForm::reopened(
+                            ssid.clone(),
+                            *security,
+                            password.as_ref(),
+                            message,
+                        ));
+                    }
+                }
+            }
+            (
                 Cmd::JoinEap {
                     network, ssid, eap, ..
                 },
@@ -805,6 +892,7 @@ impl App {
                 let undo = Cmd::Join {
                     network: network.clone(),
                     ssid: ssid.clone(),
+                    device: None,
                 };
                 self.say(format!("Disconnected from {ssid}."), false, Some(undo));
             }
@@ -909,6 +997,36 @@ impl App {
                 }
             }
             return true;
+        }
+        if let Some(form) = self.hidden.as_mut() {
+            match form.key(key) {
+                HiddenTyped::Editing => {}
+                HiddenTyped::Cancel => self.hidden = None,
+                HiddenTyped::Submit {
+                    name,
+                    security,
+                    password,
+                } => {
+                    self.hidden = None;
+                    let device = self.wifi.card().map(str::to_owned);
+                    self.run_wifi(Cmd::JoinHidden {
+                        ssid: name,
+                        security,
+                        password,
+                        device,
+                    });
+                }
+            }
+            return true;
+        }
+        if self.aps.is_some() {
+            return match key.code {
+                KeyCode::Esc | KeyCode::Char('i' | 'q') | KeyCode::Enter => {
+                    self.aps = None;
+                    true
+                }
+                _ => false,
+            };
         }
         if self.field.is_some() {
             return self.field_key(key);
@@ -1106,7 +1224,7 @@ impl App {
                 if self.narrow()
                     && !matches!(
                         self.tab,
-                        Tab::WiFi | Tab::Ethernet | Tab::Vpn | Tab::Hotspot
+                        Tab::WiFi | Tab::Ethernet | Tab::Vpn | Tab::Hotspot | Tab::Settings
                     ) =>
             {
                 self.layer = Layer::Sheet;
@@ -1128,6 +1246,7 @@ impl App {
             Tab::Vpn => self.vpn_key(key),
             Tab::Ethernet => self.eth_key(key),
             Tab::Hotspot => self.hotspot_tab_key(key),
+            Tab::Settings => self.settings_key(key),
             _ => false,
         }
     }
@@ -1184,6 +1303,12 @@ impl App {
                 }
                 None => false,
             },
+            KeyCode::Char('n') => {
+                self.toast = None;
+                self.hidden = Some(HiddenForm::new());
+                true
+            }
+            KeyCode::Char('c') => self.wifi.cycle_card(),
             _ => {
                 let Some(entry) = self.wifi.selected().cloned() else {
                     return false;
@@ -1197,7 +1322,26 @@ impl App {
                         true
                     }
                     KeyCode::Enter if !entry.joined() && self.wifi.busy.is_none() => {
-                        self.run_wifi(Cmd::Join { network, ssid });
+                        let device = self.wifi.card().map(str::to_owned);
+                        self.run_wifi(Cmd::Join {
+                            network,
+                            ssid,
+                            device,
+                        });
+                        true
+                    }
+                    KeyCode::Char('i') if matches!(entry, Entry::Net(_)) => {
+                        self.toast = None;
+                        self.aps = Some(Aps::loading(ssid));
+                        if let Some(runner) = &self.runner {
+                            runner.call(Op::WifiAps { network }, |r| {
+                                Msg::Aps(r.and_then(|v| {
+                                    serde_json::from_value(v).map_err(|_| {
+                                        "The daemon sent details Nexus cannot read.".to_string()
+                                    })
+                                }))
+                            });
+                        }
                         true
                     }
                     KeyCode::Char('x') if entry.joined() => {
@@ -1374,7 +1518,9 @@ impl App {
 
     /// Sends a Wi-Fi command, marking a join as in flight.
     fn run_wifi(&mut self, cmd: Cmd) {
-        if let Cmd::Join { ssid, .. } | Cmd::JoinEap { ssid, .. } = &cmd {
+        if let Cmd::Join { ssid, .. } | Cmd::JoinEap { ssid, .. } | Cmd::JoinHidden { ssid, .. } =
+            &cmd
+        {
             self.wifi.busy = Some(ssid.clone());
         }
         self.toast = None;
@@ -1430,8 +1576,11 @@ impl App {
         if self.palette.is_some() {
             return vec![("enter", "run"), ("esc", "close")];
         }
-        if self.eap.is_some() {
+        if self.eap.is_some() || self.hidden.is_some() {
             return vec![("tab", "next"), ("enter", "join"), ("esc", "cancel")];
+        }
+        if self.aps.is_some() {
+            return vec![("esc", "close")];
         }
         if self.hotspot.form.is_some() {
             return vec![
@@ -1473,6 +1622,8 @@ impl App {
                     v.extend(self.vpn_hints(false));
                 } else if self.tab == Tab::Hotspot {
                     v.extend(self.tether_hints());
+                } else if self.tab == Tab::Settings {
+                    v.extend(self.settings_hints());
                 } else if self.tab == Tab::Ethernet {
                     v.extend(self.eth_hints());
                 }
@@ -1490,6 +1641,11 @@ impl App {
                     v.extend(self.wifi_hints(!narrow));
                 } else if self.tab == Tab::Vpn {
                     v.extend(self.vpn_hints(!narrow));
+                } else if self.tab == Tab::Settings {
+                    v.extend(self.settings_hints());
+                    if narrow && self.rows() > 0 {
+                        v.push(("d", "details"));
+                    }
                 } else if self.tab == Tab::Hotspot {
                     v.extend(self.tether_hints());
                     if narrow && self.rows() > 0 {
@@ -1572,6 +1728,12 @@ impl App {
             }
             if e.saved() {
                 v.push(("e", "settings"));
+            }
+        }
+        if more {
+            v.push(("n", "other"));
+            if !self.wifi.cards().is_empty() {
+                v.push(("c", "card"));
             }
         }
         if self.toast.as_ref().is_some_and(|t| t.undo.is_some()) {

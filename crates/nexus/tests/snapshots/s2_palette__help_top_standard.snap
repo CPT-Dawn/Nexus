@@ -12,7 +12,7 @@ expression: top
 │     Not connected│  1 - 6                Jump to a tab                        █                  │
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █                  │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
-│                  │  Esc                  Back out; never quits                █                  │
+│                  │  Esc                  Back out; never quits                │                  │
 │                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │──────────────────╯
 │                  │  ?                    Show or hide this help               │──────────────────╮
@@ -23,10 +23,10 @@ expression: top
 │                  │  Wi-Fi: f             Forget (asks first)                  │──────────────────╯
 │                  │  Wi-Fi: a             Toggle autoconnect                   │──────────────────╮
 │                  │  Wi-Fi: t             Mark Trusted or Untrusted            │s show up here.   │
+│                  │  Wi-Fi: n             Join a hidden Network by name        │                  │
+│                  │  Wi-Fi: i             Access point details of the Network  │                  │
+│                  │  Wi-Fi: c             Pick the Wi-Fi card joins use        │                  │
 │                  │  Wi-Fi: e             Edit the Profile's settings          │                  │
 │                  │  Wi-Fi: s             Share as a QR code (asks first)      │                  │
-│                  │  Ethernet: Enter      Join the selected port               │                  │
-│                  │  Ethernet: x          Drop the port's Link                 │                  │
-│                  │  Ethernet: s          Sign in to an 802.1X port            │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

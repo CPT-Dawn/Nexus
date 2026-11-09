@@ -137,7 +137,19 @@ enum WifiAction {
         json: bool,
     },
     /// Join a Network. The Profile is saved only if the join works.
-    Join(JoinArgs),
+    Join(Box<JoinArgs>),
+    /// Show the access points behind a Network: address, channel, frequency,
+    /// band and link rate.
+    Aps {
+        /// The Network's name (SSID).
+        ssid: String,
+        /// `ssid` is the hex id from `wifi list --json` (for names that are not UTF-8).
+        #[arg(long)]
+        hex: bool,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Switch the Wi-Fi radio on.
     On {
         /// Print the radio state as JSON.
@@ -160,6 +172,9 @@ enum WifiAction {
     Forget {
         /// The Network's name (SSID).
         ssid: String,
+        /// `ssid` is the hex id from `wifi list --json` (for names that are not UTF-8).
+        #[arg(long)]
+        hex: bool,
         /// Print the result as JSON.
         #[arg(long)]
         json: bool,
@@ -406,6 +421,17 @@ enum Switch {
 struct JoinArgs {
     /// The Network's name (SSID).
     ssid: String,
+    /// `ssid` is the hex id from `wifi list --json` (for names that are not UTF-8).
+    #[arg(long)]
+    hex: bool,
+    /// The Network is hidden (it does not broadcast its name): join it by name
+    /// with this security.
+    #[arg(long, value_enum, conflicts_with = "eap")]
+    hidden: Option<HiddenSecurity>,
+    /// Join through this Wi-Fi device (interface name, e.g. wlan1) instead of
+    /// the one that hears the Network best.
+    #[arg(long, conflicts_with = "eap")]
+    device: Option<String>,
     /// The password. Visible in the process list: prefer --password-stdin.
     #[arg(long, conflicts_with = "password_stdin")]
     password: Option<String>,
@@ -445,6 +471,31 @@ struct JoinArgs {
     /// Private key password. Visible in the process list.
     #[arg(long, requires = "eap")]
     private_key_password: Option<String>,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum HiddenSecurity {
+    Open,
+    /// Enhanced Open (OWE).
+    Owe,
+    Wpa2,
+    Wpa3,
+    /// Accepts both WPA2 and WPA3 clients.
+    #[value(name = "wpa2-3")]
+    Wpa23,
+}
+
+impl HiddenSecurity {
+    fn security(self) -> nexus_ipc::Security {
+        use nexus_ipc::Security;
+        match self {
+            HiddenSecurity::Open => Security::Open,
+            HiddenSecurity::Owe => Security::Owe,
+            HiddenSecurity::Wpa2 => Security::Wpa2,
+            HiddenSecurity::Wpa3 => Security::Wpa3,
+            HiddenSecurity::Wpa23 => Security::Wpa3Transition,
+        }
+    }
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -536,6 +587,7 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Join(a),
         } => {
+            let a = *a;
             let eap = a.eap();
             let source = match (a.password, a.password_stdin) {
                 (Some(p), _) => cli::PasswordSource::Flag(p),
@@ -543,8 +595,15 @@ fn main() -> ExitCode {
                 (None, false) => cli::PasswordSource::None,
             };
             match eap {
-                Some(eap) => cli::wifi_join_eap(&a.ssid, eap, source, a.json),
-                None => cli::wifi_join(&a.ssid, source, a.json),
+                Some(eap) => cli::wifi_join_eap(&a.ssid, eap, source, a.json, a.hex),
+                None => {
+                    let at = cli::JoinWhere {
+                        hex: a.hex,
+                        device: a.device,
+                        hidden: a.hidden.map(HiddenSecurity::security),
+                    };
+                    cli::wifi_join(&a.ssid, source, a.json, at)
+                }
             }
         }
         Command::Wifi {
@@ -563,8 +622,11 @@ fn main() -> ExitCode {
             action: WifiAction::Disconnect { json },
         } => cli::wifi_disconnect(json),
         Command::Wifi {
-            action: WifiAction::Forget { ssid, json },
-        } => cli::wifi_forget(&ssid, json),
+            action: WifiAction::Forget { ssid, hex, json },
+        } => cli::wifi_forget(&ssid, hex, json),
+        Command::Wifi {
+            action: WifiAction::Aps { ssid, hex, json },
+        } => cli::wifi_aps(&ssid, hex, json),
         Command::Profile {
             action: ProfileAction::Show { ssid, json },
         } => profile_cli::show(&ssid, json),

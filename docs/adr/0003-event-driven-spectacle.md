@@ -15,3 +15,11 @@ Nexus aims to be a showcase TUI, so it goes further than Zenith's restraint (Zen
 - Tiers: truecolor and 256 colours play Effects (256 blends in RGB, then snaps every cell to the nearest palette index); 16 colours and none play none, and their state changes are static. Reduced motion keeps the bloom as a plain colour fade and drops the rest.
 - Surfaces (`tui/surface.rs`): focused borders run a hue gradient across the screen (truecolor smooth, 256 stepped) and, on truecolor only, the cells beside them take a 10% tint. Both are a post-pass keyed on the focused border token, so views never name a gradient.
 - Dialogs and the command palette sit over the detail pane when the screen is split, so they never cover the list.
+
+## Themes (#28)
+
+- A theme is data: ten tokens, each with an RGB value and a 16-colour fallback. Custom themes in `config.toml` (`[themes.<name>]`, `#rrggbb`, optional `base`) get their 16-colour fallbacks from the nearest ANSI colour. The `accent` must differ from the `border`, because the focused border is recognised by the accent on a box glyph; a theme that breaks this is rejected like any other mistake.
+- The TUI resolves the theme from the Daemon's config (`config_get` on connect, `config_reloaded` after), so there is no second copy of the setting. An unknown name or a bad custom theme falls back to Midnight Bloom and says why (toast plus the Settings tab), and the Daemon keeps the rest of the file in force.
+- A theme change rebuilds the effects (they hold the theme's colours) and restarts the connecting pulse if one was running. Reduced motion is the environment OR `ui.reduce_motion`; either can turn it on, only the config can turn it off, and the Settings tab says when the environment is holding it on.
+- The backdrop stays transparent in every theme; an opaque switch (`Look::surface`) is still unused.
+

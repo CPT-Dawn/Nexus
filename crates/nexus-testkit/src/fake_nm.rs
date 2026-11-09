@@ -85,6 +85,10 @@ pub struct Ap {
     pub flags: u32,
     pub wpa_flags: u32,
     pub rsn_flags: u32,
+    /// `MaxBitrate` in kbit/s.
+    pub bitrate: u32,
+    /// Does not broadcast its name: `Ssid` reads empty until a Device joins it.
+    pub hidden: bool,
 }
 
 impl Ap {
@@ -98,7 +102,31 @@ impl Ap {
             flags: 0x1,
             wpa_flags: 0,
             rsn_flags: 0x108, // KEY_MGMT_PSK (0x100) | PAIR_CCMP (0x8)
+            bitrate: 130_000,
+            hidden: false,
         }
+    }
+
+    /// Hides the name: the access point is in range but cannot be listed.
+    pub fn hidden(mut self) -> Self {
+        self.hidden = true;
+        self
+    }
+
+    /// Sets `MaxBitrate` in kbit/s.
+    pub fn bitrate(mut self, kbps: u32) -> Self {
+        self.bitrate = kbps;
+        self
+    }
+
+    /// An OWE (Enhanced Open) access point.
+    pub fn owe(ssid: &str, bssid: &str, strength: u8) -> Self {
+        Self::wpa2(ssid, bssid, strength).security(0x1, 0, 0x808) // KEY_MGMT_OWE | PAIR_CCMP
+    }
+
+    /// A WPA2/WPA3 transition-mode access point (PSK and SAE together).
+    pub fn transition(ssid: &str, bssid: &str, strength: u8) -> Self {
+        Self::wpa2(ssid, bssid, strength).security(0x1, 0, 0x508) // PSK | SAE | PAIR_CCMP
     }
 
     pub fn frequency(mut self, mhz: u32) -> Self {
@@ -281,6 +309,9 @@ struct Model {
     psks: HashMap<Vec<u8>, String>,
     /// The `802-1x` setting of the last Profile added for each SSID, as text.
     eap_settings: HashMap<Vec<u8>, HashMap<String, String>>,
+    /// Every setting (`section.key`, secrets left out) of the last Profile
+    /// added for each SSID, as text.
+    added: HashMap<Vec<u8>, HashMap<String, String>>,
     /// Joins that die on purpose: `(NMDeviceState died in, reason)`.
     join_failures: HashMap<Vec<u8>, (u32, u32)>,
     /// Tethering Links that die on purpose, by phone address.
@@ -508,10 +539,21 @@ impl Manager {
         let persist: Option<String> = options
             .get("persist")
             .and_then(|v| v.try_clone().ok()?.try_into().ok());
+        let shown: HashMap<String, String> = connection
+            .iter()
+            .flat_map(|(section, keys)| {
+                keys.iter()
+                    .filter(|(k, _)| !matches!(k.as_str(), "psk" | "password" | "wep-key0"))
+                    .map(move |(k, v)| (format!("{section}.{k}"), show_variant(v)))
+            })
+            .collect();
+        self.0.lock().unwrap().added.insert(ssid.clone(), shown);
         // A secured profile without its secret: NetworkManager asks the agent.
         let eap = connection.get("802-1x");
         let needs_agent = eap.is_none()
             && connection.contains_key("802-11-wireless-security")
+            // OWE has no secret: nothing to ask for.
+            && text("802-11-wireless-security", "key-mgmt").as_deref() != Some("owe")
             && text("802-11-wireless-security", "psk").is_none();
         if let Some(eap) = eap {
             let shown = eap
@@ -569,6 +611,17 @@ impl Manager {
             path: profile_path(n),
             wrong_inline,
         });
+        // A hidden Network nobody answers the probe of: SSID_NOT_FOUND.
+        let hidden = connection
+            .get("802-11-wireless")
+            .and_then(|w| w.get("hidden"))
+            .and_then(|v| v.try_clone().ok()?.try_into().ok())
+            .unwrap_or(false);
+        let heard = {
+            let m = self.0.lock().unwrap();
+            m.devices[dev].aps.iter().any(|id| m.aps[id].ssid == ssid)
+        };
+        let forced = (hidden && !heard).then_some((40, 53));
         let task = tokio::spawn(activate(
             conn.clone(),
             self.0.clone(),
@@ -576,6 +629,7 @@ impl Manager {
             ssid,
             Some(given),
             ask,
+            forced,
         ));
         self.0.lock().unwrap().tasks.push(task.abort_handle());
         Ok((opath(&profile_path(n)), opath(ACTIVE_PATH), HashMap::new()))
@@ -647,7 +701,15 @@ impl Manager {
                     wrong_inline: false,
                 })
         };
-        let task = tokio::spawn(activate(conn.clone(), self.0.clone(), dev, ssid, None, ask));
+        let task = tokio::spawn(activate(
+            conn.clone(),
+            self.0.clone(),
+            dev,
+            ssid,
+            None,
+            ask,
+            None,
+        ));
         self.0.lock().unwrap().tasks.push(task.abort_handle());
         Ok(opath(ACTIVE_PATH))
     }
@@ -1325,6 +1387,7 @@ async fn activate(
     ssid: Vec<u8>,
     given: Option<String>,
     ask: Option<Ask>,
+    forced: Option<(u32, u32)>,
 ) {
     let step = std::time::Duration::from_millis(15);
     let (script, wanted, ap) = {
@@ -1341,7 +1404,7 @@ async fn activate(
         )
     };
     // (state to die in, reason), or a clean run.
-    let failure = script.or_else(|| match (&wanted, &given) {
+    let failure = script.or(forced).or_else(|| match (&wanted, &given) {
         _ if ask.is_some() => None, // the agent decides, at NEED_AUTH
         (Some(want), Some(got)) if want != got => Some((60, 7)), // NEED_AUTH, NO_SECRETS
         _ => None,
@@ -1376,7 +1439,14 @@ async fn activate(
         }
     }
     tokio::time::sleep(step).await;
-    model.lock().unwrap().devices[dev].active_ap = ap;
+    {
+        let mut m = model.lock().unwrap();
+        m.devices[dev].active_ap = ap;
+        // Associating teaches NetworkManager the name of a hidden network.
+        if let Some(ap) = ap.and_then(|id| m.aps.get_mut(&id)) {
+            ap.hidden = false;
+        }
+    }
     if let Ok(i) = conn
         .object_server()
         .interface::<_, Wireless>(device_path(dev))
@@ -1552,7 +1622,13 @@ impl AccessPoint {
 impl AccessPoint {
     #[zbus(property)]
     fn ssid(&self) -> Vec<u8> {
-        self.ap().ssid
+        let ap = self.ap();
+        if ap.hidden { Vec::new() } else { ap.ssid }
+    }
+
+    #[zbus(property)]
+    fn max_bitrate(&self) -> u32 {
+        self.ap().bitrate
     }
 
     #[zbus(property)]
@@ -2032,6 +2108,7 @@ impl FakeNm {
             profiles: Vec::new(),
             psks: HashMap::new(),
             eap_settings: HashMap::new(),
+            added: HashMap::new(),
             secret_reads: 0,
             deny_secret_reads: false,
             join_failures: HashMap::new(),
@@ -2476,6 +2553,14 @@ impl FakeNm {
             .unwrap()
             .psks
             .insert(ssid.as_bytes().to_vec(), format!("{identity}\0{password}"));
+    }
+
+    /// One setting, as `section.key` (e.g. `802-11-wireless-security.key-mgmt`),
+    /// of the Profile the Daemon last added for `ssid`, as text. Secrets are
+    /// not kept.
+    pub fn added_setting(&self, ssid: &[u8], key: &str) -> Option<String> {
+        let m = self.model.lock().unwrap();
+        m.added.get(ssid)?.get(key).cloned()
     }
 
     /// One key of the `802-1x` setting the Daemon sent when it added the

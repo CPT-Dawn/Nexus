@@ -12,10 +12,10 @@ use std::time::Duration;
 use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
-    AutoconnectSet, BackendInfo, Connectivity, Disconnected, EthernetDropped, EthernetJoined,
-    EthernetList, Forgotten, Hotspot, HotspotStarted, HotspotStopped, Joined, Link, LinkKind,
-    NewTunnel, ProfileKey, Radio, Radios, ScanOutcome, Secret, State, Status, Tethered, Tethers,
-    Untethered, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
+    ApList, AutoconnectSet, BackendInfo, Connectivity, Disconnected, EthernetDropped,
+    EthernetJoined, EthernetList, Forgotten, Hotspot, HotspotStarted, HotspotStopped, Joined, Link,
+    LinkKind, NewTunnel, ProfileKey, Radio, Radios, ScanOutcome, Secret, State, Status, Tethered,
+    Tethers, Untethered, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
 };
 use std::pin::Pin;
 
@@ -26,7 +26,7 @@ use zbus::fdo::DBusProxy;
 use zbus::names::BusName;
 use zbus::proxy::CacheProperties;
 
-use super::{Backend, BackendError, Capabilities, Counters, NetFacts};
+use super::{Backend, BackendError, Capabilities, Counters, JoinTarget, NetFacts};
 use crate::secrets::Broker;
 use crate::text::{self, Failure};
 
@@ -395,13 +395,20 @@ impl Backend for NetworkManager {
         &self,
         network: String,
         password: Option<Secret>,
+        target: JoinTarget,
     ) -> Result<Joined, BackendError> {
         let broker = self.broker.clone();
         self.with_bus(|c| async move {
-            super::wifi::join(&c, &broker, &network, password.as_ref(), None).await
+            super::wifi::join(&c, &broker, &network, password.as_ref(), None, &target).await
         })
         .await?
         .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_aps(&self, network: String) -> Result<ApList, BackendError> {
+        self.with_bus(|c| async move { super::wifi::access_points(&c, &network).await })
+            .await?
+            .map_err(BackendError::Refused)
     }
 
     async fn wifi_join_eap(
@@ -411,7 +418,15 @@ impl Backend for NetworkManager {
     ) -> Result<Joined, BackendError> {
         let broker = self.broker.clone();
         self.with_bus(|c| async move {
-            super::wifi::join(&c, &broker, &network, None, Some(&eap)).await
+            super::wifi::join(
+                &c,
+                &broker,
+                &network,
+                None,
+                Some(&eap),
+                &JoinTarget::default(),
+            )
+            .await
         })
         .await?
         .map_err(BackendError::Refused)

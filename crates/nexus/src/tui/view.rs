@@ -20,6 +20,7 @@ use super::layout::{self, Areas, Mode};
 use super::overlays;
 use super::overview;
 use super::profile_ui;
+use super::settings_ui;
 use super::surface;
 use super::tether_ui;
 use super::theme::Look;
@@ -164,6 +165,12 @@ pub fn draw(f: &mut Frame, app: &App) {
     vpn_ui::overlays(f, app, body, &look, &sym);
     if let Some(form) = app.eap_form() {
         eap_ui::draw(f, form, body, &look, &sym);
+    }
+    if let Some(form) = app.hidden_form() {
+        super::hidden::draw(f, form, body, &look, &sym);
+    }
+    if let Some(aps) = app.aps() {
+        super::aps::draw(f, aps, body, &look, &sym);
     }
     profile_ui::overlay(f, app, body, &look, &sym);
     if app.layer() == Layer::Help {
@@ -354,6 +361,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
         hotspot_ui::panel(f, app, panel, look, sym);
         return tether_ui::master(f, app, list, look, sym);
     }
+    if app.tab() == Tab::Settings {
+        return settings_ui::master(f, app, area, look, sym);
+    }
     if app.tab() == Tab::Ethernet {
         return ethernet_ui::master(f, app, area, look, sym);
     }
@@ -379,6 +389,9 @@ fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     }
     if app.tab() == Tab::Hotspot && app.conn() == Conn::Up {
         return tether_ui::detail(f, app, area, look, sym);
+    }
+    if app.tab() == Tab::Settings && app.conn() == Conn::Up {
+        return settings_ui::detail(f, app, area, look, sym);
     }
     if app.tab() == Tab::Ethernet && app.conn() == Conn::Up {
         return ethernet_ui::detail(f, app, area, look, sym);

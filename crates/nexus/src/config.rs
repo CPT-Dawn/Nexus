@@ -1,6 +1,7 @@
 //! The optional `config.toml`: defaults, validation, live reload and
 //! in-place edits. Nothing here may stop the Daemon from starting.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -16,6 +17,12 @@ use tokio::sync::broadcast;
 pub struct Config {
     /// Name of the TUI theme.
     pub theme: String,
+    /// Custom themes by name: semantic token -> `#rrggbb`, plus an optional
+    /// `base` (a built-in theme to start from). The TUI checks them; a bad
+    /// one falls back to the default theme with a warning, never an error here.
+    pub themes: BTreeMap<String, BTreeMap<String, String>>,
+    /// Look and feel switches of the TUI.
+    pub ui: Ui,
     pub connectivity: ConnectivityCheck,
     pub menu: Menu,
     pub prompts: Prompts,
@@ -34,6 +41,17 @@ pub struct TrustConfig {
     pub auto_vpn: String,
     /// Also mark the Network's Profile metered, so apps go easy on data.
     pub metered: bool,
+}
+
+/// Look and feel switches of the TUI. The environment (`NEXUS_REDUCE_MOTION`)
+/// and the `--nerd-font` flag turn these on too; they never turn them off.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Ui {
+    /// Nerd Font icons on the tabs.
+    pub nerd_font: bool,
+    /// No gliding, sliding, shaking or pulsing.
+    pub reduce_motion: bool,
 }
 
 /// Which desktop notifications the Daemon sends. Each kind has its own switch.
@@ -139,6 +157,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             theme: "midnight-bloom".into(),
+            themes: BTreeMap::new(),
+            ui: Ui::default(),
             connectivity: ConnectivityCheck::default(),
             menu: Menu::default(),
             prompts: Prompts::default(),

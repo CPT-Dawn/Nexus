@@ -1,0 +1,90 @@
+---
+source: crates/nexus/tests/s2_settings.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Settings ──────────────────╮╭ Theme ─────────────────────────────────────────────────────────────╮
+│ ▸ Theme      High contrast ││ The colours of the TUI. Enter picks the next one.                  │
+│   Nerd Font icons      off ││                                                                    │
+│   Reduced motion       off ││   ████████ Midnight Bloom                                          │
+│   Notify: joined        on ││   ████████ Catppuccin                                              │
+│   Notify: lost         off ││   ████████ Gruvbox                                                 │
+│   Notify: bad password  on ││   ████████ Nord                                                    │
+│   Notify: prompt        on ││   ████████ Tokyo Night                                             │
+│   Notify: login         on ││   ████████ Rosé Pine                                               │
+│   Notify: VPN drop      on ││ ● ████████ High contrast                                           │
+│   Notify: untrusted     on ││   broken (has a mistake, see below)                                │
+│   Untrusted: metered   off ││   ████████ sunrise (custom)                                        │
+│                            ││                                                                    │
+│                            ││ Make your own in config.toml:                                      │
+│                            ││   [themes.mine]                                                    │
+│                            ││   base = "nord"                                                    │
+│                            ││   accent = "#ff8800"                                               │
+│                            ││                                                                    │
+│                            ││ enter changes it, r puts the default back.                         │
+│                            ││                                                                    │
+│                            ││ theme `broken`: `accent = teal` is not a #rrggbb colour            │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter change  r reset  h/l tab  : palette  ? help  q quit
+
+ 1818 cells  fg=Reset bg=Reset mods=[]
+    6 cells  fg=Reset bg=Rgb(26, 11, 0) mods=[]
+   10 cells  fg=Reset bg=Rgb(26, 13, 0) mods=[]
+   13 cells  fg=Reset bg=Rgb(26, 15, 0) mods=[]
+   18 cells  fg=Reset bg=Rgb(26, 17, 0) mods=[]
+   20 cells  fg=Reset bg=Rgb(26, 19, 0) mods=[]
+    3 cells  fg=Reset bg=Rgb(26, 21, 0) mods=[]
+    5 cells  fg=Reset bg=Rgb(26, 9, 0) mods=[]
+    2 cells  fg=Rgb(122, 162, 247) bg=Reset mods=[]
+    2 cells  fg=Rgb(136, 192, 208) bg=Reset mods=[]
+  181 cells  fg=Rgb(140, 140, 140) bg=Reset mods=[]
+    2 cells  fg=Rgb(141, 227, 220) bg=Reset mods=[]
+    2 cells  fg=Rgb(156, 207, 216) bg=Reset mods=[]
+    4 cells  fg=Rgb(158, 206, 106) bg=Reset mods=[]
+    2 cells  fg=Rgb(163, 190, 140) bg=Reset mods=[]
+    2 cells  fg=Rgb(166, 227, 161) bg=Reset mods=[]
+  104 cells  fg=Rgb(184, 184, 184) bg=Reset mods=[]
+    4 cells  fg=Rgb(184, 187, 38) bg=Reset mods=[]
+    2 cells  fg=Rgb(196, 167, 231) bg=Reset mods=[]
+    2 cells  fg=Rgb(203, 166, 247) bg=Reset mods=[]
+    2 cells  fg=Rgb(224, 132, 141) bg=Reset mods=[bold]
+    4 cells  fg=Rgb(224, 175, 104) bg=Reset mods=[]
+   86 cells  fg=Rgb(224, 224, 224) bg=Reset mods=[]
+   12 cells  fg=Rgb(224, 224, 224) bg=Rgb(26, 11, 0) mods=[]
+    6 cells  fg=Rgb(224, 224, 224) bg=Rgb(26, 13, 0) mods=[]
+    7 cells  fg=Rgb(224, 224, 224) bg=Rgb(26, 17, 0) mods=[]
+    9 cells  fg=Rgb(224, 224, 224) bg=Rgb(26, 19, 0) mods=[]
+    4 cells  fg=Rgb(224, 224, 224) bg=Rgb(26, 21, 0) mods=[]
+    2 cells  fg=Rgb(235, 111, 146) bg=Reset mods=[bold]
+    2 cells  fg=Rgb(235, 203, 139) bg=Reset mods=[]
+    2 cells  fg=Rgb(243, 139, 168) bg=Reset mods=[bold]
+    2 cells  fg=Rgb(246, 193, 119) bg=Reset mods=[]
+    4 cells  fg=Rgb(247, 118, 142) bg=Reset mods=[bold]
+    2 cells  fg=Rgb(249, 226, 175) bg=Reset mods=[]
+    2 cells  fg=Rgb(250, 189, 47) bg=Reset mods=[]
+    4 cells  fg=Rgb(254, 128, 25) bg=Reset mods=[]
+   19 cells  fg=Rgb(255, 109, 0) bg=Reset mods=[]
+    2 cells  fg=Rgb(255, 122, 89) bg=Reset mods=[]
+   16 cells  fg=Rgb(255, 130, 0) bg=Reset mods=[]
+   13 cells  fg=Rgb(255, 150, 0) bg=Reset mods=[]
+   92 cells  fg=Rgb(255, 160, 64) bg=Reset mods=[]
+   19 cells  fg=Rgb(255, 171, 0) bg=Reset mods=[]
+   20 cells  fg=Rgb(255, 191, 0) bg=Reset mods=[]
+   14 cells  fg=Rgb(255, 212, 0) bg=Reset mods=[]
+    6 cells  fg=Rgb(255, 212, 0) bg=Reset mods=[bold]
+    5 cells  fg=Rgb(255, 212, 0) bg=Rgb(26, 17, 0) mods=[]
+    4 cells  fg=Rgb(255, 212, 0) bg=Rgb(26, 19, 0) mods=[]
+    1 cells  fg=Rgb(255, 212, 0) bg=Rgb(26, 9, 0) mods=[bold]
+  143 cells  fg=Rgb(255, 255, 255) bg=Reset mods=[]
+   29 cells  fg=Rgb(255, 255, 255) bg=Reset mods=[bold]
+    1 cells  fg=Rgb(255, 255, 255) bg=Rgb(26, 11, 0) mods=[bold]
+    1 cells  fg=Rgb(255, 255, 255) bg=Rgb(26, 9, 0) mods=[bold]
+   36 cells  fg=Rgb(255, 255, 255) bg=Rgb(42, 42, 96) mods=[bold]
+    6 cells  fg=Rgb(255, 89, 0) bg=Reset mods=[]
+    4 cells  fg=Rgb(255, 92, 71) bg=Reset mods=[bold]
+    3 cells  fg=Rgb(255, 96, 96) bg=Reset mods=[bold]
+   14 cells  fg=Rgb(64, 255, 64) bg=Reset mods=[]

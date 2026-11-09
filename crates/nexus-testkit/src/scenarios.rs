@@ -184,6 +184,35 @@ pub fn tether_world(bin: impl Into<std::path::PathBuf>, powered: bool) -> World 
     world
 }
 
+/// The Settings tab's world: a config with comments, a custom theme
+/// (`sunrise`, from Gruvbox) and a mistaken one (`broken`). With `bad_theme`
+/// the config selects `broken`, so the TUI starts on the fallback with its
+/// warning. Press `6` in the demo.
+pub fn settings_world(bin: impl Into<std::path::PathBuf>, bad_theme: bool) -> World {
+    let mut world = World::builder(bin).daemon(false).start();
+    let theme = if bad_theme {
+        "broken"
+    } else {
+        "midnight-bloom"
+    };
+    world.write_config(&format!(
+        "# Nexus settings, edited by hand and by the Settings tab.\n\
+         theme = \"{theme}\"  # try `nexus config set theme nord`\n\
+         \n\
+         [notifications]\n\
+         lost = false  # too chatty on the train\n\
+         \n\
+         [themes.sunrise]\n\
+         base = \"gruvbox\"\n\
+         accent = \"#ff7a59\"\n\
+         \n\
+         [themes.broken]\n\
+         accent = \"teal\"\n"
+    ));
+    world.start_daemon();
+    world
+}
+
 /// Two Ethernet ports. `enp3s0` has its cable in and a saved Profile
 /// ("Office wall socket"), but the port wants 802.1X, so the network gave it
 /// no address: it reads as plugged in and misconfigured. The login that gets
@@ -266,4 +295,54 @@ pub fn hotspot_world(bin: impl Into<std::path::PathBuf>, start: HotspotStart) ->
         }
     }
     world
+}
+
+/// The awkward Wi-Fi cases, nothing joined: two cards (`wlan0`, `wlan1`), a
+/// mesh (`Mesh-Home`: 2.4, 5 and 6 GHz access points, heard by both cards),
+/// an OWE and a WPA2/WPA3 transition Network, a name that is not valid UTF-8
+/// (with an escape sequence inside), and `Ghost-Net`, a hidden WPA2 Network
+/// that is not listed and takes the password `boo-boo-boo`.
+pub fn wifi_edge(world: &World) -> (DeviceId, DeviceId) {
+    let nm = &world.nm;
+    let wlan0 = nm.add_wifi_device("wlan0");
+    let wlan1 = nm.add_wifi_device("wlan1");
+    nm.add_ap(
+        wlan0,
+        Ap::wpa2("Mesh-Home", "AA:00:00:00:10:01", 48)
+            .frequency(2437)
+            .bitrate(144_000),
+    );
+    nm.add_ap(
+        wlan0,
+        Ap::wpa2("Mesh-Home", "AA:00:00:00:10:02", 82)
+            .frequency(5180)
+            .bitrate(866_000),
+    );
+    nm.add_ap(
+        wlan0,
+        Ap::wpa2("Mesh-Home", "AA:00:00:00:10:03", 31)
+            .frequency(6135)
+            .bitrate(2_402_000),
+    );
+    nm.add_ap(
+        wlan1,
+        Ap::wpa2("Mesh-Home", "AA:00:00:00:10:02", 60)
+            .frequency(5180)
+            .bitrate(866_000),
+    );
+    nm.add_ap(wlan0, Ap::owe("Airport Free", "AA:00:00:00:20:01", 64));
+    nm.add_ap(
+        wlan1,
+        Ap::transition("Mixed-Mode", "AA:00:00:00:30:01", 70).frequency(5240),
+    );
+    nm.add_ap(
+        wlan0,
+        Ap::open("x", "AA:00:00:00:40:01", 40).ssid_bytes(b"caf\xe9 \x1b[2Jwifi"),
+    );
+    nm.add_ap(
+        wlan0,
+        Ap::wpa2("Ghost-Net", "AA:00:00:00:50:01", 57).hidden(),
+    );
+    nm.set_psk("Ghost-Net", "boo-boo-boo");
+    (wlan0, wlan1)
 }

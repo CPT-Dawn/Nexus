@@ -12,7 +12,7 @@ expression: frame
 │     Not connected│  1 - 6                Jump to a tab                        ██░░████████░░     │
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █░  ░░░░░░░░       │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
-│                  │  Esc                  Back out; never quits                █n-in page is      │
+│                  │  Esc                  Back out; never quits                │n-in page is      │
 │                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │nager 1.58.1      │
 │                  │  ?                    Show or hide this help               │──────────────────╯
@@ -23,10 +23,10 @@ expression: frame
 │                  │  Wi-Fi: f             Forget (asks first)                  │──────────────────╮
 │                  │  Wi-Fi: a             Toggle autoconnect                   │                  │
 │                  │  Wi-Fi: t             Mark Trusted or Untrusted            │isit any plain... │
-│                  │  Wi-Fi: e             Edit the Profile's settings          │──────────────────╯
-│                  │  Wi-Fi: s             Share as a QR code (asks first)      │──────────────────╮
-│                  │  Ethernet: Enter      Join the selected port               │                  │
-│                  │  Ethernet: x          Drop the port's Link                 │                  │
-│                  │  Ethernet: s          Sign in to an 802.1X port            │                  │
+│                  │  Wi-Fi: n             Join a hidden Network by name        │──────────────────╯
+│                  │  Wi-Fi: i             Access point details of the Network  │──────────────────╮
+│                  │  Wi-Fi: c             Pick the Wi-Fi card joins use        │                  │
+│                  │  Wi-Fi: e             Edit the Profile's settings          │                  │
+│                  │  Wi-Fi: s             Share as a QR code (asks first)      │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

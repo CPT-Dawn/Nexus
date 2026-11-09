@@ -188,6 +188,33 @@ fn out_of_range_sentence(ssid: &str) -> String {
     format!("{ssid} is not in range. Move closer, or scan again.")
 }
 
+/// A hidden Network was named with a security Nexus cannot join blind.
+pub fn hidden_security(ssid: &str, what: &str) -> Failure {
+    fail(
+        ErrorCode::InvalidSettings,
+        format!(
+            "Cannot join the hidden network {ssid} as {what}. \
+             Choose open, owe, wpa2, wpa3 or wpa2/3."
+        ),
+    )
+}
+
+/// No Wi-Fi Device has that name.
+pub fn unknown_device(device: &str) -> Failure {
+    fail(
+        ErrorCode::UnknownDevice,
+        format!("No Wi-Fi device called {device}. `nexus wifi list --json` names them."),
+    )
+}
+
+/// The chosen Wi-Fi Device is not the one that hears the Network.
+pub fn not_heard_by(ssid: &str, device: &str) -> Failure {
+    fail(
+        ErrorCode::OutOfRange,
+        format!("{device} cannot hear {ssid}. Pick another Wi-Fi device, or move closer."),
+    )
+}
+
 pub fn out_of_range(ssid: &str) -> Failure {
     fail(ErrorCode::OutOfRange, out_of_range_sentence(ssid))
 }

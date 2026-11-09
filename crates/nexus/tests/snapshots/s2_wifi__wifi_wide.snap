@@ -33,4 +33,4 @@ expression: frame
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
- j/k move  r scan  x disconnect  f forget  s share  a auto  t trust  e settings  h/l tab  : palette  ? help  q quit
+ j/k move  r scan  x disconnect  f forget  s share  a auto  t trust  e settings  n other  h/l tab  : palette  ? help  q quit

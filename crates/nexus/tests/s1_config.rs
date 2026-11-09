@@ -296,3 +296,28 @@ fn the_prompt_timeout_is_a_setting_with_sane_bounds() {
     let resp = wire.call(json!({"op": "config_set", "key": "prompts.timeout_secs", "value": 30}));
     assert_eq!(resp["ok"]["value"], 30, "{resp}");
 }
+
+#[test]
+fn ui_switches_and_custom_themes_are_ordinary_keys() {
+    let world = World::start(NEXUS);
+    let resp = get(&world);
+    assert_eq!(resp["ok"]["value"]["ui"]["nerd_font"], false, "{resp}");
+    assert_eq!(resp["ok"]["value"]["ui"]["reduce_motion"], false, "{resp}");
+    assert_eq!(resp["ok"]["value"]["themes"], json!({}), "{resp}");
+    let mut wire = world.wire();
+    for (key, value) in [
+        ("ui.reduce_motion", json!(true)),
+        ("themes.mine.accent", json!("#ff8800")),
+        ("themes.mine.base", json!("nord")),
+    ] {
+        let resp = wire.call(json!({"op": "config_set", "key": key, "value": value}));
+        assert_eq!(resp["ok"]["value"], value, "{resp}");
+    }
+    let text = std::fs::read_to_string(world.config_path()).unwrap();
+    assert!(text.contains("[themes.mine]") && text.contains("reduce_motion = true"));
+    // A mistake inside a custom theme is the TUI's to report: the Daemon
+    // keeps the rest of the file in force.
+    let resp = wire.call(json!({"op": "config_set", "key": "themes.mine.accent", "value": "teal"}));
+    assert!(resp.get("ok").is_some(), "{resp}");
+    assert!(get(&world)["ok"].get("warning").is_none());
+}

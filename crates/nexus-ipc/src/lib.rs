@@ -75,7 +75,22 @@ pub enum Op {
         network: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         password: Option<Secret>,
+        /// Join through this Wi-Fi Device (`WifiDevice.id` or its interface
+        /// name) instead of the one that hears the Network best.
+        /// `unknown_device` when there is none by that name.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        device: Option<String>,
+        /// Join a hidden Network: one that does not broadcast its name, so it
+        /// is not in the list. `network` is still its SSID bytes in hex; the
+        /// security says how to authenticate (`open`, `owe`, `wpa`, `wpa2`,
+        /// `wpa3`, `wpa3_transition`). `invalid_settings` for anything else.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hidden: Option<Security>,
     },
+    /// The access points behind a Network (`WifiNetwork.id`): address,
+    /// channel, frequency, band and link rate of each. Result: [`ApList`];
+    /// `out_of_range` when none is heard.
+    WifiAps { network: String },
     /// Join a WPA-Enterprise (802.1X) Network such as eduroam, with the
     /// settings in `eap`. Like `wifi_join` otherwise (result [`Joined`]);
     /// `invalid_settings` when `eap` fails its validation, `wrong_password`
@@ -316,6 +331,20 @@ pub fn network_id(ssid: &[u8]) -> String {
     })
 }
 
+/// An SSID as text a terminal can safely show. SSIDs are up to 32 arbitrary
+/// bytes: invalid UTF-8 and every control or direction-override character is
+/// replaced with U+FFFD, so a hostile name can neither drive the terminal nor
+/// reorder the text around it. The bytes stay joinable by `WifiNetwork.id`.
+pub fn display_ssid(ssid: &[u8]) -> String {
+    String::from_utf8_lossy(ssid)
+        .chars()
+        .map(|c| {
+            let bidi = matches!(c, '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}');
+            if c.is_control() || bidi { '\u{fffd}' } else { c }
+        })
+        .collect()
+}
+
 /// The SSID bytes behind a `WifiNetwork.id`, if it is one.
 pub fn parse_network_id(id: &str) -> Option<Vec<u8>> {
     if !id.len().is_multiple_of(2) || !id.is_ascii() {
@@ -420,6 +449,8 @@ pub enum ErrorCode {
     /// No Secret Service (keyring) answers, or it is locked or refused: a
     /// Profile's secrets cannot be moved into or out of it.
     KeyringUnavailable,
+    /// No Wi-Fi Device has that name or id.
+    UnknownDevice,
     /// This machine's Wi-Fi cannot host a Hotspot; the message says why.
     HotspotUnsupported,
     #[serde(other)]
@@ -952,6 +983,46 @@ pub struct TrustSet {
     pub trust: Trust,
 }
 
+/// One access point behind a Network.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApInfo {
+    /// Its hardware address, e.g. `AA:BB:CC:00:11:22`.
+    pub bssid: String,
+    /// The channel number; 0 when the frequency is outside the known bands.
+    pub channel: u32,
+    pub frequency_mhz: u32,
+    pub band: Band,
+    /// 0 to 100.
+    pub signal: u8,
+    /// The best link rate it offers, in Mbit/s; 0 when it does not say.
+    pub rate_mbps: u32,
+    /// The interface name of the Device that hears it.
+    pub device: String,
+    /// True while a Device is associated with it.
+    #[serde(default)]
+    pub joined: bool,
+}
+
+/// The `wifi_aps` result: strongest first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApList {
+    pub ssid: String,
+    pub aps: Vec<ApInfo>,
+}
+
+/// The channel of a frequency in MHz (IEEE 802.11 numbering); 0 when unknown.
+pub fn channel_of(mhz: u32) -> u32 {
+    match mhz {
+        2484 => 14,
+        2412..=2472 => (mhz - 2407) / 5,
+        5160..=5885 => (mhz - 5000) / 5,
+        // 6 GHz channel 2 is the odd one out at 5935; the rest count from 5955.
+        5935 => 2,
+        5955..=7115 => (mhz - 5950) / 5,
+        _ => 0,
+    }
+}
+
 /// A saved Wi-Fi Profile whose Network is not in range.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedWifi {
@@ -1451,4 +1522,43 @@ fn decode<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, Failure> {
         code: ErrorCode::Internal,
         message: format!("undecodable result: {e}"),
     })
+}
+
+#[cfg(test)]
+mod wifi_edge_tests {
+    use super::*;
+
+    #[test]
+    fn hostile_ssids_display_safely() {
+        assert_eq!(display_ssid(b"Home"), "Home");
+        assert_eq!(display_ssid(b"a\x1b[31mb"), "a\u{fffd}[31mb");
+        assert_eq!(display_ssid(&[b'x', 0xff, 0xfe]), "x\u{fffd}\u{fffd}");
+        assert_eq!(display_ssid("a\u{202e}b".as_bytes()), "a\u{fffd}b");
+        assert_eq!(
+            display_ssid("Caf\u{e9} \u{1f4f6}".as_bytes()),
+            "Caf\u{e9} \u{1f4f6}"
+        );
+    }
+
+    #[test]
+    fn non_utf8_ssids_round_trip_through_their_id() {
+        let ssid = [0xc0, 0x80, b'!', 0xff];
+        assert_eq!(
+            parse_network_id(&network_id(&ssid)).as_deref(),
+            Some(&ssid[..])
+        );
+    }
+
+    #[test]
+    fn channels_follow_ieee_numbering() {
+        assert_eq!(channel_of(2412), 1);
+        assert_eq!(channel_of(2462), 11);
+        assert_eq!(channel_of(2484), 14);
+        assert_eq!(channel_of(5180), 36);
+        assert_eq!(channel_of(5745), 149);
+        assert_eq!(channel_of(5935), 2);
+        assert_eq!(channel_of(5955), 1);
+        assert_eq!(channel_of(6135), 37);
+        assert_eq!(channel_of(100), 0);
+    }
 }

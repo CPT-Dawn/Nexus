@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_settings.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Settings ──────────────────╮╭ Notify: VPN drop ──────────────────────────────────────────────────╮
+│   Theme     Midnight Bloom ││ A desktop notification when a VPN goes down without being asked    │
+│   Nerd Font icons      off ││ to.                                                                │
+│   Reduced motion       off ││                                                                    │
+│   Notify: joined       off ││ Now         off                                                    │
+│   Notify: lost          on ││ Default     on                                                     │
+│   Notify: bad password off ││                                                                    │
+│   Notify: prompt       off ││ enter changes it, r puts the default back.                         │
+│   Notify: login        off ││                                                                    │
+│ ▸ Notify: VPN drop     off ││                                                                    │
+│   Notify: untrusted     on ││                                                                    │
+│   Untrusted: metered   off ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter change  r reset  h/l tab  : palette  ? help  q quit

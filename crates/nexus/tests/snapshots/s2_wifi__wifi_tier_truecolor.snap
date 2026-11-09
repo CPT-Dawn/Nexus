@@ -29,7 +29,7 @@ expression: frame
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter join  r scan  t trust  h/l tab  : palette  ? help  q quit
+ j/k move  enter join  r scan  t trust  n other  h/l tab  : palette  ? help  q quit
 
   174 cells  fg=#2c4a4c bg=- mods=[]
   104 cells  fg=#5d7377 bg=- mods=[]
@@ -41,13 +41,13 @@ expression: frame
    20 cells  fg=#8de3d5 bg=- mods=[]
     1 cells  fg=#8de3dc bg=#182724 mods=[bold]
     9 cells  fg=#8de3dc bg=#182727 mods=[]
-   12 cells  fg=#8de3dc bg=- mods=[]
+   13 cells  fg=#8de3dc bg=- mods=[]
     6 cells  fg=#8de3dc bg=- mods=[bold]
     3 cells  fg=#9db4b5 bg=#182724 mods=[]
    19 cells  fg=#9db4b5 bg=#182725 mods=[]
    16 cells  fg=#9db4b5 bg=#182727 mods=[]
     4 cells  fg=#9db4b5 bg=#182728 mods=[]
-  210 cells  fg=#9db4b5 bg=- mods=[]
+  218 cells  fg=#9db4b5 bg=- mods=[]
     9 cells  fg=#9db4b5 bg=- mods=[bold]
     4 cells  fg=#9ece6a bg=#182725 mods=[]
     7 cells  fg=#9ece6a bg=- mods=[]
@@ -62,4 +62,4 @@ expression: frame
    13 cells  fg=- bg=#182726 mods=[]
    38 cells  fg=- bg=#182727 mods=[]
     3 cells  fg=- bg=#182728 mods=[]
- 1938 cells  fg=- bg=- mods=[]
+ 1929 cells  fg=- bg=- mods=[]

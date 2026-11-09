@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_wifi_edge.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
+╭ Wi-Fi ───────────────────────────────╮╭ Mesh-Home ───────────────────────────────────────────────────────────────────────────────────────╮
+│ ▸   Mesh-Home       ▂▄▆█ wpa2     5G ││ Not saved                                                                                        │
+│     Mixed-Mode      ▂▄▆█ wpa2/3   5G ││                                                                                                  │
+│     Airport Free    ▂▄▆█ owe    2.4G ││ Signal         82%  ▂▄▆█                                                                         │
+│     caf� �[2Jwifi   ▂▄▆█ open   2.4G ││ Security      WPA2 personal                                                                      │
+│                                      ││ Band          5 GHz                                                                              │
+│                                      ││ Access points 4                                                                                  │
+│                                      ││ Adapter       wlan0                                                                              │
+│                                      ││ Trust         Trusted                                                                            │
+│                                    ╭ Join a hidden network ─────────────────────────────────────────╮                                    │
+│                                    │ ▸ Network name  _                                              │                                    │
+│                                    │   Security      ‹ WPA2 ›                                       │                                    │
+│                                    │   Password      empty: you will be asked                       │                                    │
+│                                    │                                                                │                                    │
+│                                    │                                                                │                                    │
+│                                    │                                                                │                                    │
+│                                    │                                                                │                                    │
+│                                    │                                                                │                                    │
+│                                    │                                                                │                                    │
+│                                    │ tab next  ←→ change  ^r show  enter join  esc cancel           │                                    │
+│                                    ╰────────────────────────────────────────────────────────────────╯                                    │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ tab next  enter join  esc cancel

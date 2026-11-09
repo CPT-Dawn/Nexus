@@ -27,6 +27,13 @@
 //!   check, `ctrl-r` shows passwords, `enter` joins, `esc` cancels. The right
 //!   login is `you@uni.example` / `correct-horse`, server name `radius.uni.example`.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
+//! - `wifi-edge`: the awkward cases, two Wi-Fi cards, nothing joined. Press `2`.
+//!   `n` opens the hidden-network form: type `Ghost-Net`, `tab`, `←`/`→` pick
+//!   the security (WPA2), `tab`, password `boo-boo-boo`, `enter` joins (leave
+//!   the password empty and a prompt asks for it). `i` on Mesh-Home lists its
+//!   access points (2.4, 5 and 6 GHz); `c` pins joins to wlan0 or wlan1 (wlan1
+//!   hears only Mesh-Home and Mixed-Mode); Airport Free is OWE, Mixed-Mode
+//!   is WPA2/WPA3, and one name is not valid UTF-8 and shows a replacement mark.
 //! - `vpn`: online, with three VPNs: Work (WireGuard, up), Home Lab
 //!   (WireGuard, down) and Office OpenVPN (plugin, down). Press `4` for the
 //!   VPN tab; `enter` brings the selected one up or down, `p` shows its public
@@ -44,6 +51,13 @@
 //!   tethers, `x` drops the tether, `u` undoes. `d` opens details when narrow.
 //! - `tether-off`: the same, with Bluetooth switched off, so `enter` shows how
 //!   to turn it on.
+//! - `settings`: Press `6`. `j`/`k` move, `enter` changes the row (the theme
+//!   cycles through the seven built-ins and the custom `sunrise`; switches
+//!   flip), `r` resets it. The config file (with its comments) is edited in
+//!   place, so `nexus config get` in another shell agrees. `Lost` notifications
+//!   start switched off.
+//! - `settings-bad`: the same, but the config selects the mistaken theme
+//!   `broken`: the TUI falls back to Midnight Bloom and says why.
 //! - `hotspot`: the Hotspot tab (press `5`) on a machine whose Wi-Fi card can
 //!   host one, above the Tethering phones. `n` starts one with a made-up
 //!   password, `c` opens the form for your own name and password, then `s`
@@ -98,7 +112,9 @@ fn main() {
     let scenario = args.next().unwrap_or_else(|| "online".into());
     let rest: Vec<String> = args.collect();
 
-    let world = if let Some(start) = match scenario.as_str() {
+    let world = if scenario.starts_with("settings") {
+        nexus_testkit::scenarios::settings_world(&bin, scenario == "settings-bad")
+    } else if let Some(start) = match scenario.as_str() {
         "hotspot" => Some(nexus_testkit::scenarios::HotspotStart::Capable),
         "hotspot-on" => Some(nexus_testkit::scenarios::HotspotStart::Running),
         "hotspot-nocard" => Some(nexus_testkit::scenarios::HotspotStart::NoCard),
@@ -116,12 +132,16 @@ fn main() {
     let opened = world.dir().join("opened.log");
     let mut wlan0 = None;
     match scenario.as_str() {
-        "offline" | "tether" | "tether-off" | "hotspot" | "hotspot-on" | "hotspot-nocard" => {}
+        "offline" | "tether" | "tether-off" | "settings" | "settings-bad" | "hotspot"
+        | "hotspot-on" | "hotspot-nocard" => {}
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" | "wifi-enterprise" | "profile" | "profile-keyring" | "effects" => {
-            if scenario == "wifi" || scenario == "effects" {
+        "wifi" | "wifi-prompt" | "wifi-enterprise" | "wifi-edge" | "profile"
+        | "profile-keyring" | "effects" => {
+            if scenario == "wifi-edge" {
+                nexus_testkit::scenarios::wifi_edge(&world);
+            } else if scenario == "wifi" || scenario == "effects" {
                 nexus_testkit::scenarios::wifi_busy(&world);
                 if scenario == "effects" {
                     // Activation fails (state 60) with "no secrets" (reason 7).

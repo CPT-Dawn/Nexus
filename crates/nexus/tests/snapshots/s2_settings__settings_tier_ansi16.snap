@@ -1,0 +1,50 @@
+---
+source: crates/nexus/tests/s2_settings.rs
+expression: "styled_of(&tui::render(&rig.app, STANDARD.0, STANDARD.1))"
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Settings ──────────────────╮╭ Theme ─────────────────────────────────────────────────────────────╮
+│ ▸ Theme     Midnight Bloom ││ The colours of the TUI. Enter picks the next one.                  │
+│   Nerd Font icons      off ││                                                                    │
+│   Reduced motion       off ││ ● ████████ Midnight Bloom                                          │
+│   Notify: joined        on ││   ████████ Catppuccin                                              │
+│   Notify: lost         off ││   ████████ Gruvbox                                                 │
+│   Notify: bad password  on ││   ████████ Nord                                                    │
+│   Notify: prompt        on ││   ████████ Tokyo Night                                             │
+│   Notify: login         on ││   ████████ Rosé Pine                                               │
+│   Notify: VPN drop      on ││   ████████ High contrast                                           │
+│   Notify: untrusted     on ││   broken (has a mistake, see below)                                │
+│   Untrusted: metered   off ││   ████████ sunrise (custom)                                        │
+│                            ││                                                                    │
+│                            ││ Make your own in config.toml:                                      │
+│                            ││   [themes.mine]                                                    │
+│                            ││   base = "nord"                                                    │
+│                            ││   accent = "#ff8800"                                               │
+│                            ││                                                                    │
+│                            ││ enter changes it, r puts the default back.                         │
+│                            ││                                                                    │
+│                            ││ theme `broken`: `accent = teal` is not a #rrggbb colour            │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter change  r reset  h/l tab  : palette  ? help  q quit
+
+  181 cells  fg=Cyan bg=Reset mods=[]
+  104 cells  fg=DarkGray bg=Reset mods=[]
+  124 cells  fg=Gray bg=Reset mods=[]
+   26 cells  fg=Green bg=Reset mods=[]
+    2 cells  fg=LightBlue bg=Reset mods=[]
+  118 cells  fg=LightCyan bg=Reset mods=[]
+    7 cells  fg=LightCyan bg=Reset mods=[bold]
+   14 cells  fg=LightCyan bg=Reset mods=[reversed]
+    2 cells  fg=LightGreen bg=Reset mods=[]
+    4 cells  fg=LightMagenta bg=Reset mods=[]
+    2 cells  fg=LightRed bg=Reset mods=[]
+   17 cells  fg=LightRed bg=Reset mods=[bold]
+    6 cells  fg=LightYellow bg=Reset mods=[]
+ 2035 cells  fg=Reset bg=Reset mods=[]
+   32 cells  fg=Reset bg=Reset mods=[bold]
+   22 cells  fg=Reset bg=Reset mods=[reversed]
+  104 cells  fg=Yellow bg=Reset mods=[]
