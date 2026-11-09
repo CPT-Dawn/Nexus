@@ -18,6 +18,7 @@ let out = world.run_nexus(&["status", "--json"]);             // the real CLI
 - Everything runs with a cleared environment: a private `dbus-daemon` stands in for the system bus (`DBUS_SYSTEM_BUS_ADDRESS`), the session bus points at nothing, `XDG_RUNTIME_DIR` is a tempdir. The production code path is unchanged; no test-only env var exists.
 - Assert on the wire (`Wire::call` returns the whole response `Value`) and on CLI stdout/exit codes, never on Daemon internals.
 - To fake more of NetworkManager: add the member to the interface in `nexus-testkit/src/fake_nm.rs`, keep its value in `Model`, add a `set_*` that mutates the model and emits `PropertiesChanged`. Fake only what the Backend reads, so a proxy member the fake lacks fails loudly.
+- Events: `let mut ev = world.wire(); ev.subscribe();` then act, then `ev.next_event("config_reloaded")` (skips other lines, panics on timeout). Subscribe before acting, or the event is missed. Config: `world.write_config(text)` / `world.config_path()` (`$HOME/.config/nexus/config.toml` in the world's `HOME`).
 - Never `sleep`: poll (the harness polls the socket) or wait for an event.
 
 Needs `dbus-daemon` installed. Optional tools, tests skip with a message without them: `systemd-socket-activate` (socket activation), and for the peer-credential test `socat`, passwordless `sudo -u <user>` and `NEXUS_TEST_INTRUDER=<user>` (CI creates user `intruder`).

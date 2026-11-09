@@ -24,13 +24,32 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Read or change the config file.
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
     /// Run the Daemon in the foreground (systemd socket activation also uses this).
     Daemon,
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// Print the effective config, or one value by dotted key (e.g. `connectivity.url`).
+    Get { key: Option<String> },
+    /// Set a value in config.toml, keeping your comments. `null` resets it.
+    Set { key: String, value: String },
 }
 
 fn main() -> ExitCode {
     match Args::parse().command {
         Command::Status { json } => cli::status(json),
+        Command::Config {
+            action: ConfigAction::Get { key },
+        } => cli::config_get(key),
+        Command::Config {
+            action: ConfigAction::Set { key, value },
+        } => cli::config_set(key, &value),
         Command::Daemon => daemon::run(),
     }
 }

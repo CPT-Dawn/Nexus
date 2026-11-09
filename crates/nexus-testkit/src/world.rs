@@ -238,6 +238,25 @@ impl Wire {
         }
     }
 
+    /// Subscribes this connection to events; later [`Wire::next_event`] calls
+    /// see everything the Daemon pushes from now on.
+    pub fn subscribe(&mut self) {
+        let resp = self.call(json!({"op": "subscribe"}));
+        assert!(resp.get("ok").is_some(), "subscribe refused: {resp}");
+    }
+
+    /// Waits (up to [`PATIENCE`]) for the next event named `name`, skipping
+    /// other lines, and returns it whole. Panics if none arrives.
+    pub fn next_event(&mut self, name: &str) -> Value {
+        loop {
+            let line = self.read_line();
+            assert!(!line.is_null(), "no `{name}` event arrived in time");
+            if line["event"] == name {
+                return line;
+            }
+        }
+    }
+
     /// Sends `{"v":1,"id":<n>,...op}` and returns the whole response.
     pub fn call(&mut self, op: Value) -> Value {
         let id = self.next_id;

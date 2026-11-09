@@ -228,13 +228,10 @@ fn to_value(config: &Config) -> Value {
 fn answer(state: &Loaded, key: Option<&str>) -> Result<Value, Failure> {
     let mut value = to_value(&state.config);
     for part in key.into_iter().flat_map(|k| k.split('.')) {
-        value = value
-            .get(part)
-            .cloned()
-            .ok_or_else(|| Failure {
-                code: ErrorCode::BadRequest,
-                message: format!("unknown config key `{}`", key.unwrap_or_default()),
-            })?;
+        value = value.get(part).cloned().ok_or_else(|| Failure {
+            code: ErrorCode::BadRequest,
+            message: format!("unknown config key `{}`", key.unwrap_or_default()),
+        })?;
     }
     let mut out = serde_json::json!({ "value": value });
     if let Some(w) = &state.warning {

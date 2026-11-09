@@ -10,8 +10,8 @@ use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 
 use crate::backend::Backend;
-use crate::config::{self, Settings};
 use crate::backend::nm::NetworkManager;
+use crate::config::{self, Settings};
 
 /// `nexus daemon`.
 pub fn run() -> ExitCode {
