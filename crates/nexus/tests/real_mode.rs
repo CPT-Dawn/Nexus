@@ -15,6 +15,7 @@ const WPA2: &str = "NexusWpa2";
 const WPA2_PSK: &str = "correct-horse-2";
 const SAE: &str = "NexusSae";
 const SAE_PSK: &str = "correct-horse-3";
+const PORTAL: &str = "NexusPortal";
 
 fn id(ssid: &str) -> String {
     nexus_ipc::network_id(ssid.as_bytes())
@@ -359,4 +360,50 @@ fn tls_joins_with_a_client_certificate() {
         }),
     );
     assert_eq!(resp["ok"]["ssid"], EAP, "{resp}\n{}", world.daemon_log());
+}
+
+/// The portal server in the AP namespace (rig/portal.py): a station that has
+/// not fetched `/login` is redirected there by the connectivity check.
+fn portal_sign_in() {
+    use std::io::{Read, Write};
+    let mut stream =
+        std::net::TcpStream::connect(("10.99.99.1", 80)).expect("reach the portal server");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .expect("timeout");
+    stream
+        .write_all(b"GET /login HTTP/1.0\r\nHost: 10.99.99.1\r\n\r\n")
+        .expect("send");
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).expect("reply");
+    assert!(reply.starts_with("HTTP/1.0 200"), "{reply}");
+}
+
+fn connectivity(world: &RealWorld) -> Value {
+    world.wire().call(json!({"op": "status"}))["ok"]["connectivity"].clone()
+}
+
+#[test]
+fn a_portal_is_detected_and_signing_in_clears_it() {
+    let Some(world) = world() else { return };
+    eventually("NexusPortal in range", || {
+        let _ = world.wire().call(json!({"op": "wifi_scan"}));
+        row(&list(&world), PORTAL)
+    });
+    let resp = join(&world, PORTAL, None);
+    assert_eq!(resp["ok"]["ssid"], PORTAL, "{resp}\n{}", world.daemon_log());
+
+    // NetworkManager's own connectivity check meets the redirect.
+    eventually("the Link is behind a Portal", || {
+        (connectivity(&world) == "portal").then_some(())
+    });
+    let portal = world.wire().call(json!({"op": "portal"}));
+    assert_eq!(portal["ok"]["portal"]["network"], PORTAL, "{portal}");
+
+    portal_sign_in();
+    eventually("the Portal is gone after signing in", || {
+        (connectivity(&world) == "full").then_some(())
+    });
+    let portal = world.wire().call(json!({"op": "portal"}));
+    assert!(portal["ok"]["portal"].is_null(), "{portal}");
 }
