@@ -36,6 +36,52 @@ pub fn status(json: bool) -> ExitCode {
     }
 }
 
+/// `nexus wifi list [--json]`.
+pub fn wifi_list(json: bool) -> ExitCode {
+    wifi_call(Op::WifiList, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::WifiList>(value) {
+            Ok(list) => print!("{}", crate::wifi_view::table(&list)),
+            Err(e) => eprintln!("nexus: undecodable list: {e}"),
+        }
+    })
+}
+
+/// `nexus wifi scan [--json]`.
+pub fn wifi_scan(json: bool) -> ExitCode {
+    wifi_call(Op::WifiScan, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::ScanOutcome>(value) {
+            Ok(outcome) => println!("{}", crate::wifi_view::scan_line(&outcome)),
+            Err(e) => eprintln!("nexus: undecodable scan result: {e}"),
+        }
+    })
+}
+
+fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
+    let mut conn = match Connection::connect() {
+        Ok(c) => c,
+        Err(e) => return unreachable(&e),
+    };
+    match conn.call(op) {
+        Err(e) => unreachable(&e),
+        Ok(Err(failure)) => {
+            eprintln!("nexus: {}", failure.message);
+            ExitCode::from(EXIT_DAEMON_ERROR)
+        }
+        Ok(Ok(value)) => {
+            show(value);
+            ExitCode::SUCCESS
+        }
+    }
+}
+
 /// `nexus config get [key]`.
 pub fn config_get(key: Option<String>) -> ExitCode {
     config_call(Op::ConfigGet { key })

@@ -99,6 +99,26 @@ fn unknown_events_decode_as_unknown() {
 }
 
 #[test]
+fn wifi_ops_and_unknown_wifi_enums() {
+    assert!(matches!(
+        parse(r#"{"v":1,"id":1,"op":"wifi_list"}"#).unwrap().op,
+        Op::WifiList
+    ));
+    assert!(matches!(
+        parse(r#"{"v":1,"id":1,"op":"wifi_scan"}"#).unwrap().op,
+        Op::WifiScan
+    ));
+    let n: nexus_ipc::WifiNetwork = serde_json::from_value(json!({
+        "id": "6162", "ssid": "ab", "signal": 40, "security": "wpa9", "band": "60",
+        "access_points": 1, "device": "/d/0", "future": true
+    }))
+    .unwrap();
+    assert_eq!(n.security, nexus_ipc::Security::Unknown);
+    assert_eq!(n.band, nexus_ipc::Band::Unknown);
+    assert!(n.profile.is_none());
+}
+
+#[test]
 fn status_event_line() {
     let line = EventLine {
         v: 1,
