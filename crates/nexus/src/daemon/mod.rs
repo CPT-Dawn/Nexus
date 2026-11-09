@@ -426,9 +426,11 @@ async fn answer<B: Backend>(
             }
             backend_reply(req.id, result)
         }
-        Op::VpnImport { name, config } => {
-            backend_reply(req.id, backend.vpn_import(name, config).await)
-        }
+        Op::VpnImport {
+            name,
+            config,
+            plugin,
+        } => backend_reply(req.id, backend.vpn_import(name, config, plugin).await),
         Op::VpnCreate(tunnel) => backend_reply(req.id, backend.vpn_create(tunnel).await),
         Op::VpnKey { vpn } => backend_reply(req.id, backend.vpn_key(vpn).await),
         Op::VpnReveal { vpn } => backend_reply(req.id, backend.vpn_reveal(vpn).await),

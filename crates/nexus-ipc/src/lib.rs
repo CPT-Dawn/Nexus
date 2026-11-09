@@ -170,6 +170,11 @@ pub enum Op {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<String>,
         config: Secret,
+        /// A provider file instead of WireGuard: the NetworkManager plugin
+        /// that reads it (`openvpn`, `vpnc`, ...). Imported by `nmcli`;
+        /// `missing_plugin` when its package is not installed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plugin: Option<String>,
     },
     /// Create a WireGuard VPN Profile from scratch with a fresh key pair.
     /// Result: [`VpnAdded`] (carries the public key); `invalid_config`.
@@ -335,6 +340,9 @@ pub enum ErrorCode {
     InvalidConfig,
     /// The VPN did not come up; the message says why.
     VpnFailed,
+    /// A plugin VPN's NetworkManager plugin is not installed; the message
+    /// names the package.
+    MissingPlugin,
     #[serde(other)]
     Unknown,
 }
@@ -506,6 +514,23 @@ pub struct ActivityLog {
 pub enum PromptKind {
     /// The password of a Wi-Fi Network.
     WifiPassword,
+    /// A secret a plugin VPN asks for; [`Prompt::field`] says which.
+    VpnSecret,
+    #[serde(other)]
+    Unknown,
+}
+
+/// What a [`PromptKind::VpnSecret`] prompt wants typed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum PromptField {
+    #[default]
+    Password,
+    /// A user name: not secret, so a Front end may show it as typed.
+    Username,
+    /// A one-time code.
+    Otp,
     #[serde(other)]
     Unknown,
 }
@@ -515,9 +540,12 @@ pub enum PromptKind {
 pub struct Prompt {
     pub id: u64,
     pub kind: PromptKind,
-    /// The Network's name.
+    /// What is asked for (always `password` for Wi-Fi).
+    #[serde(default)]
+    pub field: PromptField,
+    /// The Network's name, or the VPN's.
     pub network: String,
-    /// `WifiNetwork.id` of the Network.
+    /// `WifiNetwork.id` of the Network, or the VPN's Profile id.
     pub network_id: String,
     /// The password was tried and rejected: this asks again.
     pub retry: bool,
@@ -970,7 +998,8 @@ pub struct VpnToggled {
 pub struct VpnAdded {
     pub id: String,
     pub name: String,
-    /// This end's public key, to give to the other side.
+    /// This end's public key, to give to the other side. Empty for a plugin VPN.
+    #[serde(default)]
     pub public_key: String,
 }
 

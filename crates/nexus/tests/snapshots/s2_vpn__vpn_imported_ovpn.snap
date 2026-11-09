@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_vpn.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ VPN ───────────────────────╮╭ Branch ────────────────────────────────────────────────────────────╮
+│ ▸ ○ Branch            down ││ ○ Down                                                             │
+│                            ││                                                                    │
+│                            ││ Kind        Plugin VPN                                             │
+│                            ││                                                                    │
+│                            ││ Press enter to bring it up.                                        │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                  ╭ Done ─────────╮ │
+│                            ││                                                  │ Saved Branch. │ │
+│                            ││                                                  ╰───────────────╯ │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter up  i import  c create  h/l tab  : palette  ? help  q quit

@@ -267,3 +267,29 @@ fn a_front_end_that_left_means_the_next_prompt_is_announced() {
     fe.call(json!({"op": "secret_cancel", "prompt": opened["prompt"]["id"]}));
     join.join().unwrap();
 }
+
+#[test]
+fn a_vpn_prompt_with_no_front_end_says_what_the_vpn_wants() {
+    let world = world_with(None);
+    terminal_log(&world);
+    world.install_vpn_plugin("openvpn");
+    world
+        .nm
+        .add_plugin_vpn_of("uuid-ovpn", "Office", Some("openvpn"));
+    world.nm.script_vpn_asks("uuid-ovpn", &["otp"]);
+    let notes = world.notifications.as_ref().unwrap();
+
+    let mut wire = world.wire();
+    let up = std::thread::spawn(move || wire.call(json!({"op": "vpn_up", "vpn": "uuid-ovpn"})));
+    let note = notes.notified(1);
+    assert_eq!(note.summary, "One-time code needed");
+    assert!(note.body.contains("Office"), "{note:?}");
+    assert_eq!(note.actions, ["enter", "Enter password"]);
+
+    let mut fe = front_end(&world);
+    let opened = fe.next_event("secret_prompt_opened");
+    assert_eq!(opened["prompt"]["kind"], "vpn_secret");
+    fe.call(json!({"op": "secret_answer", "prompt": opened["prompt"]["id"], "secret": "123456"}));
+    assert_eq!(up.join().unwrap()["ok"]["state"], "up");
+    notes.wait_closed(note.id);
+}

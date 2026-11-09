@@ -153,11 +153,13 @@ pub trait Backend: Send + Sync + 'static {
         vpn: String,
     ) -> impl Future<Output = Result<VpnToggled, BackendError>> + Send;
 
-    /// Saves a WireGuard `.conf` as a VPN Profile.
+    /// Saves a WireGuard `.conf` as a VPN Profile, or with `plugin` set a
+    /// provider file that plugin reads (imported by `nmcli`).
     fn vpn_import(
         &self,
         name: Option<String>,
         config: Secret,
+        plugin: Option<String>,
     ) -> impl Future<Output = Result<VpnAdded, BackendError>> + Send;
 
     /// Saves a new WireGuard VPN Profile with a freshly generated key pair.
