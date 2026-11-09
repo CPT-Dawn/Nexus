@@ -170,7 +170,7 @@ write_wired_profiles() {
 # NetworkManager does IP configuration itself; iwd's own DHCP must be off or
 # both run on the same link. /etc/iwd is backed up, so --revert restores it.
 iwd_hand_over_ip() {
-  local content= has=0
+  local content='' has=0
   [ -f "$IWD_CONF" ] && content=$(cat "$IWD_CONF")
   grep -q '^EnableNetworkConfiguration=' <<<"$content" && has=1
   printf '%s\n' "$content" | awk -v has="$has" '
