@@ -17,7 +17,8 @@ use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
 use super::nm::{ActiveConnectionProxy, NetworkManagerProxy};
-use super::wifi::{Settings, SettingsConnectionProxy, SettingsProxy, is_denial, new_uuid, variant};
+use super::proxies::{SettingsConnectionProxy, variant};
+use super::wifi::{Settings, SettingsProxy, is_denial, new_uuid};
 use crate::text::{self, Failure};
 use crate::wireguard::{self, Config, Interface, Peer};
 
@@ -28,16 +29,6 @@ const DEACTIVATED: u32 = 4;
 
 /// How long a VPN may take to come up.
 const UP_TIMEOUT: Duration = Duration::from_secs(45);
-
-macro_rules! no_cache {
-    ($proxy:ident, $conn:expr, $path:expr) => {
-        $proxy::builder($conn)
-            .path($path)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?
-    };
-}
 
 struct Profile {
     path: OwnedObjectPath,

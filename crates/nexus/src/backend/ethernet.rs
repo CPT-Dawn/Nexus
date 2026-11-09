@@ -18,7 +18,8 @@ use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
 use super::nm::{ActiveConnectionProxy, NetworkManagerProxy};
-use super::wifi::{Settings, SettingsConnectionProxy, SettingsProxy, new_uuid, variant};
+use super::proxies::{DeviceProxy, SettingsConnectionProxy, StateChangedStream, variant};
+use super::wifi::{Settings, SettingsProxy, new_uuid};
 use crate::text::{self, Failure};
 
 /// `NM_DEVICE_TYPE_ETHERNET`.
@@ -34,31 +35,6 @@ const REASON_NEW_ACTIVATION: u32 = 60;
 
 /// How long a join may take. NetworkManager's own activation timeout is 60 s.
 const JOIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
-
-#[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Device",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-trait Port {
-    #[zbus(property)]
-    fn interface(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn device_type(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn state(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn state_reason(&self) -> zbus::Result<(u32, u32)>;
-    #[zbus(property)]
-    fn active_connection(&self) -> zbus::Result<OwnedObjectPath>;
-    #[zbus(property, name = "Ip4Config")]
-    fn ip4_config(&self) -> zbus::Result<OwnedObjectPath>;
-    #[zbus(property, name = "Ip6Config")]
-    fn ip6_config(&self) -> zbus::Result<OwnedObjectPath>;
-    fn disconnect(&self) -> zbus::Result<()>;
-    #[zbus(signal, name = "StateChanged")]
-    fn device_state_changed(&self, new_state: u32, old_state: u32, reason: u32)
-    -> zbus::Result<()>;
-}
 
 #[zbus::proxy(
     interface = "org.freedesktop.NetworkManager.Device.Wired",
@@ -93,16 +69,6 @@ trait Ip4 {
 trait Ip6 {
     #[zbus(property)]
     fn address_data(&self) -> zbus::Result<Vec<HashMap<String, OwnedVariant>>>;
-}
-
-macro_rules! no_cache {
-    ($proxy:ident, $conn:expr, $path:expr) => {
-        $proxy::builder($conn)
-            .path($path)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?
-    };
 }
 
 /// A wired Profile as read.
@@ -176,7 +142,7 @@ async fn ports(conn: &Connection) -> zbus::Result<Vec<Port>> {
     let mut out = Vec::new();
     for path in nm.get_devices().await? {
         // A Device can vanish between the two calls: skip it.
-        let device = no_cache!(PortProxy, conn, path.as_str());
+        let device = no_cache!(DeviceProxy, conn, path.as_str());
         let (Ok(kind), Ok(name)) = (device.device_type().await, device.interface().await) else {
             continue;
         };
@@ -191,7 +157,7 @@ async fn ports(conn: &Connection) -> zbus::Result<Vec<Port>> {
 pub(super) async fn carrying(conn: &Connection, uuid: &str) -> zbus::Result<Vec<OwnedObjectPath>> {
     let mut out = Vec::new();
     for port in ports(conn).await? {
-        let device = no_cache!(PortProxy, conn, port.path.as_str());
+        let device = no_cache!(DeviceProxy, conn, port.path.as_str());
         if active_uuid(conn, &device).await.as_deref() == Some(uuid) {
             out.push(port.path);
         }
@@ -200,7 +166,7 @@ pub(super) async fn carrying(conn: &Connection, uuid: &str) -> zbus::Result<Vec<
 }
 
 /// The uuid of the Profile `device` has active (or is activating), if any.
-async fn active_uuid(conn: &Connection, device: &PortProxy<'_>) -> Option<String> {
+async fn active_uuid(conn: &Connection, device: &DeviceProxy<'_>) -> Option<String> {
     let path = device.active_connection().await.ok()?;
     if path.as_str() == "/" {
         return None;
@@ -273,7 +239,7 @@ fn link_local(address: &str) -> bool {
 /// configuration can vanish between reads.
 async fn link_details(
     conn: &Connection,
-    device: &PortProxy<'_>,
+    device: &DeviceProxy<'_>,
     port: &mut EthernetPort,
 ) -> zbus::Result<()> {
     let ip4 = device.ip4_config().await?;
@@ -323,7 +289,7 @@ pub async fn list(conn: &Connection) -> zbus::Result<EthernetList> {
     let profiles = wired_profiles(conn).await?;
     let mut out = Vec::new();
     for port in found {
-        let device = no_cache!(PortProxy, conn, port.path.as_str());
+        let device = no_cache!(DeviceProxy, conn, port.path.as_str());
         let wired = no_cache!(WiredProxy, conn, port.path.as_str());
         // A port that vanishes mid-read is skipped, not an error.
         let (Ok(state), Ok(carrier)) = (device.state().await, wired.carrier().await) else {
@@ -417,7 +383,7 @@ async fn join(
         Err(f) => return Ok(Err(f)),
     };
     let name = port.name.clone();
-    let device = no_cache!(PortProxy, conn, port.path.as_str());
+    let device = no_cache!(DeviceProxy, conn, port.path.as_str());
     let wired = no_cache!(WiredProxy, conn, port.path.as_str());
     if !wired.carrier().await? {
         return Ok(Err(text::unplugged(&name)));
@@ -576,7 +542,7 @@ pub async fn disconnect(
         Ok(p) => p,
         Err(f) => return Ok(Err(f)),
     };
-    let device = no_cache!(PortProxy, conn, port.path.as_str());
+    let device = no_cache!(DeviceProxy, conn, port.path.as_str());
     if device.state().await? <= STATE_DISCONNECTED {
         return Ok(Err(text::ethernet_not_connected(&port.name)));
     }

@@ -10,6 +10,7 @@ mod manpages;
 mod menu;
 mod profile_cli;
 mod secrets;
+mod sysutil;
 mod tether_view;
 mod text;
 mod vpn_cli;

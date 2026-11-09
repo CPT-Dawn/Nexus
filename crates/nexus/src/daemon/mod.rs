@@ -531,50 +531,34 @@ async fn answer<B: Backend>(
 ) -> Response {
     match req.op {
         Op::Status => match backend.status().await {
-            Ok(status) => Response::ok(
-                req.id,
-                serde_json::to_value(status).expect("status serializes"),
-            ),
+            Ok(status) => ok_value(req.id, status),
             Err(e) => backend_reply::<()>(req.id, Err(e)),
         },
         Op::Traffic => match backend.counters().await {
-            Ok(counters) => Response::ok(
-                req.id,
-                serde_json::to_value(live.traffic.rates(counters).await)
-                    .expect("wire types serialize"),
-            ),
+            Ok(counters) => ok_value(req.id, live.traffic.rates(counters).await),
             Err(e) => backend_reply::<()>(req.id, Err(e)),
         },
-        Op::Activity => Response::ok(
+        Op::Activity => ok_value(
             req.id,
-            serde_json::to_value(nexus_ipc::ActivityLog {
+            nexus_ipc::ActivityLog {
                 entries: live.activity.entries(),
-            })
-            .expect("wire types serialize"),
+            },
         ),
         Op::Portal => {
             let portal = match backend.status().await {
                 Ok(status) => portal::of_status(&status, settings),
                 Err(e) => return backend_reply::<()>(req.id, Err(e)),
             };
-            Response::ok(
-                req.id,
-                serde_json::to_value(nexus_ipc::PortalState { portal })
-                    .expect("wire types serialize"),
-            )
+            ok_value(req.id, nexus_ipc::PortalState { portal })
         }
         Op::PortalOpen => open_portal(backend, settings, live, req.id).await,
-        Op::Doctor => Response::ok(
+        Op::Doctor => ok_value(
             req.id,
-            serde_json::to_value(crate::doctor::run(backend, settings, &live.doctor).await)
-                .expect("wire types serialize"),
+            crate::doctor::run(backend, settings, &live.doctor).await,
         ),
         Op::DoctorFix { finding, confirm } => {
             match crate::doctor::run_fix(backend, settings, &finding, confirm).await {
-                Ok(done) => Response::ok(
-                    req.id,
-                    serde_json::to_value(done).expect("wire types serialize"),
-                ),
+                Ok(done) => ok_value(req.id, done),
                 Err(f) => Response::err(Some(req.id), f.code, f.message),
             }
         }
@@ -710,10 +694,7 @@ async fn set_trust<B: Backend>(
     }
     live.trust.apply(&mut list);
     let _ = live.events.send(Event::NetworksChanged { wifi: list });
-    Response::ok(
-        id,
-        serde_json::to_value(nexus_ipc::TrustSet { ssid, trust }).expect("wire types serialize"),
-    )
+    ok_value(id, nexus_ipc::TrustSet { ssid, trust })
 }
 
 fn network_name(id: &str) -> String {
@@ -786,7 +767,7 @@ async fn open_portal<B: Backend>(
 
 fn backend_reply<T: serde::Serialize>(id: u64, result: Result<T, BackendError>) -> Response {
     match result {
-        Ok(v) => Response::ok(id, serde_json::to_value(v).expect("wire types serialize")),
+        Ok(v) => ok_value(id, v),
         Err(BackendError::Unavailable) => Response::err(
             Some(id),
             ErrorCode::BackendUnavailable,
@@ -797,6 +778,14 @@ fn backend_reply<T: serde::Serialize>(id: u64, result: Result<T, BackendError>) 
             Response::err(Some(id), ErrorCode::Internal, e.to_string())
         }
     }
+}
+
+/// A success response carrying a wire type.
+fn ok_value<T: serde::Serialize>(id: u64, value: T) -> Response {
+    Response::ok(
+        id,
+        serde_json::to_value(value).expect("wire types serialize"),
+    )
 }
 
 fn reply(id: u64, result: Result<serde_json::Value, nexus_ipc::Failure>) -> Response {

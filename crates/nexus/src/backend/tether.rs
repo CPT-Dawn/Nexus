@@ -17,7 +17,8 @@ use nexus_ipc::{Bluetooth, Phone, Tethered, Tethers, Untethered};
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
-use super::wifi::{new_uuid, variant};
+use super::proxies::{DeviceProxy, SettingsConnectionProxy, StateChangedStream, variant};
+use super::wifi::new_uuid;
 use crate::text::{self, Failure};
 
 /// `NM_DEVICE_TYPE_BT`.
@@ -35,21 +36,6 @@ const REASON_NEW_ACTIVATION: u32 = 60;
 const LINK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
 
 const BLUEZ: &str = "org.bluez";
-
-#[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Device",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-trait PhoneDevice {
-    #[zbus(property)]
-    fn device_type(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn state(&self) -> zbus::Result<u32>;
-    fn disconnect(&self) -> zbus::Result<()>;
-    #[zbus(signal, name = "StateChanged")]
-    fn device_state_changed(&self, new_state: u32, old_state: u32, reason: u32)
-    -> zbus::Result<()>;
-}
 
 #[zbus::proxy(
     interface = "org.freedesktop.NetworkManager.Device.Bluetooth",
@@ -71,28 +57,6 @@ trait PhoneBluetooth {
 )]
 trait PhoneSettings {
     fn list_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
-}
-
-#[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Settings.Connection",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-trait PhoneProfile {
-    #[zbus(property)]
-    fn unsaved(&self) -> zbus::Result<bool>;
-    fn get_settings(&self) -> zbus::Result<HashMap<String, HashMap<String, OwnedVariant>>>;
-    fn save(&self) -> zbus::Result<()>;
-    fn delete(&self) -> zbus::Result<()>;
-}
-
-macro_rules! no_cache {
-    ($proxy:ident, $conn:expr, $path:expr) => {
-        $proxy::builder($conn)
-            .path($path)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?
-    };
 }
 
 /// A paired phone as NetworkManager sees it.
@@ -235,7 +199,7 @@ async fn phones(conn: &Connection) -> zbus::Result<Vec<Found>> {
     let mut saved: Option<Vec<String>> = None;
     let mut out = Vec::new();
     for path in nm.get_devices().await? {
-        let device = no_cache!(PhoneDeviceProxy, conn, path.as_str());
+        let device = no_cache!(DeviceProxy, conn, path.as_str());
         // A Device can vanish between the two calls: skip it.
         if device.device_type().await.ok() != Some(DEVICE_TYPE_BT) {
             continue;
@@ -312,7 +276,7 @@ async fn saved_profiles(conn: &Connection) -> zbus::Result<Vec<Saved>> {
         .await?;
     let mut out = Vec::new();
     for path in settings.list_connections().await? {
-        let proxy = no_cache!(PhoneProfileProxy, conn, path.as_str());
+        let proxy = no_cache!(SettingsConnectionProxy, conn, path.as_str());
         // A Profile only in memory is a Link still coming up (or one that
         // failed): not something the person saved.
         if proxy.unsaved().await.unwrap_or(true) {
@@ -408,7 +372,7 @@ pub async fn connect(
         .cache_properties(CacheProperties::No)
         .build()
         .await?;
-    let device = no_cache!(PhoneDeviceProxy, conn, chosen.path.as_str());
+    let device = no_cache!(DeviceProxy, conn, chosen.path.as_str());
     // Subscribe before asking: the Device may move on before the call returns.
     let mut states = device.receive_device_state_changed().await?;
     let mut owner = zbus::fdo::DBusProxy::new(conn)
@@ -442,7 +406,7 @@ pub async fn connect(
     };
 
     let outcome = wait_for_link(&mut states, &mut owner, &phone.name).await;
-    let profile = no_cache!(PhoneProfileProxy, conn, profile.as_str());
+    let profile = no_cache!(SettingsConnectionProxy, conn, profile.as_str());
     match outcome {
         Ok(()) => {
             if created && let Err(e) = profile.save().await {
@@ -523,7 +487,7 @@ pub async fn disconnect(conn: &Connection) -> zbus::Result<Result<Untethered, Fa
         if !(found.phone.connected || found.phone.connecting) {
             continue;
         }
-        let device = no_cache!(PhoneDeviceProxy, conn, found.path.as_str());
+        let device = no_cache!(DeviceProxy, conn, found.path.as_str());
         if device.disconnect().await.is_ok() {
             dropped.get_or_insert(found.phone.name);
         }

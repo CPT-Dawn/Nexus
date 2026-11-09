@@ -105,14 +105,15 @@ fn keyring_owned(connection: &Settings) -> bool {
         .is_some_and(|f| f & 0x1 != 0)
 }
 
-fn psk_of(connection: &Settings) -> Option<String> {
-    connection
+fn psk_of(connection: &Settings) -> Option<nexus_ipc::Secret> {
+    let psk: String = connection
         .get(SECURITY)?
         .get("psk")?
         .try_clone()
         .ok()?
         .try_into()
-        .ok()
+        .ok()?;
+    Some(nexus_ipc::Secret::new(psk))
 }
 
 fn key(connection_path: &str, setting_name: &str) -> String {
@@ -312,11 +313,10 @@ impl Agent {
         let (Some(uuid), Some(psk)) = (connection_uuid(&connection), psk_of(&connection)) else {
             return;
         };
-        let psk = zeroize::Zeroizing::new(psk);
         let ssid = wifi_name(&connection)
             .map(|s| nexus_ipc::display_ssid(&s))
             .unwrap_or_default();
-        if let Err(e) = Keyring.store(&uuid, &ssid, &psk).await {
+        if let Err(e) = Keyring.store(&uuid, &ssid, psk.expose()).await {
             tracing::warn!("cannot keep the password of {ssid} in the keyring: {e}");
         }
     }

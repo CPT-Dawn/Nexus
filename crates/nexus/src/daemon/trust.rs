@@ -94,15 +94,8 @@ impl Marks {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
         let text = serde_json::to_string_pretty(&*marks).expect("marks serialize");
-        // Written whole beside the file and renamed over it, so a crash never
-        // leaves half a file.
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, text)?;
-        std::fs::rename(&tmp, path)
+        crate::sysutil::write_atomically(path, &text)
     }
 }
 

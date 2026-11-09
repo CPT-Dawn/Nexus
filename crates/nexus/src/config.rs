@@ -387,7 +387,7 @@ impl Settings {
         edit(&mut doc, key, value).map_err(bad)?;
         let new = doc.to_string();
         let config = parse(&new).map_err(|p| bad(format!("cannot set `{key}`: {p}")))?;
-        write_atomically(path, &new)
+        crate::sysutil::write_atomically(path, &new)
             .map_err(|e| Failure::from(text::config_unwritable(path, &e)))?;
         *state = Loaded {
             raw: Some(new),
@@ -460,14 +460,6 @@ fn edit(doc: &mut toml_edit::DocumentMut, key: &str, value: &Value) -> Result<()
         }
     }
     Ok(())
-}
-
-fn write_atomically(path: &Path, text: &str) -> io::Result<()> {
-    let dir = path.parent().expect("config path has a parent");
-    std::fs::create_dir_all(dir)?;
-    let tmp = dir.join(".config.toml.nexus-tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
 }
 
 /// Reloads the config whenever its directory changes. Watching the directory

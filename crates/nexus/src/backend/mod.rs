@@ -1,11 +1,24 @@
 //! The domain-level Backend interface (ADR-0001). The Daemon depends on this
 //! trait, never on NetworkManager types, so another Backend can be added later.
 
+/// Builds a proxy at `$path` that never caches properties: every read asks
+/// NetworkManager. Use inside an `async fn` returning `zbus::Result`.
+macro_rules! no_cache {
+    ($proxy:ident, $conn:expr, $path:expr) => {
+        $proxy::builder($conn)
+            .path($path)
+            .cache_properties(CacheProperties::No)
+            .build()
+            .await?
+    };
+}
+
 mod agent;
 pub mod eap;
 mod ethernet;
 pub mod hotspot;
 pub mod nm;
+mod proxies;
 mod tether;
 mod vpn;
 mod wifi;

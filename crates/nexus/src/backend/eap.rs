@@ -7,9 +7,7 @@ use std::collections::HashMap;
 use nexus_ipc::{Eap, EapMethod, Phase2};
 use zbus::OwnedVariant;
 
-fn variant<'a>(v: impl Into<zbus::Variant<'a>>) -> OwnedVariant {
-    OwnedVariant::try_from(v.into()).expect("plain values have no file descriptors")
-}
+use super::proxies::variant;
 
 fn phase2(p: Phase2) -> &'static str {
     match p {
