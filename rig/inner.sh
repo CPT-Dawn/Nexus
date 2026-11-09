@@ -78,7 +78,7 @@ done
 in_ap dnsmasq "${dnsmasq_args[@]}" >"$bus_dir/dnsmasq.log" 2>&1 &
 
 # ---- station side: wpa_supplicant + NetworkManager -----------------------
-cat >/etc/NetworkManager/NetworkManager.conf <<'EOF'
+cat >/etc/NetworkManager/NetworkManager.conf <<EOF
 [main]
 plugins=keyfile
 dhcp=internal
@@ -90,16 +90,17 @@ auth-polkit=false
 wifi.backend=wpa_supplicant
 wifi.scan-rand-mac-address=no
 [logging]
-level=INFO
+level=${NEXUS_RIG_NM_LOG:-INFO}
 EOF
 wpa_supplicant -u -O /run/wpa_supplicant >"$bus_dir/wpa_supplicant.log" 2>&1 &
 NetworkManager --no-daemon >"$bus_dir/networkmanager.log" 2>&1 &
+nm_pid=$!
 for _ in $(seq 200); do
     busctl --address="$DBUS_SYSTEM_BUS_ADDRESS" status org.freedesktop.NetworkManager >/dev/null 2>&1 && break
     sleep 0.1
 done
 busctl --address="$DBUS_SYSTEM_BUS_ADDRESS" status org.freedesktop.NetworkManager >/dev/null 2>&1 \
-    || { tail -n 30 "$bus_dir/networkmanager.log" >&2; die "NetworkManager never claimed its name"; }
+    || { kill -0 "$nm_pid" 2>/dev/null && echo "NetworkManager still running" >&2 || { wait "$nm_pid"; echo "NetworkManager exited with $?" >&2; }; die "NetworkManager never claimed its name"; }
 
 # ---- run the tests -------------------------------------------------------
 status=0
