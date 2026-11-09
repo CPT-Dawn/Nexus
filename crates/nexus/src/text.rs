@@ -607,6 +607,85 @@ pub fn untethered(phone: &str) -> String {
     format!("Dropped the tether to {phone}.")
 }
 
+// Hotspot.
+
+pub fn no_wifi_for_hotspot() -> Failure {
+    fail(
+        ErrorCode::HotspotUnsupported,
+        "This machine has no Wi-Fi card, so it cannot host a Hotspot.",
+    )
+}
+
+pub fn wifi_off_for_hotspot() -> Failure {
+    fail(
+        ErrorCode::HotspotUnsupported,
+        "Wi-Fi is switched off, so a Hotspot cannot start. Turn it on with `nexus wifi on`.",
+    )
+}
+
+pub fn card_cannot_host() -> Failure {
+    fail(
+        ErrorCode::HotspotUnsupported,
+        "This Wi-Fi card cannot host a Hotspot: its driver does not offer access point mode. \
+         A USB Wi-Fi adapter that does (check `iw list`) is the usual way around it.",
+    )
+}
+
+pub fn hotspot_running(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::HotspotFailed,
+        format!("The Hotspot {ssid} is already running. Stop it first."),
+    )
+}
+
+pub fn hotspot_failed(ssid: &str, why: &str) -> Failure {
+    fail(
+        ErrorCode::HotspotFailed,
+        format!("The Hotspot {ssid} did not start: {why}."),
+    )
+}
+
+pub fn hotspot_timed_out(ssid: &str) -> Failure {
+    hotspot_failed(ssid, "it took too long")
+}
+
+pub fn invalid_hotspot(why: &str) -> Failure {
+    fail(ErrorCode::InvalidSettings, why)
+}
+
+pub fn hotspot_not_running() -> Failure {
+    fail(ErrorCode::NotConnected, "No Hotspot is running.")
+}
+
+pub fn hotspot_started(ssid: &str) -> String {
+    format!("Hotspot {ssid} is on.")
+}
+
+pub fn hotspot_stopped(ssid: &str) -> String {
+    format!("Hotspot {ssid} stopped.")
+}
+
+/// One line for `nexus hotspot status`.
+pub fn hotspot_line(h: &nexus_ipc::Hotspot) -> String {
+    match (&h.ssid, h.on) {
+        (Some(ssid), true) if h.starting => format!("Hotspot {ssid} is starting."),
+        (Some(ssid), true) => format!("Hotspot {ssid} is on, {}.", hotspot_devices(h.devices)),
+        _ if h.available => "No Hotspot is running. Start one with `nexus hotspot start`.".into(),
+        _ => h
+            .why
+            .clone()
+            .unwrap_or_else(|| "This machine cannot host a Hotspot.".into()),
+    }
+}
+
+pub fn hotspot_devices(n: Option<u32>) -> String {
+    match n {
+        Some(1) => "1 device joined".into(),
+        Some(n) => format!("{n} devices joined"),
+        None => "device count unknown (install `iw` to count them)".into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

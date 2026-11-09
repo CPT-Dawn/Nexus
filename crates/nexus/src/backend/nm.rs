@@ -12,9 +12,10 @@ use std::time::Duration;
 use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
-    AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind,
-    NewTunnel, Radio, Radios, ScanOutcome, Secret, State, Status, Tethered, Tethers, Untethered,
-    VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
+    AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Hotspot, HotspotStarted,
+    HotspotStopped, Joined, Link, LinkKind, NewTunnel, Radio, Radios, ScanOutcome, Secret, State,
+    Status, Tethered, Tethers, Untethered, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled,
+    WifiList, WifiShare,
 };
 use std::pin::Pin;
 
@@ -538,6 +539,35 @@ impl Backend for NetworkManager {
 
     async fn tether_disconnect(&self) -> Result<Untethered, BackendError> {
         self.with_bus(|c| async move { super::tether::disconnect(&c).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn hotspot(&self) -> Result<Hotspot, BackendError> {
+        self.with_bus(|c| async move { super::hotspot::state(&c).await })
+            .await
+    }
+
+    async fn hotspot_start(
+        &self,
+        ssid: Option<String>,
+        password: Option<Secret>,
+    ) -> Result<HotspotStarted, BackendError> {
+        self.with_bus(|c| async move {
+            super::hotspot::start(&c, ssid.as_deref(), password.as_ref()).await
+        })
+        .await?
+        .map_err(BackendError::Refused)
+    }
+
+    async fn hotspot_stop(&self) -> Result<HotspotStopped, BackendError> {
+        self.with_bus(|c| async move { super::hotspot::stop(&c).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn hotspot_reveal(&self) -> Result<WifiShare, BackendError> {
+        self.with_bus(|c| async move { super::hotspot::reveal(&c).await })
             .await?
             .map_err(BackendError::Refused)
     }

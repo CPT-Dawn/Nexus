@@ -55,6 +55,11 @@ enum Command {
         #[command(subcommand)]
         action: TetherAction,
     },
+    /// Share this machine's connection as a Wi-Fi Hotspot.
+    Hotspot {
+        #[command(subcommand)]
+        action: HotspotAction,
+    },
     /// Show or change the settings of a saved Network's Profile.
     Profile {
         #[command(subcommand)]
@@ -250,6 +255,47 @@ enum TetherAction {
     /// Drop the tether; the phone stays paired and its Profile stays saved.
     Disconnect {
         /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum HotspotAction {
+    /// Whether this machine can host a Hotspot, and the one that runs.
+    Status {
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Start a Hotspot. Without a name and password, Nexus makes both up.
+    Start {
+        /// The Hotspot's name (default: Nexus-XXXX).
+        #[arg(long)]
+        ssid: Option<String>,
+        /// The password, 8 to 63 characters. Visible in the process list:
+        /// prefer --password-stdin.
+        #[arg(long, conflicts_with = "password_stdin")]
+        password: Option<String>,
+        /// Read the password from the first line of stdin.
+        #[arg(long)]
+        password_stdin: bool,
+        /// Also draw the join code as a QR code.
+        #[arg(long)]
+        qr: bool,
+        /// Print the result, password included, as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop the Hotspot.
+    Stop {
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Draw the running Hotspot's join code as a QR code.
+    Qr {
+        /// Print the join details, password included, as JSON.
         #[arg(long)]
         json: bool,
     },
@@ -465,6 +511,32 @@ fn main() -> ExitCode {
             VpnAction::Key { name, json } => vpn_cli::key(&name, json),
             VpnAction::Share { name, qr, json } => vpn_cli::share(&name, qr, json),
         },
+        Command::Hotspot {
+            action: HotspotAction::Status { json },
+        } => cli::hotspot_status(json),
+        Command::Hotspot {
+            action:
+                HotspotAction::Start {
+                    ssid,
+                    password,
+                    password_stdin,
+                    qr,
+                    json,
+                },
+        } => {
+            let source = match (password, password_stdin) {
+                (Some(p), _) => cli::PasswordSource::Flag(p),
+                (None, true) => cli::PasswordSource::Stdin,
+                (None, false) => cli::PasswordSource::None,
+            };
+            cli::hotspot_start(ssid, source, qr, json)
+        }
+        Command::Hotspot {
+            action: HotspotAction::Stop { json },
+        } => cli::hotspot_stop(json),
+        Command::Hotspot {
+            action: HotspotAction::Qr { json },
+        } => cli::hotspot_qr(json),
         Command::Tether {
             action: TetherAction::List { json },
         } => cli::tether_list(json),
