@@ -20,6 +20,33 @@ pub struct Config {
     pub menu: Menu,
     pub prompts: Prompts,
     pub doctor: DoctorConfig,
+    pub notifications: Notifications,
+}
+
+/// Which desktop notifications the Daemon sends. Each kind has its own switch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Notifications {
+    /// "Joined <network>".
+    pub joined: bool,
+    /// "Lost <network>".
+    pub lost: bool,
+    /// A join failed because the password was wrong.
+    pub wrong_password: bool,
+    /// A Secret prompt opened while no Front end is running, with an action
+    /// that opens the TUI on it.
+    pub secret_prompt: bool,
+}
+
+impl Default for Notifications {
+    fn default() -> Self {
+        Self {
+            joined: true,
+            lost: true,
+            wrong_password: true,
+            secret_prompt: true,
+        }
+    }
 }
 
 /// What the Doctor probes.
@@ -77,6 +104,7 @@ impl Default for Config {
             menu: Menu::default(),
             prompts: Prompts::default(),
             doctor: DoctorConfig::default(),
+            notifications: Notifications::default(),
         }
     }
 }
@@ -170,6 +198,16 @@ impl Settings {
     pub fn prompt_timeout(&self) -> std::time::Duration {
         let state = self.state.lock().expect("settings lock");
         std::time::Duration::from_secs(state.config.prompts.timeout_secs)
+    }
+
+    /// Which notifications are on right now.
+    pub fn notifications(&self) -> Notifications {
+        self.state
+            .lock()
+            .expect("settings lock")
+            .config
+            .notifications
+            .clone()
     }
 
     pub fn path(&self) -> Option<&Path> {
