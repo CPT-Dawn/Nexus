@@ -496,8 +496,15 @@ async fn answer<B: Backend>(
         }
         Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
-        Op::WifiJoin { network, password } => {
-            let result = backend.wifi_join(network, password).await;
+        Op::WifiAps { network } => backend_reply(req.id, backend.wifi_aps(network).await),
+        Op::WifiJoin {
+            network,
+            password,
+            device,
+            hidden,
+        } => {
+            let target = crate::backend::JoinTarget { device, hidden };
+            let result = backend.wifi_join(network, password, target).await;
             if let Err(BackendError::Refused(f)) = &result
                 && f.code == ErrorCode::WrongPassword
             {

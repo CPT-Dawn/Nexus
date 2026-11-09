@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_wifi_edge.rs
+expression: frame
+---
+ Nexus  Wi-Fi ▾  2/6                              ● Offline
+╭ Wi-Fi ───────────────────────────────────────────────────╮
+│ ▸   Mesh-Home                           ▂▄▆█ wpa2     5G │
+│     Mixed-Mode                          ▂▄▆█ wpa2/3   5G │
+╭ Join a hidden network ───────────────────────────────────╮
+│ ▸ Network name  _                                        │
+│   Security      ‹ WPA2 ›                                 │
+│   Password      empty: you will be asked                 │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│ tab next  ←→ change  ^r show  enter join  esc cancel     │
+╰──────────────────────────────────────────────────────────╯
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ tab next  enter join  esc cancel

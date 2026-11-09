@@ -275,7 +275,7 @@ impl Agent {
             kind: PromptKind::WifiPassword,
             field: PromptField::Password,
             message: None,
-            network: String::from_utf8_lossy(&ssid).into_owned(),
+            network: nexus_ipc::display_ssid(&ssid),
             network_id: nexus_ipc::network_id(&ssid),
             retry: flags & REQUEST_NEW != 0,
         };
@@ -314,7 +314,7 @@ impl Agent {
         };
         let psk = zeroize::Zeroizing::new(psk);
         let ssid = wifi_name(&connection)
-            .map(|s| String::from_utf8_lossy(&s).into_owned())
+            .map(|s| nexus_ipc::display_ssid(&s))
             .unwrap_or_default();
         if let Err(e) = Keyring.store(&uuid, &ssid, &psk).await {
             tracing::warn!("cannot keep the password of {ssid} in the keyring: {e}");

@@ -344,7 +344,7 @@ async fn manager(conn: &Connection) -> zbus::Result<CheckpointsProxy<'_>> {
 
 fn named(network: &str) -> Result<(Vec<u8>, String), Failure> {
     let ssid = nexus_ipc::parse_network_id(network).ok_or_else(text::bad_network_id)?;
-    let name = String::from_utf8_lossy(&ssid).into_owned();
+    let name = nexus_ipc::display_ssid(&ssid);
     Ok((ssid, name))
 }
 

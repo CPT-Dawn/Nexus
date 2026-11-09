@@ -147,3 +147,9 @@ Add an AP: drop a hostapd config in `rig/aps.d/<name>.conf` with `interface=@IFA
 - Prompts: `nm.add_plugin_vpn_of(uuid, name, Some("openvpn"))` gives the Profile a `vpn.service-type`; `nm.script_vpn_asks(uuid, &["username", "password", "otp"])` makes activation call the Nexus secret agent's `GetSecrets("vpn", hints)` first; `nm.vpn_answers(uuid)` returns what the agent handed back. A hint `x-vpn-message:<text>` becomes the prompt sentence. A Profile without a `service-type` is never checked for its plugin.
 - S2 (`s2_vpn.rs`): prompt overlays at narrow/standard/wide, the user name shown as typed, the code masked, Esc declining, `.ovpn` import and the missing-plugin toast. `s1_notifications.rs` covers the "One-time code needed" notification.
 - Demo: `cargo run -p nexus-testkit --example demo -- target/debug/nexus vpn-plugin`, press `4`.
+
+## Wi-Fi edge cases (ticket #15)
+
+- S1 (`crates/nexus/tests/s1_wifi_edge.rs`): `wifi_join` with `hidden` (a security) and `device` (interface name or id), `wifi_aps`, the CLI (`wifi join --hidden <open|owe|wpa2|wpa3|wpa2-3>`, `--device`, `--hex` for names that are not UTF-8, `wifi aps`). Fake NM: `Ap::hidden()` (`Ssid` reads empty until a Device associates, and a hidden join nobody hears fails with reason 53), `Ap::owe`, `Ap::transition`, `Ap::bitrate(kbps)`, `nm.added_setting(ssid_bytes, "802-11-wireless-security.key-mgmt")` to see which Profile the Daemon built. A second Device is just another `add_wifi_device`.
+- SSIDs are untrusted bytes: `nexus_ipc::display_ssid` replaces invalid UTF-8, control and direction-override characters before a name reaches any Front end; the `WifiNetwork.id` (hex of the bytes) is what joins.
+- S2 (`crates/nexus/tests/s2_wifi_edge.rs`): the hidden form (`n`), access point details (`i`), the card chooser (`c`) at narrow/standard/wide. World: `nexus_testkit::scenarios::wifi_edge`, also `demo wifi-edge`.

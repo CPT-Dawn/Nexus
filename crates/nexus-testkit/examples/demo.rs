@@ -27,6 +27,13 @@
 //!   check, `ctrl-r` shows passwords, `enter` joins, `esc` cancels. The right
 //!   login is `you@uni.example` / `correct-horse`, server name `radius.uni.example`.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
+//! - `wifi-edge`: the awkward cases, two Wi-Fi cards, nothing joined. Press `2`.
+//!   `n` opens the hidden-network form: type `Ghost-Net`, `tab`, `←`/`→` pick
+//!   the security (WPA2), `tab`, password `boo-boo-boo`, `enter` joins (leave
+//!   the password empty and a prompt asks for it). `i` on Mesh-Home lists its
+//!   access points (2.4, 5 and 6 GHz); `c` pins joins to wlan0 or wlan1 (wlan1
+//!   hears only Mesh-Home and Mixed-Mode); Airport Free is OWE, Mixed-Mode
+//!   is WPA2/WPA3, and one name is not valid UTF-8 and shows a replacement mark.
 //! - `vpn`: online, with three VPNs: Work (WireGuard, up), Home Lab
 //!   (WireGuard, down) and Office OpenVPN (plugin, down). Press `4` for the
 //!   VPN tab; `enter` brings the selected one up or down, `p` shows its public
@@ -120,8 +127,11 @@ fn main() {
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" | "wifi-enterprise" | "profile" | "profile-keyring" | "effects" => {
-            if scenario == "wifi" || scenario == "effects" {
+        "wifi" | "wifi-prompt" | "wifi-enterprise" | "wifi-edge" | "profile"
+        | "profile-keyring" | "effects" => {
+            if scenario == "wifi-edge" {
+                nexus_testkit::scenarios::wifi_edge(&world);
+            } else if scenario == "wifi" || scenario == "effects" {
                 nexus_testkit::scenarios::wifi_busy(&world);
                 if scenario == "effects" {
                     // Activation fails (state 60) with "no secrets" (reason 7).

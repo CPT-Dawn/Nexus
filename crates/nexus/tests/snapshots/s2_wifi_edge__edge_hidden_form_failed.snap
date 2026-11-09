@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_wifi_edge.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Wi-Fi ─────────────────────╮╭ Mesh-Home ─────────────────────────────────────────────────────────╮
+│ ▸   Mesh-Home  ▂▄▆█ wpa2   ││ Not saved                                                          │
+│     Mixed-Mode ▂▄▆█ wpa2/3 ││                                                                    │
+│     Airport F… ▂▄▆█ owe    ││ Signal         82%  ▂▄▆█                                           │
+│     caf� �[2J… ▂▄▆█ open   ││ Security      WPA2 personal                                        │
+│                            ││ Band          5 GHz                                                │
+│                            ││ Access points 4                                                    │
+│                ╭ Join a hidden network ─────────────────────────────────────────╮                │
+│                │ Nowhere is not in range. Move closer, or scan again.           │                │
+│                │                                                                │                │
+│                │ ▸ Network name  Nowhere_                                       │word.           │
+│                │   Security      ‹ Open ›                                       │                │
+│                │                                                                │                │
+│                │                                                                │                │
+│                │                                                                │                │
+│                │                                                                │                │
+│                │                                                                │                │
+│                │ tab next  ←→ change  ^r show  enter join  esc cancel           │                │
+│                ╰────────────────────────────────────────────────────────────────╯                │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ tab next  enter join  esc cancel

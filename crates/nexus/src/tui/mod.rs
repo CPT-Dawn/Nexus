@@ -5,6 +5,7 @@
 //! says the screen changed. With nothing happening it is asleep.
 
 mod app;
+mod aps;
 mod bigtype;
 mod caps;
 mod client;
@@ -15,6 +16,7 @@ mod ethernet;
 mod ethernet_ui;
 mod fx;
 mod graph;
+mod hidden;
 mod hits;
 mod hotspot;
 mod hotspot_ui;

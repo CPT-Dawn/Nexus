@@ -165,6 +165,12 @@ pub fn draw(f: &mut Frame, app: &App) {
     if let Some(form) = app.eap_form() {
         eap_ui::draw(f, form, body, &look, &sym);
     }
+    if let Some(form) = app.hidden_form() {
+        super::hidden::draw(f, form, body, &look, &sym);
+    }
+    if let Some(aps) = app.aps() {
+        super::aps::draw(f, aps, body, &look, &sym);
+    }
     profile_ui::overlay(f, app, body, &look, &sym);
     if app.layer() == Layer::Help {
         overlays::help(f, app, body, &look, &sym);

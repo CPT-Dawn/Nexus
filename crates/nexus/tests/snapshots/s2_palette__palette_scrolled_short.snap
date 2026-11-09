@@ -11,8 +11,8 @@ expression: frame
 │   ○ VPN                    │╰──│   Disconnect                                               x │──╯
 │     Not connected          │╭ T│   Forget network                                           f │──╮
 │   ○ Hotspot                ││ ↓│   Toggle autoconnect                                       a │⣀ │
-│     Not started            ││ ↑│ ▸ Edit network settings                                    e │⣀ │
-│                            │╰──│   Open the Wi-Fi tab and pick a Network first.               │──╯
+│     Not started            ││ ↑│ ▸ Join hidden network                                      n │⣀ │
+│                            │╰──│   Open the Wi-Fi tab first.                                  │──╯
 │                            │   ╰──────────────────────────────────────────────────────────────╯
 ╰────────────────────────────╯
  enter run  esc close

@@ -11,7 +11,7 @@ expression: bottom
 │  Hotspot: n           Share this connection with a made- │
 │  Hotspot: c           Start a Hotspot with a name and pa │
 │  Hotspot: S           Stop the Hotspot                   │
-│  Hotspot: s           Show the Hotspot's QR code and pas █
+│  Hotspot: s           Show the Hotspot's QR code and pas │
 │  Hotspot: Enter       Use the selected phone's data      █
 │  Hotspot: x           Drop the phone's tether            █
 │  u                    Wi-Fi, Hotspot: undo the toast     █
