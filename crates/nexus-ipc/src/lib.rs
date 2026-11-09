@@ -106,6 +106,31 @@ pub enum Op {
     /// Airplane mode: every radio the Backend controls off (`on`) or back on.
     /// Result: [`Radios`]. `hard_blocked` when a hardware switch prevents it.
     Airplane { on: bool },
+    /// The VPN Profiles and their state. Result: [`VpnList`].
+    VpnList,
+    /// Bring a VPN up, waiting until it is up or has failed (`vpn` is a
+    /// `Vpn.id`). Result: [`VpnToggled`]; `unknown_vpn`, `vpn_failed`.
+    VpnUp { vpn: String },
+    /// Bring a VPN down. Result: [`VpnToggled`]; `unknown_vpn`, `not_connected`
+    /// when it is not up.
+    VpnDown { vpn: String },
+    /// Import a WireGuard `.conf` (its text, private key included) as a VPN
+    /// Profile. Result: [`VpnAdded`]; `invalid_config` with the line at fault.
+    VpnImport {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        config: Secret,
+    },
+    /// Create a WireGuard VPN Profile from scratch with a fresh key pair.
+    /// Result: [`VpnAdded`] (carries the public key); `invalid_config`.
+    VpnCreate(NewTunnel),
+    /// The public key of a WireGuard VPN Profile. Result: [`VpnKey`].
+    VpnKey { vpn: String },
+    /// Reveal a WireGuard Profile's whole config, private key included, so it
+    /// can be shown as a QR code. Needs the Backend's authorization. Result:
+    /// [`VpnShare`]; `reveal_denied` when refused. Front ends call it only after
+    /// the person pressed a reveal key.
+    VpnReveal { vpn: String },
     /// Start receiving event lines on this connection. Answered with
     /// `{"ok": {}}`; events follow, interleaved with later responses.
     Subscribe,
@@ -231,6 +256,12 @@ pub enum ErrorCode {
     FixFailed,
     /// The Backend refused to hand over a stored secret (authorization denied).
     RevealDenied,
+    /// No VPN Profile has that id.
+    UnknownVpn,
+    /// A WireGuard config could not be read; the message names the line.
+    InvalidConfig,
+    /// The VPN did not come up; the message says why.
+    VpnFailed,
     #[serde(other)]
     Unknown,
 }
@@ -302,6 +333,10 @@ pub enum Event {
     /// to run). Carries all of them.
     DoctorFindings {
         findings: Vec<Finding>,
+    },
+    /// The VPN list changed (a Profile added, a VPN up or down).
+    VpnsChanged {
+        vpns: VpnList,
     },
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]
@@ -764,6 +799,102 @@ impl WifiShare {
         out.push(';');
         out
     }
+}
+
+/// What kind of VPN a Profile is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VpnKind {
+    Wireguard,
+    /// A plugin VPN such as OpenVPN.
+    Plugin,
+}
+
+/// Whether a VPN is carrying traffic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VpnState {
+    Down,
+    Activating,
+    Up,
+}
+
+/// One VPN Profile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Vpn {
+    /// The Profile's UUID.
+    pub id: String,
+    pub name: String,
+    pub kind: VpnKind,
+    pub state: VpnState,
+    /// Addresses of the tunnel's own end, as `10.0.0.2/32`.
+    #[serde(default)]
+    pub addresses: Vec<String>,
+    /// The first peer's endpoint, if it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+}
+
+/// The `vpn_list` result.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VpnList {
+    pub vpns: Vec<Vpn>,
+}
+
+/// The `vpn_up` / `vpn_down` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VpnToggled {
+    pub id: String,
+    pub name: String,
+    pub state: VpnState,
+}
+
+/// The `vpn_import` / `vpn_create` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VpnAdded {
+    pub id: String,
+    pub name: String,
+    /// This end's public key, to give to the other side.
+    pub public_key: String,
+}
+
+/// The `vpn_key` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VpnKey {
+    pub name: String,
+    pub public_key: String,
+}
+
+/// The `vpn_reveal` result: a whole WireGuard config.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VpnShare {
+    pub name: String,
+    pub public_key: String,
+    /// The `.conf` text. Wiped from memory when dropped.
+    pub config: Secret,
+}
+
+fn all_traffic() -> Vec<String> {
+    vec!["0.0.0.0/0".into(), "::/0".into()]
+}
+
+/// What `vpn_create` needs: this end's addresses and, if known yet, the peer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NewTunnel {
+    pub name: String,
+    /// Addresses of this end, e.g. `10.0.0.2/32`.
+    pub addresses: Vec<String>,
+    #[serde(default)]
+    pub dns: Vec<String>,
+    /// The peer's public key; a tunnel without one cannot carry traffic yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_key: Option<String>,
+    /// `host:port`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    /// What to send through the tunnel; everything by default.
+    #[serde(default = "all_traffic")]
+    pub allowed_ips: Vec<String>,
 }
 
 /// Encodes a value as one line, newline included.

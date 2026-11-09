@@ -6,6 +6,7 @@ mod doctor;
 mod secrets;
 mod text;
 mod wifi_view;
+mod wireguard;
 
 use std::process::ExitCode;
 
