@@ -146,6 +146,7 @@ t_switch_then_revert_restores() {
   [ -f "$NEXUS_SWITCH_ROOT/etc/systemd/network/20-wired.network" ] || ok=0
   grep -q 'interface-name=enp110s0' "$NEXUS_SWITCH_ROOT"/etc/NetworkManager/system-connections/*.nmconnection || ok=0
   grep -q '^EnableNetworkConfiguration=false' "$NEXUS_SWITCH_ROOT/etc/iwd/main.conf" || ok=0
+  [ "$(grep -c '^EnableNetworkConfiguration=' "$NEXUS_SWITCH_ROOT/etc/iwd/main.conf")" = 1 ] || ok=0
   [ "$(cat "$STUB_STATE/systemd-networkd-varlink.socket.active")" = inactive ] || ok=0
   [ "$(cat "$STUB_STATE/NetworkManager.active")" = active ] || ok=0
   "$SCRIPT" --revert --yes >/dev/null 2>&1 || ok=0
