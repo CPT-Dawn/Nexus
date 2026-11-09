@@ -1,6 +1,8 @@
 //! The Daemon: owns the socket and the Backend, answers Front ends.
 
+mod activity;
 mod socket;
+mod traffic;
 
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -45,7 +47,8 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
     let (events, _) = broadcast::channel::<Event>(64);
     let settings = Arc::new(Settings::load(config::default_path(), events.clone()));
     tokio::spawn(config::watch(settings.clone()));
-    tokio::spawn(watch_wifi(backend.clone(), events.clone()));
+    let live = Arc::new(Live::default());
+    tokio::spawn(watch_backend(backend.clone(), events.clone(), live.clone()));
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -59,9 +62,10 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
                 }
                 let backend = backend.clone();
                 let settings = settings.clone();
+                let live = live.clone();
                 let events = events.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = socket::serve_connection(stream, events, |req| answer(&*backend, &settings, req)).await {
+                    if let Err(e) = socket::serve_connection(stream, events, |req| answer(&*backend, &settings, &live, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -74,11 +78,24 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Tells subscribers when the Wi-Fi list changes. The Backend coalesces each
-/// burst of changes into one tick; a tick that changed nothing visible is not
-/// worth an event.
-async fn watch_wifi<B: Backend>(backend: Arc<B>, events: broadcast::Sender<Event>) {
+/// What the Daemon remembers between requests.
+#[derive(Debug, Default)]
+struct Live {
+    traffic: traffic::Sampler,
+    activity: activity::Log,
+}
+
+/// Tells subscribers what changed. The Backend coalesces each burst of
+/// changes into one tick, and only one task may wait for ticks, so the Wi-Fi
+/// list and the activity log are both fed from here. A tick that changed
+/// nothing visible is not worth an event.
+async fn watch_backend<B: Backend>(
+    backend: Arc<B>,
+    events: broadcast::Sender<Event>,
+    live: Arc<Live>,
+) {
     let mut last = backend.wifi_list().await.ok();
+    let mut status = backend.status().await.ok();
     loop {
         backend.changed().await;
         match backend.wifi_list().await {
@@ -89,11 +106,27 @@ async fn watch_wifi<B: Backend>(backend: Arc<B>, events: broadcast::Sender<Event
             Ok(_) => {}
             Err(e) => tracing::debug!("wifi list unavailable: {e}"),
         }
+        match backend.status().await {
+            Ok(now) => {
+                if let Some(before) = &status {
+                    for entry in live.activity.observe(before, &now) {
+                        let _ = events.send(Event::Activity { entry });
+                    }
+                }
+                status = Some(now);
+            }
+            Err(e) => tracing::debug!("status unavailable: {e}"),
+        }
     }
 }
 
 /// One request in, one response out.
-async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> Response {
+async fn answer<B: Backend>(
+    backend: &B,
+    settings: &Settings,
+    live: &Live,
+    req: Request,
+) -> Response {
     match req.op {
         Op::Status => match backend.status().await {
             Ok(status) => Response::ok(
@@ -102,6 +135,21 @@ async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> R
             ),
             Err(e) => backend_reply::<()>(req.id, Err(e)),
         },
+        Op::Traffic => match backend.counters().await {
+            Ok(counters) => Response::ok(
+                req.id,
+                serde_json::to_value(live.traffic.rates(counters).await)
+                    .expect("wire types serialize"),
+            ),
+            Err(e) => backend_reply::<()>(req.id, Err(e)),
+        },
+        Op::Activity => Response::ok(
+            req.id,
+            serde_json::to_value(nexus_ipc::ActivityLog {
+                entries: live.activity.entries(),
+            })
+            .expect("wire types serialize"),
+        ),
         Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
         Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),

@@ -20,7 +20,7 @@ use zbus::fdo::DBusProxy;
 use zbus::names::BusName;
 use zbus::proxy::CacheProperties;
 
-use super::{Backend, BackendError, Capabilities};
+use super::{Backend, BackendError, Capabilities, Counters};
 
 const SERVICE: &str = "org.freedesktop.NetworkManager";
 
@@ -50,7 +50,27 @@ trait ActiveConnection {
     fn id(&self) -> zbus::Result<String>;
     #[zbus(property, name = "Type")]
     fn kind(&self) -> zbus::Result<String>;
+    #[zbus(property)]
+    fn devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 }
+
+#[zbus::proxy(
+    interface = "org.freedesktop.NetworkManager.Device.Statistics",
+    default_service = "org.freedesktop.NetworkManager"
+)]
+trait Statistics {
+    #[zbus(property)]
+    fn refresh_rate_ms(&self) -> zbus::Result<u32>;
+    #[zbus(property)]
+    fn set_refresh_rate_ms(&self, ms: u32) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn rx_bytes(&self) -> zbus::Result<u64>;
+    #[zbus(property)]
+    fn tx_bytes(&self) -> zbus::Result<u64>;
+}
+
+/// NetworkManager only updates a Device's counters while this is non-zero.
+const STATISTICS_REFRESH_MS: u32 = 1000;
 
 /// Property-change bursts are folded into one update per tick.
 const TICK: Duration = Duration::from_millis(100);
@@ -206,6 +226,11 @@ impl Backend for NetworkManager {
             .await
     }
 
+    async fn counters(&self) -> Result<Option<Counters>, BackendError> {
+        self.with_bus(|c| async move { read_counters(&c).await })
+            .await
+    }
+
     async fn changed(&self) {
         loop {
             let mut guard = self.watch.lock().await;
@@ -259,6 +284,45 @@ impl Backend for NetworkManager {
             }
         }
     }
+}
+
+async fn read_counters(conn: &Connection) -> zbus::Result<Option<Counters>> {
+    let nm = NetworkManagerProxy::builder(conn)
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await?;
+    let primary = nm.primary_connection().await?;
+    if primary.as_str() == "/" {
+        return Ok(None);
+    }
+    let active = ActiveConnectionProxy::builder(conn)
+        .path(primary.as_str())
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await?;
+    // The active connection can vanish between the two reads.
+    let Ok(devices) = active.devices().await else {
+        return Ok(None);
+    };
+    let Some(device) = devices.first() else {
+        return Ok(None);
+    };
+    let stats = StatisticsProxy::builder(conn)
+        .path(device.as_str())
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await?;
+    if stats.refresh_rate_ms().await? == 0 {
+        // Best effort: without it the counters never move.
+        if let Err(e) = stats.set_refresh_rate_ms(STATISTICS_REFRESH_MS).await {
+            tracing::debug!("cannot enable device statistics: {e}");
+        }
+    }
+    Ok(Some(Counters {
+        device: device.to_string(),
+        rx_bytes: stats.rx_bytes().await?,
+        tx_bytes: stats.tx_bytes().await?,
+    }))
 }
 
 /// `NMState`. Values the Daemon does not know decode as `Unknown`.

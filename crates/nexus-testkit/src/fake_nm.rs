@@ -120,6 +120,9 @@ struct DeviceModel {
     /// `CLOCK_BOOTTIME` ms of the last finished scan; -1 never.
     last_scan: i64,
     aps: Vec<u32>,
+    /// `Device.Statistics` byte counters.
+    rx_bytes: u64,
+    tx_bytes: u64,
 }
 
 #[derive(Debug)]
@@ -171,6 +174,13 @@ impl ActiveConnection {
         }
     }
 
+    pub fn vpn(id: &str) -> Self {
+        Self {
+            id: id.into(),
+            kind: "vpn".into(),
+        }
+    }
+
     pub fn ethernet(id: &str) -> Self {
         Self {
             id: id.into(),
@@ -194,6 +204,10 @@ struct Model {
     scan_requests: u32,
     /// Refuse every `RequestScan`, whatever `LastScan` says.
     refuse_scans: bool,
+    /// Reads of `Statistics.RxBytes`/`TxBytes`.
+    statistics_reads: u32,
+    /// What the Daemon wrote to `Statistics.RefreshRateMs`.
+    refresh_rate_ms: u32,
 }
 
 type Shared = Arc<Mutex<Model>>;
@@ -255,6 +269,16 @@ impl Active {
     fn state(&self) -> u32 {
         2 // NM_ACTIVE_CONNECTION_STATE_ACTIVATED
     }
+
+    /// The first Device carries the primary connection.
+    #[zbus(property)]
+    fn devices(&self) -> Vec<OwnedObjectPath> {
+        if self.0.lock().unwrap().devices.is_empty() {
+            Vec::new()
+        } else {
+            vec![opath(&device_path(0))]
+        }
+    }
 }
 
 impl Active {
@@ -283,6 +307,35 @@ impl Device {
     #[zbus(property)]
     fn device_type(&self) -> u32 {
         2 // NM_DEVICE_TYPE_WIFI
+    }
+}
+
+struct Statistics(Shared, usize);
+
+#[interface(name = "org.freedesktop.NetworkManager.Device.Statistics")]
+impl Statistics {
+    #[zbus(property)]
+    fn refresh_rate_ms(&self) -> u32 {
+        self.0.lock().unwrap().refresh_rate_ms
+    }
+
+    #[zbus(property)]
+    fn set_refresh_rate_ms(&self, ms: u32) {
+        self.0.lock().unwrap().refresh_rate_ms = ms;
+    }
+
+    #[zbus(property)]
+    fn rx_bytes(&self) -> u64 {
+        let mut m = self.0.lock().unwrap();
+        m.statistics_reads += 1;
+        m.devices[self.1].rx_bytes
+    }
+
+    #[zbus(property)]
+    fn tx_bytes(&self) -> u64 {
+        let mut m = self.0.lock().unwrap();
+        m.statistics_reads += 1;
+        m.devices[self.1].tx_bytes
     }
 }
 
@@ -457,6 +510,8 @@ impl FakeNm {
             profiles: Vec::new(),
             scan_requests: 0,
             refuse_scans: false,
+            statistics_reads: 0,
+            refresh_rate_ms: 0,
         }));
         let mut nm = FakeNm {
             rt,
@@ -501,6 +556,7 @@ impl FakeNm {
             for n in 0..devices {
                 b = b
                     .serve_at(device_path(n), Device(model.clone(), n))
+                    .serve_at(device_path(n), Statistics(model.clone(), n))
                     .serve_at(device_path(n), Wireless(model.clone(), n));
             }
             for id in aps {
@@ -552,6 +608,8 @@ impl FakeNm {
                 interface: interface.into(),
                 last_scan: -1,
                 aps: Vec::new(),
+                rx_bytes: 0,
+                tx_bytes: 0,
             });
             m.devices.len() - 1
         };
@@ -559,6 +617,7 @@ impl FakeNm {
         self.with_conn(move |c| async move {
             let os = c.object_server();
             let _ = os.at(device_path(n), Device(model.clone(), n)).await;
+            let _ = os.at(device_path(n), Statistics(model.clone(), n)).await;
             let _ = os.at(device_path(n), Wireless(model, n)).await;
         });
         DeviceId(n)
@@ -635,6 +694,24 @@ impl FakeNm {
     /// Pretends `device` last scanned `ms_ago` milliseconds ago.
     pub fn set_last_scan_ago(&self, device: DeviceId, ms_ago: i64) {
         self.model.lock().unwrap().devices[device.0].last_scan = boottime_ms() - ms_ago;
+    }
+
+    /// Sets a Device's byte counters (`Statistics.RxBytes`/`TxBytes`). The
+    /// first Device added carries the primary connection.
+    pub fn set_traffic(&self, device: DeviceId, rx_bytes: u64, tx_bytes: u64) {
+        let mut m = self.model.lock().unwrap();
+        m.devices[device.0].rx_bytes = rx_bytes;
+        m.devices[device.0].tx_bytes = tx_bytes;
+    }
+
+    /// How many times a counter was read, to prove nobody polls needlessly.
+    pub fn statistics_reads(&self) -> u32 {
+        self.model.lock().unwrap().statistics_reads
+    }
+
+    /// What was last written to `Statistics.RefreshRateMs` (0 = never).
+    pub fn refresh_rate_ms(&self) -> u32 {
+        self.model.lock().unwrap().refresh_rate_ms
     }
 
     /// Makes NetworkManager refuse every `RequestScan`.

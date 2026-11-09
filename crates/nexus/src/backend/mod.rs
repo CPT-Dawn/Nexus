@@ -18,6 +18,15 @@ pub struct Capabilities {
     pub portal_detection: bool,
 }
 
+/// Byte counters of the Device carrying the primary Link.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Counters {
+    /// Identifies the Device, so a change of Link restarts the baseline.
+    pub device: String,
+    pub rx_bytes: u64,
+    pub tx_bytes: u64,
+}
+
 /// Why a Backend call failed. For `status`, "not running" is a [`Status`]
 /// instead; the other calls have nothing to show without the Backend.
 #[derive(Debug)]
@@ -56,6 +65,9 @@ pub trait Backend: Send + Sync + 'static {
     /// Refreshes the Wi-Fi list, reusing recent results instead of
     /// re-requesting inside the Backend's rate limit.
     fn wifi_scan(&self) -> impl Future<Output = Result<ScanOutcome, BackendError>> + Send;
+
+    /// Byte counters of the primary Link's Device, `None` without one.
+    fn counters(&self) -> impl Future<Output = Result<Option<Counters>, BackendError>> + Send;
 
     /// Resolves after the Backend changed, once per burst: a storm of
     /// property changes is coalesced into a single tick. Cancel-safe.

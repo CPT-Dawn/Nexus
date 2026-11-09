@@ -45,6 +45,11 @@ pub enum Op {
     /// Ask the Backend to refresh the Wi-Fi list. Results arrive as
     /// `networks_changed` events; the response only says what was done.
     WifiScan,
+    /// Download and upload rates of the primary Link, in bytes per second.
+    /// Zero without a Link; the first call only sets a baseline.
+    Traffic,
+    /// The recent activity log, newest first.
+    Activity,
     /// Start receiving event lines on this connection. Answered with
     /// `{"ok": {}}`; events follow, interleaved with later responses.
     Subscribe,
@@ -139,6 +144,10 @@ pub enum Event {
     NetworksChanged {
         wifi: WifiList,
     },
+    /// Something worth a line in the activity strip just happened.
+    Activity {
+        entry: ActivityEntry,
+    },
     /// `config.toml` changed (or was fixed, or broke). `config` is what is now
     /// in force; `warning` says why the file is being ignored, if it is.
     ConfigReloaded {
@@ -149,6 +158,46 @@ pub enum Event {
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]
     Unknown,
+}
+
+/// The `traffic` result: the primary Link's rates in bytes per second.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Traffic {
+    pub rx_bps: u64,
+    pub tx_bps: u64,
+}
+
+/// What kind of thing an [`ActivityEntry`] reports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ActivityKind {
+    Joined,
+    Lost,
+    VpnUp,
+    VpnDown,
+    /// A Portal was detected on the Link.
+    Portal,
+    /// Internet is reachable again (after a Portal login).
+    Online,
+    #[serde(other)]
+    Other,
+}
+
+/// One line of the activity log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivityEntry {
+    /// Unix seconds.
+    pub at: u64,
+    pub kind: ActivityKind,
+    /// Plain English, ready to show.
+    pub text: String,
+}
+
+/// The `activity` result, newest first.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivityLog {
+    pub entries: Vec<ActivityEntry>,
 }
 
 /// The overall network state, as the user would phrase it.
@@ -520,6 +569,16 @@ impl Connection {
     /// Convenience for the `wifi_scan` op.
     pub fn wifi_scan(&mut self) -> io::Result<Result<ScanOutcome, Failure>> {
         Ok(self.call(Op::WifiScan)?.and_then(decode))
+    }
+
+    /// Convenience for the `traffic` op.
+    pub fn traffic(&mut self) -> io::Result<Result<Traffic, Failure>> {
+        Ok(self.call(Op::Traffic)?.and_then(decode))
+    }
+
+    /// Convenience for the `activity` op.
+    pub fn activity(&mut self) -> io::Result<Result<ActivityLog, Failure>> {
+        Ok(self.call(Op::Activity)?.and_then(decode))
     }
 
     /// Convenience for the `status` op.
