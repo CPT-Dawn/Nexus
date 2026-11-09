@@ -60,6 +60,10 @@ _Avoid_: client, UI
 A request from the Backend for something only the user knows, such as a Wi-Fi password or a VPN one-time code, answered through a Front end.
 _Avoid_: password dialog, auth request
 
+**Reveal**:
+Reading a stored secret back out of the Backend, such as a saved Wi-Fi password, so it can be shown or turned into a QR code. Always an explicit act of the user, and the Backend must authorize it.
+_Avoid_: unlock, decrypt, export
+
 **Doctor**:
 The set of checks that explains, in plain language, why the machine is or is not online and what to do about it.
 _Avoid_: diagnostics, troubleshooter, health check

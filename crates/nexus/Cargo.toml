@@ -32,6 +32,7 @@ tracing = "0.1"
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 zbus = { version = "6", default-features = false, features = ["tokio", "proxy", "service"] }
 zeroize = "1.9.1"
+qrcode = { version = "0.14", default-features = false }
 
 [dev-dependencies]
 insta = "1"
