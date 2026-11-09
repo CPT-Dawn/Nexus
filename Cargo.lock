@@ -321,6 +321,7 @@ name = "nexus"
 version = "2.0.0-dev"
 dependencies = [
  "clap",
+ "futures-util",
  "listenfd",
  "nexus-ipc",
  "nexus-testkit",
@@ -345,6 +346,7 @@ name = "nexus-testkit"
 version = "2.0.0-dev"
 dependencies = [
  "nexus-ipc",
+ "rustix",
  "serde_json",
  "tempfile",
  "tokio",

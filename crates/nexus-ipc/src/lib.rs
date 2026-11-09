@@ -39,6 +39,14 @@ pub struct Request {
 pub enum Op {
     /// Overall network state and the primary Link.
     Status,
+    /// Nearby Wi-Fi Networks, one per SSID, plus saved out-of-range ones.
+    WifiList,
+    /// Ask the Backend to refresh the Wi-Fi list. Results arrive as
+    /// `networks_changed` events; the response only says what was done.
+    WifiScan,
+    /// Turn this connection into an event stream. Subscribe first, then call
+    /// `wifi_list`, so no change falls between the two.
+    Subscribe,
 }
 
 /// One response line: `ok` or `err`, never both.
@@ -73,6 +81,8 @@ pub enum ErrorCode {
     UnsupportedVersion,
     UnknownOp,
     Internal,
+    /// The Backend (NetworkManager) is not running or not reachable.
+    BackendUnavailable,
     #[serde(other)]
     Unknown,
 }
@@ -98,7 +108,7 @@ impl Response {
     }
 }
 
-/// One event line, pushed to subscribers (no op sends them yet).
+/// One event line, pushed to subscribers after `subscribe`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventLine {
     pub v: u32,
@@ -112,6 +122,11 @@ pub struct EventLine {
 pub enum Event {
     StatusChanged {
         status: Status,
+    },
+    /// The Wi-Fi list changed. Carries the whole new list; a burst of
+    /// Backend changes yields one event per Daemon tick.
+    NetworksChanged {
+        wifi: WifiList,
     },
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]
@@ -227,6 +242,127 @@ impl Status {
     }
 }
 
+/// How well a Network is protected, as the user would phrase it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum Security {
+    Open,
+    /// Enhanced Open: encrypted without a password.
+    Owe,
+    Wep,
+    Wpa,
+    Wpa2,
+    Wpa3,
+    /// Accepts both WPA2 and WPA3 clients.
+    Wpa3Transition,
+    Enterprise,
+    #[serde(other)]
+    Unknown,
+}
+
+impl Security {
+    /// Short label for tables.
+    pub fn label(self) -> &'static str {
+        match self {
+            Security::Open => "open",
+            Security::Owe => "owe",
+            Security::Wep => "wep",
+            Security::Wpa => "wpa",
+            Security::Wpa2 => "wpa2",
+            Security::Wpa3 => "wpa3",
+            Security::Wpa3Transition => "wpa2/3",
+            Security::Enterprise => "enterprise",
+            Security::Unknown => "?",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Band {
+    #[serde(rename = "2.4")]
+    Ghz2_4,
+    #[serde(rename = "5")]
+    Ghz5,
+    #[serde(rename = "6")]
+    Ghz6,
+    #[serde(other)]
+    Unknown,
+}
+
+impl Band {
+    pub fn label(self) -> &'static str {
+        match self {
+            Band::Ghz2_4 => "2.4 GHz",
+            Band::Ghz5 => "5 GHz",
+            Band::Ghz6 => "6 GHz",
+            Band::Unknown => "?",
+        }
+    }
+}
+
+/// A Wi-Fi Device (radio).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiDevice {
+    /// The Backend's stable key for the Device (its object path on NetworkManager).
+    pub id: String,
+    /// The interface name, e.g. `wlan0`.
+    pub name: String,
+}
+
+/// One nearby Wi-Fi Network: every access point that broadcasts the same
+/// SSID bytes, folded into the strongest one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiNetwork {
+    /// SSID bytes in lowercase hex. This is the key: SSIDs need not be UTF-8.
+    pub id: String,
+    /// The SSID for display, with invalid UTF-8 replaced.
+    pub ssid: String,
+    /// 0 to 100, from the strongest access point.
+    pub signal: u8,
+    pub security: Security,
+    pub band: Band,
+    /// How many access points broadcast it.
+    pub access_points: u32,
+    /// The Device that hears the strongest access point.
+    pub device: String,
+    /// UUID of the saved Profile for it, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+}
+
+/// A saved Wi-Fi Profile whose Network is not in range.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedWifi {
+    pub uuid: String,
+    pub id: String,
+    pub ssid: String,
+    pub autoconnect: bool,
+}
+
+/// The `wifi_list` result.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiList {
+    pub devices: Vec<WifiDevice>,
+    /// Strongest first; ties by SSID.
+    pub networks: Vec<WifiNetwork>,
+    /// Saved Profiles that match no nearby Network.
+    pub saved: Vec<SavedWifi>,
+}
+
+/// The `wifi_scan` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScanOutcome {
+    /// How many Devices were asked to scan.
+    pub requested: u32,
+    /// How many were skipped because they scanned too recently.
+    pub skipped: u32,
+    /// Age of the freshest scan in milliseconds, if any Device ever scanned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_scan_ms_ago: Option<u64>,
+}
+
 /// Encodes a value as one line, newline included.
 pub fn encode<T: Serialize>(value: &T) -> String {
     let mut line = serde_json::to_string(value).expect("wire types always serialize");
@@ -325,6 +461,16 @@ impl Connection {
         }
     }
 
+    /// Convenience for the `wifi_list` op.
+    pub fn wifi_list(&mut self) -> io::Result<Result<WifiList, Failure>> {
+        Ok(self.call(Op::WifiList)?.and_then(decode))
+    }
+
+    /// Convenience for the `wifi_scan` op.
+    pub fn wifi_scan(&mut self) -> io::Result<Result<ScanOutcome, Failure>> {
+        Ok(self.call(Op::WifiScan)?.and_then(decode))
+    }
+
     /// Convenience for the `status` op.
     pub fn status(&mut self) -> io::Result<Result<Status, Failure>> {
         Ok(self.call(Op::Status)?.and_then(|v| {
@@ -334,4 +480,11 @@ impl Connection {
             })
         }))
     }
+}
+
+fn decode<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, Failure> {
+    serde_json::from_value(v).map_err(|e| Failure {
+        code: ErrorCode::Internal,
+        message: format!("undecodable result: {e}"),
+    })
 }

@@ -13,9 +13,10 @@ publish = false
 clap = { version = "4", features = ["derive"] }
 listenfd = "1"
 nexus-ipc.workspace = true
-rustix = { version = "1", features = ["process"] }
+futures-util = { version = "0.3", default-features = false }
+rustix = { version = "1", features = ["process", "time"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt", "net", "io-util", "signal", "sync", "macros"] }
+tokio = { version = "1", features = ["rt", "net", "io-util", "signal", "sync", "macros", "time"] }
 tracing = "0.1"
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 zbus = { version = "6", default-features = false, features = ["tokio", "proxy"] }
