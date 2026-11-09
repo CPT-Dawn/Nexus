@@ -123,9 +123,14 @@ async fn answer<B: Backend>(
         Op::WifiForget { network } => backend_reply(req.id, backend.wifi_forget(network).await),
         Op::SecretAnswer { prompt, secret } => reply(
             req.id,
-            broker.answer(prompt, secret).map(|()| serde_json::json!({})),
+            broker
+                .answer(prompt, secret)
+                .map(|()| serde_json::json!({})),
         ),
-        Op::SecretCancel { prompt } => reply(req.id, broker.cancel(prompt).map(|()| serde_json::json!({}))),
+        Op::SecretCancel { prompt } => reply(
+            req.id,
+            broker.cancel(prompt).map(|()| serde_json::json!({})),
+        ),
         Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
         Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
         // `Subscribe` is handled by the connection itself.

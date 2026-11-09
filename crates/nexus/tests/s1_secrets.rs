@@ -126,7 +126,11 @@ fn a_wrong_password_reopens_the_prompt_saying_so() {
         again["prompt"]["message"],
         "Wrong password for Home. Try again."
     );
-    assert!(answer(&mut fe, &again, "right-password").get("ok").is_some());
+    assert!(
+        answer(&mut fe, &again, "right-password")
+            .get("ok")
+            .is_some()
+    );
 
     let joined = join.join().unwrap();
     assert_eq!(joined["ok"]["ssid"], "Home", "{joined}");
@@ -176,7 +180,12 @@ fn an_unanswered_prompt_expires_and_the_network_reads_as_needing_a_password() {
 
     let joined = join.join().unwrap();
     assert_eq!(joined["err"]["code"], "password_required", "{joined}");
-    assert!(joined["err"]["message"].as_str().unwrap().contains("in time"));
+    assert!(
+        joined["err"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("in time")
+    );
     assert_eq!(world.nm.profile_count(), 0);
     assert_eq!(world.nm.joined_ssid(wlan0), None);
     // A late answer finds nothing.
@@ -196,7 +205,11 @@ fn a_prompt_with_no_front_end_waits_and_is_replayed_to_the_next_one() {
     let mut fe = front_end(&world);
     let opened = fe.next_event("secret_prompt_opened");
     assert_eq!(opened["prompt"]["network"], "Home");
-    assert!(answer(&mut fe, &opened, "right-password").get("ok").is_some());
+    assert!(
+        answer(&mut fe, &opened, "right-password")
+            .get("ok")
+            .is_some()
+    );
     assert_eq!(join.join().unwrap()["ok"]["ssid"], "Home");
 }
 
@@ -260,4 +273,107 @@ fn secrets_never_reach_the_log_or_an_event() {
             "an event leaked {secret}"
         );
     }
+}
+
+// ---- the CLI, on a real terminal ----
+
+/// A pseudo-terminal: the master end the test types on, the slave end for the
+/// child's stdin.
+fn pty() -> (std::fs::File, std::os::fd::OwnedFd) {
+    use rustix::fs::{Mode, OFlags};
+    use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
+    let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY).expect("openpt");
+    grantpt(&master).expect("grantpt");
+    unlockpt(&master).expect("unlockpt");
+    let name = ptsname(&master, Vec::new()).expect("ptsname");
+    let slave = rustix::fs::open(
+        name.as_c_str(),
+        OFlags::RDWR | OFlags::NOCTTY,
+        Mode::empty(),
+    )
+    .expect("open the slave side");
+    (std::fs::File::from(master), slave)
+}
+
+/// Reads `from` until `needle` shows up in what has been read so far.
+fn read_until(from: &mut impl std::io::Read, seen: &mut String, needle: &str) {
+    let mut chunk = [0u8; 256];
+    while !seen.contains(needle) {
+        let n = from.read(&mut chunk).expect("read the child's stderr");
+        assert!(n > 0, "the child ended before printing `{needle}`: {seen}");
+        seen.push_str(&String::from_utf8_lossy(&chunk[..n]));
+    }
+}
+
+#[test]
+fn the_cli_asks_on_the_terminal_with_the_password_masked() {
+    use std::io::{Read as _, Write as _};
+    use std::process::Stdio;
+    let (world, wlan0) = world();
+    let (mut master, slave) = pty();
+    let mut child = {
+        let mut cmd = world.nexus();
+        cmd.args(["wifi", "join", "Home"])
+            .stdin(Stdio::from(slave))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        cmd.spawn().expect("spawn nexus")
+        // `cmd` drops here, closing our copy of the slave end.
+    };
+    let mut stderr = child.stderr.take().unwrap();
+    let mut seen = String::new();
+
+    read_until(&mut stderr, &mut seen, "Password for Home: ");
+    master.write_all(b"typo-password\n").unwrap();
+    read_until(
+        &mut stderr,
+        &mut seen,
+        "Wrong password for Home. Try again.: ",
+    );
+    master.write_all(b"right-password\n").unwrap();
+
+    let status = child.wait().expect("wait");
+    let mut out = String::new();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut out)
+        .unwrap();
+    assert_eq!(status.code(), Some(0), "{seen}");
+    assert!(out.contains("Joined Home"), "{out}");
+    assert_eq!(world.nm.joined_ssid(wlan0).as_deref(), Some("Home"));
+
+    // Nothing the person typed came back out of the terminal.
+    let mut echoed = Vec::new();
+    let _ = master.read_to_end(&mut echoed); // EIO once the child has gone
+    let echoed = String::from_utf8_lossy(&echoed);
+    assert!(
+        !echoed.contains("password"),
+        "the terminal echoed: {echoed:?}"
+    );
+    assert!(!seen.contains("right-password") && !out.contains("right-password"));
+}
+
+#[test]
+fn an_empty_answer_on_the_terminal_cancels_the_join() {
+    use std::io::Write as _;
+    use std::process::Stdio;
+    let (world, _) = world();
+    let (mut master, slave) = pty();
+    let mut child = {
+        let mut cmd = world.nexus();
+        cmd.args(["wifi", "join", "Home"])
+            .stdin(Stdio::from(slave))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        cmd.spawn().expect("spawn nexus")
+    };
+    let mut stderr = child.stderr.take().unwrap();
+    let mut seen = String::new();
+    read_until(&mut stderr, &mut seen, "Password for Home: ");
+    master.write_all(b"\n").unwrap();
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(10), "{seen}");
+    assert_eq!(world.nm.profile_count(), 0);
 }

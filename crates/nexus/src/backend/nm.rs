@@ -245,7 +245,7 @@ impl Backend for NetworkManager {
             super::wifi::join(&c, &broker, &network, password.as_ref()).await
         })
         .await?
-            .map_err(BackendError::Refused)
+        .map_err(BackendError::Refused)
     }
 
     async fn wifi_disconnect(&self) -> Result<Disconnected, BackendError> {

@@ -3,7 +3,7 @@
 use std::io::ErrorKind;
 use std::process::ExitCode;
 
-use nexus_ipc::{Connection, ErrorCode, Op, Secret};
+use nexus_ipc::{Connection, ErrorCode, Event, Op, Prompt, Secret};
 use serde_json::Value;
 
 /// Exit code when the Daemon cannot be reached.
@@ -94,7 +94,7 @@ pub fn wifi_join(ssid: &str, source: PasswordSource, json: bool) -> ExitCode {
         PasswordSource::None => None,
         PasswordSource::Flag(p) => Some(Secret::new(p)),
         PasswordSource::Stdin => {
-            let mut line = String::new();
+            let mut line = zeroize::Zeroizing::new(String::new());
             if let Err(e) = std::io::stdin().read_line(&mut line) {
                 eprintln!("nexus: cannot read the password from stdin: {e}");
                 return ExitCode::FAILURE;
@@ -102,19 +102,97 @@ pub fn wifi_join(ssid: &str, source: PasswordSource, json: bool) -> ExitCode {
             Some(Secret::new(line.trim_end_matches(['\n', '\r'])))
         }
     };
-    wifi_call(
-        Op::WifiJoin {
-            network: nexus_ipc::network_id(ssid.as_bytes()),
-            password,
-        },
-        |value| {
-            if json {
-                println!("{value}");
-            } else if let Ok(j) = serde_json::from_value::<nexus_ipc::Joined>(value) {
-                println!("{}", crate::text::joined(&j.ssid));
+    let network = nexus_ipc::network_id(ssid.as_bytes());
+    let op = Op::WifiJoin {
+        network: network.clone(),
+        password: password.clone(),
+    };
+    let show = |value: Value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(j) = serde_json::from_value::<nexus_ipc::Joined>(value) {
+            println!("{}", crate::text::joined(&j.ssid));
+        }
+    };
+    if password.is_some() {
+        return wifi_call(op, show);
+    }
+    // No password given: the Daemon opens a Secret prompt if the Network needs
+    // one, and this terminal answers it.
+    let (mut call, mut events) = match (Connection::connect(), Connection::connect()) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(e), _) | (_, Err(e)) => return unreachable(&e),
+    };
+    if let Err(e) = events.call(Op::Subscribe) {
+        return unreachable(&e);
+    }
+    let finished = std::sync::atomic::AtomicBool::new(false);
+    let result = std::thread::scope(|scope| {
+        let joiner = scope.spawn(|| {
+            let result = call.call(op);
+            finished.store(true, std::sync::atomic::Ordering::SeqCst);
+            result
+        });
+        let mut replies: Option<Connection> = None;
+        while !finished.load(std::sync::atomic::Ordering::SeqCst) {
+            let Ok(Some(Event::SecretPromptOpened { prompt })) =
+                events.next_event(std::time::Duration::from_millis(100))
+            else {
+                continue;
+            };
+            if prompt.network_id != network {
+                continue;
             }
+            // Answers go over their own connection: a retry prompt can arrive
+            // before this one's reply, and `call` would swallow it.
+            if replies.is_none() {
+                replies = Connection::connect().ok();
+            }
+            if let Some(replies) = replies.as_mut() {
+                answer_prompt(replies, &prompt);
+            }
+        }
+        joiner.join().expect("the join thread does not panic")
+    });
+    report(result, show)
+}
+
+/// Asks the person at the terminal, masked, and sends the answer. With no
+/// terminal to ask on (or an empty line) the prompt is cancelled.
+fn answer_prompt(replies: &mut Connection, prompt: &Prompt) {
+    let typed = if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        read_masked(&prompt.message)
+    } else {
+        None
+    };
+    let op = match typed {
+        Some(secret) => Op::SecretAnswer {
+            prompt: prompt.id,
+            secret,
         },
-    )
+        None => Op::SecretCancel { prompt: prompt.id },
+    };
+    // A refusal means the prompt closed meanwhile (expired, answered elsewhere).
+    let _ = replies.call(op);
+}
+
+/// Reads one line from the terminal with echo off. `None` for an empty line
+/// or when the terminal cannot be read.
+fn read_masked(message: &str) -> Option<Secret> {
+    use rustix::termios::{LocalModes, OptionalActions, tcgetattr, tcsetattr};
+    let stdin = std::io::stdin();
+    let original = tcgetattr(&stdin).ok()?;
+    let mut quiet = original.clone();
+    quiet.local_modes.remove(LocalModes::ECHO);
+    tcsetattr(&stdin, OptionalActions::Flush, &quiet).ok()?;
+    eprint!("{message}: ");
+    let mut line = zeroize::Zeroizing::new(String::new());
+    let read = stdin.read_line(&mut line);
+    let _ = tcsetattr(&stdin, OptionalActions::Now, &original);
+    eprintln!();
+    read.ok()?;
+    let text = line.trim_end_matches(['\n', '\r']);
+    (!text.is_empty()).then(|| Secret::new(text))
 }
 
 /// `nexus wifi disconnect`.
@@ -149,7 +227,14 @@ fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
         Ok(c) => c,
         Err(e) => return unreachable(&e),
     };
-    match conn.call(op) {
+    report(conn.call(op), show)
+}
+
+fn report(
+    result: std::io::Result<Result<Value, nexus_ipc::Failure>>,
+    show: impl FnOnce(Value),
+) -> ExitCode {
+    match result {
         Err(e) => unreachable(&e),
         Ok(Err(failure)) => {
             eprintln!("nexus: {}", failure.message);

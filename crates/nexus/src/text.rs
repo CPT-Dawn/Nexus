@@ -192,7 +192,9 @@ pub fn out_of_range(ssid: &str) -> Failure {
 pub fn prompt_expired(ssid: &str) -> Failure {
     fail(
         ErrorCode::PasswordRequired,
-        format!("{ssid} needs a password, and nobody gave one in time. Join it again to be asked again."),
+        format!(
+            "{ssid} needs a password, and nobody gave one in time. Join it again to be asked again."
+        ),
     )
 }
 

@@ -82,14 +82,6 @@ fn joining_wpa2_with_the_right_password_works() {
 }
 
 #[test]
-fn a_secured_network_without_a_password_is_refused_before_anything_is_created() {
-    let (world, _) = world();
-    let resp = join(&world, "Home", None);
-    assert_eq!(resp["err"]["code"], "password_required", "{resp}");
-    assert_eq!(world.nm.profile_count(), 0);
-}
-
-#[test]
 fn a_wrong_password_names_the_network_and_leaves_no_profile() {
     let (world, wlan0) = world();
     world.nm.set_psk("Home", "right-password");

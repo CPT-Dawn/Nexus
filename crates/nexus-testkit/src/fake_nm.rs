@@ -350,7 +350,14 @@ impl Manager {
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no such connection".into()))?;
         let dev = device_index(device.as_str())?;
         // A saved profile brings its own (right) secrets.
-        tokio::spawn(activate(conn.clone(), self.0.clone(), dev, ssid, None, None));
+        tokio::spawn(activate(
+            conn.clone(),
+            self.0.clone(),
+            dev,
+            ssid,
+            None,
+            None,
+        ));
         Ok(opath(ACTIVE_PATH))
     }
 
@@ -509,7 +516,13 @@ where
         .map(|(name, _)| name.clone())
         .ok_or(None)?;
     let reply = conn
-        .call_method(Some(name.as_str()), AGENT_PATH, Some(AGENT_IFACE), method, body)
+        .call_method(
+            Some(name.as_str()),
+            AGENT_PATH,
+            Some(AGENT_IFACE),
+            method,
+            body,
+        )
         .await
         .map_err(Some)?;
     model.lock().unwrap().agent_calls.push(method.to_owned());

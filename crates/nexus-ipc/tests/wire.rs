@@ -159,3 +159,50 @@ fn status_event_line() {
     assert_eq!(v["event"], "status_changed");
     assert_eq!(v["status"]["state"], "unavailable");
 }
+
+#[test]
+fn a_secret_answer_parses_but_never_shows_its_secret_in_debug() {
+    let line = r#"{"v":1,"id":3,"op":"secret_answer","prompt":7,"secret":"hunter2hunter2"}"#;
+    let req = nexus_ipc::parse_request(line).expect("parses");
+    assert!(
+        !format!("{req:?}").contains("hunter2"),
+        "Debug must redact: {req:?}"
+    );
+    let Op::SecretAnswer { prompt, secret } = req.op else {
+        panic!("wrong op");
+    };
+    assert_eq!((prompt, secret.expose()), (7, "hunter2hunter2"));
+}
+
+#[test]
+fn prompt_events_carry_no_secret_field() {
+    let line = EventLine {
+        v: 1,
+        event: Event::SecretPromptOpened {
+            prompt: nexus_ipc::Prompt {
+                id: 4,
+                kind: nexus_ipc::PromptKind::WifiPassword,
+                network: "Home".into(),
+                network_id: nexus_ipc::network_id(b"Home"),
+                retry: true,
+                message: "Wrong password for Home. Try again.".into(),
+                expires_in: 120,
+            },
+        },
+    };
+    let v: Value = serde_json::from_str(&encode(&line)).unwrap();
+    assert_eq!(v["event"], "secret_prompt_opened");
+    assert_eq!(v["prompt"]["kind"], "wifi_password");
+    let keys: Vec<&str> = v["prompt"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert!(
+        !keys
+            .iter()
+            .any(|k| k.contains("secret") || k.contains("password")),
+        "{keys:?}"
+    );
+}

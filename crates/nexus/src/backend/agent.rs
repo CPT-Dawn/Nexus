@@ -14,8 +14,8 @@ use std::time::Duration;
 
 use futures_util::StreamExt as _;
 use nexus_ipc::PromptKind;
-use zbus::{OwnedObjectPath, OwnedVariant, Variant};
 use zbus::{Connection, interface};
+use zbus::{OwnedObjectPath, OwnedVariant, Variant};
 
 use crate::secrets::{Broker, Request, Resolution};
 
@@ -118,7 +118,7 @@ impl Agent {
         {
             Resolution::Answered(secret) => {
                 let value = OwnedVariant::try_from(Variant::from(secret.expose()))
-                    .map_err(|e| AgentError::ZBus(e.into()))?;
+                    .map_err(AgentError::ZBus)?;
                 Ok(HashMap::from([(
                     setting_name,
                     HashMap::from([(field, value)]),
@@ -146,7 +146,9 @@ impl Agent {
 /// Returns only when the bus connection fails.
 pub async fn keep_registered(conn: &Connection, broker: Arc<Broker>) -> zbus::Result<()> {
     use zbus::{MatchRule, MessageStream, message::Type};
-    conn.object_server().at(AGENT_PATH, Agent { broker }).await?;
+    conn.object_server()
+        .at(AGENT_PATH, Agent { broker })
+        .await?;
     // Watch first, so an owner change during registration is not missed.
     let rule = MatchRule::builder()
         .msg_type(Type::Signal)
@@ -188,7 +190,10 @@ pub async fn keep_registered(conn: &Connection, broker: Arc<Broker>) -> zbus::Re
 }
 
 async fn register(conn: &Connection) -> zbus::Result<()> {
-    AgentManagerProxy::new(conn).await?.register(IDENTIFIER).await
+    AgentManagerProxy::new(conn)
+        .await?
+        .register(IDENTIFIER)
+        .await
 }
 
 async fn has_owner(conn: &Connection) -> bool {
