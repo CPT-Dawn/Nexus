@@ -2,10 +2,11 @@
 //! trait, never on NetworkManager types, so another Backend can be added later.
 
 pub mod nm;
+mod wifi;
 
 use std::future::Future;
 
-use nexus_ipc::Status;
+use nexus_ipc::{ScanOutcome, Status, WifiList};
 
 /// What a Backend can do, so Front ends can hide what is not there.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -17,14 +18,28 @@ pub struct Capabilities {
     pub portal_detection: bool,
 }
 
-/// A failure that is not "the Backend is not running" (that is a [`Status`]).
+/// Why a Backend call failed. For `status`, "not running" is a [`Status`]
+/// instead; the other calls have nothing to show without the Backend.
 #[derive(Debug)]
-pub struct BackendError(pub String);
+pub enum BackendError {
+    /// The Backend is not running or not reachable.
+    Unavailable,
+    Failed(String),
+}
 
 impl std::fmt::Display for BackendError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        match self {
+            BackendError::Unavailable => f.write_str("NetworkManager is not running"),
+            BackendError::Failed(msg) => f.write_str(msg),
+        }
     }
+}
+
+/// `CLOCK_BOOTTIME` in milliseconds: the clock NetworkManager stamps scans with.
+pub fn boottime_ms() -> i64 {
+    let t = rustix::time::clock_gettime(rustix::time::ClockId::Boottime);
+    t.tv_sec * 1000 + t.tv_nsec / 1_000_000
 }
 
 pub trait Backend: Send + Sync + 'static {
@@ -34,4 +49,15 @@ pub trait Backend: Send + Sync + 'static {
     /// Overall state and the primary Link. A Backend that is not running
     /// yields `State::Unavailable`, not an error.
     fn status(&self) -> impl Future<Output = Result<Status, BackendError>> + Send;
+
+    /// Nearby Networks (one per SSID) and saved Networks out of range.
+    fn wifi_list(&self) -> impl Future<Output = Result<WifiList, BackendError>> + Send;
+
+    /// Refreshes the Wi-Fi list, reusing recent results instead of
+    /// re-requesting inside the Backend's rate limit.
+    fn wifi_scan(&self) -> impl Future<Output = Result<ScanOutcome, BackendError>> + Send;
+
+    /// Resolves after the Backend changed, once per burst: a storm of
+    /// property changes is coalesced into a single tick. Cancel-safe.
+    fn changed(&self) -> impl Future<Output = ()> + Send;
 }

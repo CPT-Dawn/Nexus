@@ -240,10 +240,16 @@ impl Wire {
 
     /// Reads one line, waiting at most `wait`; `None` when nothing arrived.
     pub fn try_read_line(&mut self, wait: Duration) -> Option<Value> {
-        self.reader.get_ref().set_read_timeout(Some(wait)).expect("timeout");
+        self.reader
+            .get_ref()
+            .set_read_timeout(Some(wait))
+            .expect("timeout");
         let mut buf = String::new();
         let got = matches!(self.reader.read_line(&mut buf), Ok(n) if n > 0);
-        self.reader.get_ref().set_read_timeout(Some(PATIENCE)).expect("timeout");
+        self.reader
+            .get_ref()
+            .set_read_timeout(Some(PATIENCE))
+            .expect("timeout");
         got.then(|| serde_json::from_str(&buf).expect("daemon speaks JSON"))
     }
 

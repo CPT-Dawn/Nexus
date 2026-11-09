@@ -2,6 +2,7 @@ mod backend;
 mod cli;
 mod config;
 mod daemon;
+mod wifi_view;
 
 use std::process::ExitCode;
 
@@ -25,6 +26,11 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Nearby Wi-Fi Networks and scanning.
+    Wifi {
+        #[command(subcommand)]
+        action: WifiAction,
+    },
     /// Read or change the config file.
     Config {
         #[command(subcommand)]
@@ -42,6 +48,22 @@ enum Command {
 }
 
 #[derive(Subcommand)]
+enum WifiAction {
+    /// List nearby Networks (one per SSID) and saved ones out of range.
+    List {
+        /// Print the list as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Ask for a fresh scan (rate limited by NetworkManager; recent results are reused).
+    Scan {
+        /// Print the outcome as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum ConfigAction {
     /// Print the effective config, or one value by dotted key (e.g. `connectivity.url`).
     Get { key: Option<String> },
@@ -52,6 +74,12 @@ enum ConfigAction {
 fn main() -> ExitCode {
     match Args::parse().command {
         Command::Status { json } => cli::status(json),
+        Command::Wifi {
+            action: WifiAction::List { json },
+        } => cli::wifi_list(json),
+        Command::Wifi {
+            action: WifiAction::Scan { json },
+        } => cli::wifi_scan(json),
         Command::Config {
             action: ConfigAction::Get { key },
         } => cli::config_get(key),

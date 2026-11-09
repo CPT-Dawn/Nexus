@@ -6,6 +6,8 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use nexus_ipc::{ErrorCode, Event, Op, Request, Response};
+
+use crate::backend::BackendError;
 use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 
@@ -43,6 +45,7 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
     let (events, _) = broadcast::channel::<Event>(64);
     let settings = Arc::new(Settings::load(config::default_path(), events.clone()));
     tokio::spawn(config::watch(settings.clone()));
+    tokio::spawn(watch_wifi(backend.clone(), events.clone()));
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -71,6 +74,24 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Tells subscribers when the Wi-Fi list changes. The Backend coalesces each
+/// burst of changes into one tick; a tick that changed nothing visible is not
+/// worth an event.
+async fn watch_wifi<B: Backend>(backend: Arc<B>, events: broadcast::Sender<Event>) {
+    let mut last = backend.wifi_list().await.ok();
+    loop {
+        backend.changed().await;
+        match backend.wifi_list().await {
+            Ok(list) if last.as_ref() != Some(&list) => {
+                last = Some(list.clone());
+                let _ = events.send(Event::NetworksChanged { wifi: list });
+            }
+            Ok(_) => {}
+            Err(e) => tracing::debug!("wifi list unavailable: {e}"),
+        }
+    }
+}
+
 /// One request in, one response out.
 async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> Response {
     match req.op {
@@ -79,13 +100,29 @@ async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> R
                 req.id,
                 serde_json::to_value(status).expect("status serializes"),
             ),
-            Err(e) => Response::err(Some(req.id), ErrorCode::Internal, e.to_string()),
+            Err(e) => backend_reply::<()>(req.id, Err(e)),
         },
+        Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
+        Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
         Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
         Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
         // `Subscribe` is handled by the connection itself.
         // `Op` is non_exhaustive: a newer client op this build cannot serve.
         _ => Response::err(Some(req.id), ErrorCode::UnknownOp, "op not supported"),
+    }
+}
+
+fn backend_reply<T: serde::Serialize>(id: u64, result: Result<T, BackendError>) -> Response {
+    match result {
+        Ok(v) => Response::ok(id, serde_json::to_value(v).expect("wire types serialize")),
+        Err(BackendError::Unavailable) => Response::err(
+            Some(id),
+            ErrorCode::BackendUnavailable,
+            BackendError::Unavailable.to_string(),
+        ),
+        Err(e @ BackendError::Failed(_)) => {
+            Response::err(Some(id), ErrorCode::Internal, e.to_string())
+        }
     }
 }
 

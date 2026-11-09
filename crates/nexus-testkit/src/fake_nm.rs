@@ -24,10 +24,10 @@ use std::sync::{Arc, Mutex};
 
 use tokio::runtime::Runtime;
 use zbus::OwnedObjectPath;
-use zbus::{OwnedVariant, Variant};
 use zbus::fdo::ObjectManager;
 use zbus::object_server::SignalEmitter;
 use zbus::{Connection, connection, interface};
+use zbus::{OwnedVariant, Variant};
 
 const MANAGER_PATH: &str = "/org/freedesktop/NetworkManager";
 const ACTIVE_PATH: &str = "/org/freedesktop/NetworkManager/ActiveConnection/1";
@@ -55,7 +55,7 @@ fn profile_path(n: usize) -> String {
 /// Milliseconds of `CLOCK_BOOTTIME`, the clock NetworkManager's `LastScan` uses.
 pub fn boottime_ms() -> i64 {
     let t = rustix::time::clock_gettime(rustix::time::ClockId::Boottime);
-    t.tv_sec * 1000 + i64::from(t.tv_nsec) / 1_000_000
+    t.tv_sec * 1000 + t.tv_nsec / 1_000_000
 }
 
 /// An access point to place in range of a Wi-Fi Device.
@@ -228,7 +228,9 @@ impl Manager {
 
     fn get_devices(&self) -> Vec<OwnedObjectPath> {
         let m = self.0.lock().unwrap();
-        (0..m.devices.len()).map(|n| opath(&device_path(n))).collect()
+        (0..m.devices.len())
+            .map(|n| opath(&device_path(n)))
+            .collect()
     }
 
     #[zbus(signal, name = "StateChanged")]
@@ -338,7 +340,11 @@ impl Wireless {
 impl Wireless {
     fn all(&self) -> Vec<OwnedObjectPath> {
         let m = self.0.lock().unwrap();
-        m.devices[self.1].aps.iter().map(|id| opath(&ap_path(*id))).collect()
+        m.devices[self.1]
+            .aps
+            .iter()
+            .map(|id| opath(&ap_path(*id)))
+            .collect()
     }
 }
 
@@ -394,7 +400,9 @@ struct Settings(Shared);
 impl Settings {
     fn list_connections(&self) -> Vec<OwnedObjectPath> {
         let m = self.0.lock().unwrap();
-        (0..m.profiles.len()).map(|n| opath(&profile_path(n))).collect()
+        (0..m.profiles.len())
+            .map(|n| opath(&profile_path(n)))
+            .collect()
     }
 }
 
@@ -568,7 +576,10 @@ impl FakeNm {
         };
         let model = self.model.clone();
         self.with_conn(move |c| async move {
-            let _ = c.object_server().at(ap_path(id), AccessPoint(model, id)).await;
+            let _ = c
+                .object_server()
+                .at(ap_path(id), AccessPoint(model, id))
+                .await;
             if let Ok(w) = c
                 .object_server()
                 .interface::<_, Wireless>(device_path(device.0))
@@ -582,23 +593,34 @@ impl FakeNm {
 
     /// Takes an access point out of range.
     pub fn remove_ap(&self, device: DeviceId, ap: ApId) {
-        self.model.lock().unwrap().devices[device.0].aps.retain(|i| *i != ap.0);
+        self.model.lock().unwrap().devices[device.0]
+            .aps
+            .retain(|i| *i != ap.0);
         self.with_conn(move |c| async move {
             if let Ok(w) = c
                 .object_server()
                 .interface::<_, Wireless>(device_path(device.0))
                 .await
             {
-                let _ = Wireless::access_point_removed(w.signal_emitter(), opath(&ap_path(ap.0)))
-                    .await;
+                let _ =
+                    Wireless::access_point_removed(w.signal_emitter(), opath(&ap_path(ap.0))).await;
             }
-            let _ = c.object_server().remove::<AccessPoint, _>(ap_path(ap.0)).await;
+            let _ = c
+                .object_server()
+                .remove::<AccessPoint, _>(ap_path(ap.0))
+                .await;
         });
     }
 
     /// Changes an access point's signal and emits `PropertiesChanged`.
     pub fn set_strength(&self, ap: ApId, strength: u8) {
-        self.model.lock().unwrap().aps.get_mut(&ap.0).expect("known ap").strength = strength;
+        self.model
+            .lock()
+            .unwrap()
+            .aps
+            .get_mut(&ap.0)
+            .expect("known ap")
+            .strength = strength;
         self.with_conn(move |c| async move {
             if let Ok(i) = c
                 .object_server()
@@ -639,7 +661,10 @@ impl FakeNm {
         };
         let model = self.model.clone();
         self.with_conn(move |c| async move {
-            let _ = c.object_server().at(profile_path(n), Profile(model, n)).await;
+            let _ = c
+                .object_server()
+                .at(profile_path(n), Profile(model, n))
+                .await;
         });
     }
 

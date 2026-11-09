@@ -6,7 +6,13 @@
 //! reference (`org.freedesktop.NetworkManager`,
 //! `org.freedesktop.NetworkManager.Connection.Active`).
 
-use nexus_ipc::{BackendInfo, Connectivity, Link, LinkKind, State, Status};
+use std::time::Duration;
+
+use futures_util::FutureExt as _;
+use futures_util::stream::{self, Stream, StreamExt as _};
+use nexus_ipc::{BackendInfo, Connectivity, Link, LinkKind, ScanOutcome, State, Status, WifiList};
+use std::pin::Pin;
+
 use tokio::sync::Mutex;
 use zbus::Connection;
 use zbus::OwnedObjectPath;
@@ -23,7 +29,7 @@ const SERVICE: &str = "org.freedesktop.NetworkManager";
     default_service = "org.freedesktop.NetworkManager",
     default_path = "/org/freedesktop/NetworkManager"
 )]
-trait NetworkManager {
+pub(super) trait NetworkManager {
     #[zbus(property)]
     fn state(&self) -> zbus::Result<u32>;
     #[zbus(property)]
@@ -32,6 +38,7 @@ trait NetworkManager {
     fn primary_connection(&self) -> zbus::Result<OwnedObjectPath>;
     #[zbus(property)]
     fn version(&self) -> zbus::Result<String>;
+    fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 }
 
 #[zbus::proxy(
@@ -45,9 +52,24 @@ trait ActiveConnection {
     fn kind(&self) -> zbus::Result<String>;
 }
 
-#[derive(Debug, Default)]
+/// Property-change bursts are folded into one update per tick.
+const TICK: Duration = Duration::from_millis(100);
+/// How long to wait before re-opening a watch that could not be opened.
+const RETRY: Duration = Duration::from_secs(2);
+
+type Signals = Pin<Box<dyn Stream<Item = zbus::Result<zbus::Message>> + Send>>;
+
+#[derive(Default)]
 pub struct NetworkManager {
     conn: Mutex<Option<Connection>>,
+    /// Every signal NetworkManager sends, plus it appearing and vanishing.
+    watch: Mutex<Option<Signals>>,
+}
+
+impl std::fmt::Debug for NetworkManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NetworkManager").finish_non_exhaustive()
+    }
 }
 
 impl NetworkManager {
@@ -109,6 +131,52 @@ impl NetworkManager {
         })
     }
 
+    /// Runs `read` on the bus; a failure becomes `Unavailable` when
+    /// NetworkManager is not on the bus, `Failed` when it is.
+    async fn with_bus<T, F, Fut>(&self, read: F) -> Result<T, BackendError>
+    where
+        F: FnOnce(Connection) -> Fut,
+        Fut: std::future::Future<Output = zbus::Result<T>>,
+    {
+        let conn = self.connection().await.map_err(|e| {
+            tracing::debug!("system bus unreachable: {e}");
+            BackendError::Unavailable
+        })?;
+        match read(conn.clone()).await {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if Self::has_owner(&conn).await {
+                    Err(BackendError::Failed(format!(
+                        "NetworkManager read failed: {e}"
+                    )))
+                } else {
+                    self.forget_connection().await;
+                    Err(BackendError::Unavailable)
+                }
+            }
+        }
+    }
+
+    async fn open_watch(&self) -> zbus::Result<Signals> {
+        use zbus::message::Type;
+        use zbus::{MatchRule, MessageStream};
+        let conn = self.connection().await?;
+        let nm_signals = MatchRule::builder()
+            .msg_type(Type::Signal)
+            .sender(SERVICE)
+            .build()?;
+        let owner = MatchRule::builder()
+            .msg_type(Type::Signal)
+            .sender("org.freedesktop.DBus")
+            .interface("org.freedesktop.DBus")
+            .member("NameOwnerChanged")
+            .arg(0, SERVICE)
+            .build()?;
+        let a = MessageStream::for_match_rule(nm_signals, &conn, None).await?;
+        let b = MessageStream::for_match_rule(owner, &conn, None).await?;
+        Ok(Box::pin(stream::select(a, b)))
+    }
+
     async fn has_owner(conn: &Connection) -> bool {
         let Ok(bus) = DBusProxy::new(conn).await else {
             return false;
@@ -128,6 +196,46 @@ impl Backend for NetworkManager {
         }
     }
 
+    async fn wifi_list(&self) -> Result<WifiList, BackendError> {
+        self.with_bus(|c| async move { super::wifi::list(&c).await })
+            .await
+    }
+
+    async fn wifi_scan(&self) -> Result<ScanOutcome, BackendError> {
+        self.with_bus(|c| async move { super::wifi::scan(&c).await })
+            .await
+    }
+
+    async fn changed(&self) {
+        loop {
+            let mut guard = self.watch.lock().await;
+            if guard.is_none() {
+                match self.open_watch().await {
+                    Ok(s) => *guard = Some(s),
+                    Err(e) => {
+                        tracing::debug!("cannot watch NetworkManager yet: {e}");
+                        self.forget_connection().await;
+                        drop(guard);
+                        tokio::time::sleep(RETRY).await;
+                        continue;
+                    }
+                }
+            }
+            let signals = guard.as_mut().expect("just opened");
+            if signals.next().await.is_none() {
+                *guard = None; // the bus went away; reopen
+                drop(guard);
+                self.forget_connection().await;
+                tokio::time::sleep(RETRY).await;
+                continue;
+            }
+            // Let the burst land, then swallow it whole.
+            tokio::time::sleep(TICK).await;
+            while signals.next().now_or_never().flatten().is_some() {}
+            return;
+        }
+    }
+
     async fn status(&self) -> Result<Status, BackendError> {
         let conn = match self.connection().await {
             Ok(c) => c,
@@ -140,7 +248,9 @@ impl Backend for NetworkManager {
             Ok(status) => Ok(status),
             Err(e) => {
                 if Self::has_owner(&conn).await {
-                    Err(BackendError(format!("NetworkManager read failed: {e}")))
+                    Err(BackendError::Failed(format!(
+                        "NetworkManager read failed: {e}"
+                    )))
                 } else {
                     // NetworkManager is not (yet) on the bus.
                     self.forget_connection().await;
