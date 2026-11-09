@@ -310,10 +310,12 @@ pub struct PasswordField {
 
 impl PasswordField {
     pub fn new(prompt: Prompt) -> Self {
+        // A user name is not secret: show it as it is typed.
+        let reveal = prompt.field == nexus_ipc::PromptField::Username;
         Self {
             prompt,
             text: Zeroizing::new(String::new()),
-            reveal: false,
+            reveal,
         }
     }
 

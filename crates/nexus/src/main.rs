@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod daemon;
 mod doctor;
+mod keyring;
 mod profile_cli;
 mod secrets;
 mod tether_view;
@@ -179,13 +180,18 @@ enum VpnAction {
         #[arg(long)]
         json: bool,
     },
-    /// Save a WireGuard `.conf` file as a VPN.
+    /// Save a WireGuard `.conf`, an OpenVPN `.ovpn` or another provider file
+    /// as a VPN.
     Import {
         /// The file to read.
         file: String,
-        /// What to call the VPN (default: the file name without `.conf`).
+        /// What to call the VPN (default: the file name without its extension).
         #[arg(long)]
         name: Option<String>,
+        /// The plugin that reads the file (openvpn, vpnc, ...). Default: by
+        /// extension (`.ovpn`, `.pcf`); anything else is read as WireGuard.
+        #[arg(long = "type", value_name = "PLUGIN")]
+        kind: Option<String>,
         /// Print the result as JSON.
         #[arg(long)]
         json: bool,
@@ -490,7 +496,12 @@ fn main() -> ExitCode {
             VpnAction::List { json } => vpn_cli::list(json),
             VpnAction::Up { name, json } => vpn_cli::toggle(&name, true, json),
             VpnAction::Down { name, json } => vpn_cli::toggle(&name, false, json),
-            VpnAction::Import { file, name, json } => vpn_cli::import(&file, name, json),
+            VpnAction::Import {
+                file,
+                name,
+                kind,
+                json,
+            } => vpn_cli::import(&file, name, kind, json),
             VpnAction::Create {
                 name,
                 addresses,

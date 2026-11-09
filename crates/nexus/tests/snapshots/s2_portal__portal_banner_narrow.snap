@@ -6,7 +6,7 @@ expression: frame
  Nexus  VPN ▾  4/6                                 ● Portal
 ╭ VPN ─────────────────────────────────────────────────────╮
 │ No VPNs yet.                                             │
-│ Press i to import a WireGuard .conf,                     │
+│ Press i to import a .conf or .ovpn,                      │
 │ or c to create a tunnel.                                 │
 │                                                          │
 │                                                          │

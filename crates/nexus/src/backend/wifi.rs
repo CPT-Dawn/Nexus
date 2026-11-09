@@ -826,6 +826,23 @@ pub async fn reveal(conn: &Connection, network: &str) -> zbus::Result<Result<Wif
         Some("none") => (ShareAuth::Wep, "wep-key0"),
         Some(_) => return Ok(Err(text::cannot_share(&name))),
     };
+    // A Profile kept in the keyring (agent-owned secret) is read from there.
+    let kept = all
+        .get("802-11-wireless-security")
+        .and_then(|s| s.get("psk-flags"))
+        .and_then(|v| u32::try_from(v.try_clone().ok()?).ok())
+        .is_some_and(|f| f & 0x1 != 0);
+    if kept {
+        return Ok(match crate::keyring::Keyring.lookup(&p.uuid).await {
+            Ok(Some(pw)) if !pw.is_empty() => Ok(WifiShare {
+                ssid: name,
+                auth,
+                password: Some(Secret::new(pw.to_string())),
+            }),
+            Ok(_) => Err(text::no_stored_password(&name)),
+            Err(e) => Err(text::keyring_unavailable(&name, &e.0)),
+        });
+    }
     let secrets = match proxy.get_secrets("802-11-wireless-security").await {
         Ok(s) => s,
         Err(e) if is_denial(&e) => return Ok(Err(text::reveal_denied(&name))),

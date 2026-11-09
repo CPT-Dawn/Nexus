@@ -187,6 +187,11 @@ struct VpnModel {
     active: u32,
     /// Activation ends in failure (state 4) instead of success.
     fails: bool,
+    /// The secret names (hints) NetworkManager asks the agent for before the
+    /// VPN comes up, like a plugin that needs a password or a code.
+    asks: Option<Vec<String>>,
+    /// What the agent answered the last time (`vpn.secrets`).
+    answers: Option<HashMap<String, String>>,
 }
 
 /// A checkpoint: the Profiles as they were, to put back on rollback.
@@ -597,15 +602,20 @@ impl Manager {
             bt::start(conn, &self.0, dev);
             return Ok(opath(ACTIVE_PATH));
         }
-        // A saved profile brings its own (right) secrets.
-        let task = tokio::spawn(activate(
-            conn.clone(),
-            self.0.clone(),
-            dev,
-            ssid,
-            None,
-            None,
-        ));
+        // A saved profile brings its own (right) secrets, unless they are the
+        // agent's (a Profile kept in the keyring): then NetworkManager asks.
+        let ask = {
+            let m = self.0.lock().unwrap();
+            m.profiles[n]
+                .as_ref()
+                .filter(|p| agent_owned(p))
+                .map(|p| Ask {
+                    settings: agent_view(p),
+                    path: profile_path(n),
+                    wrong_inline: false,
+                })
+        };
+        let task = tokio::spawn(activate(conn.clone(), self.0.clone(), dev, ssid, None, ask));
         self.0.lock().unwrap().tasks.push(task.abort_handle());
         Ok(opath(ACTIVE_PATH))
     }
@@ -897,11 +907,49 @@ async fn start_vpn(conn: &Connection, model: &Shared, n: usize) -> zbus::fdo::Re
     let (c, m) = (conn.clone(), model.clone());
     let task = tokio::spawn(async move {
         tokio::task::yield_now().await;
-        let fails = m.lock().unwrap().profiles[n]
-            .as_ref()
-            .and_then(|p| p.vpn.as_ref())
-            .is_some_and(|v| v.fails);
-        if fails {
+        let (fails, asks, settings) = {
+            let guard = m.lock().unwrap();
+            let v = guard.profiles[n].as_ref().and_then(|p| p.vpn.as_ref());
+            (
+                v.is_some_and(|v| v.fails),
+                v.and_then(|v| v.asks.clone()),
+                v.map(|v| clone_settings(&v.settings)),
+            )
+        };
+        let mut refused = false;
+        if let (Some(hints), Some(settings)) = (asks, settings) {
+            let body = (
+                settings,
+                opath(&profile_path(n)),
+                "vpn",
+                hints,
+                ALLOW_INTERACTION,
+            );
+            match call_agent(&c, &m, "GetSecrets", &body).await {
+                Ok(reply) => {
+                    let secrets: Option<HashMap<String, String>> = reply
+                        .body()
+                        .deserialize::<SettingsDict>()
+                        .ok()
+                        .and_then(|mut all| {
+                            all.remove("vpn")?
+                                .remove("secrets")?
+                                .try_clone()
+                                .ok()?
+                                .try_into()
+                                .ok()
+                        });
+                    if let Some(v) = m.lock().unwrap().profiles[n]
+                        .as_mut()
+                        .and_then(|p| p.vpn.as_mut())
+                    {
+                        v.answers = secrets;
+                    }
+                }
+                Err(_) => refused = true,
+            }
+        }
+        if fails || refused {
             end_vpn(&c, &m, n).await;
         } else {
             vpn_state(&c, &m, n, 2).await;
@@ -1061,6 +1109,50 @@ fn clone_settings(s: &SettingsDict) -> SettingsDict {
                 .collect();
             (k.clone(), inner)
         })
+        .collect()
+}
+
+/// Whether the profile's Wi-Fi secret is the agent's (`psk-flags` has bit 1).
+fn agent_owned(p: &ProfileModel) -> bool {
+    p.settings
+        .get(SECURITY)
+        .and_then(|s| s.get("psk-flags"))
+        .and_then(|v| u32::try_from(v.try_clone().ok()?).ok())
+        .is_some_and(|f| f & 1 != 0)
+}
+
+/// What NetworkManager tells an agent about a profile: identity and the
+/// secret flags, never the secret.
+fn agent_view(p: &ProfileModel) -> SettingsDict {
+    let v = |v: Variant<'_>| OwnedVariant::try_from(v).expect("plain value");
+    let mut security = p
+        .settings
+        .get(SECURITY)
+        .map(clone_section)
+        .unwrap_or_default();
+    if let Some((key_mgmt, _)) = &p.secret {
+        security.insert("key-mgmt".to_owned(), v(Variant::from(key_mgmt.clone())));
+    }
+    SettingsDict::from([
+        (
+            "connection".to_owned(),
+            HashMap::from([
+                ("id".to_owned(), v(Variant::from(p.id.clone()))),
+                ("uuid".to_owned(), v(Variant::from(p.uuid.clone()))),
+                ("type".to_owned(), v(Variant::from("802-11-wireless"))),
+            ]),
+        ),
+        (
+            "802-11-wireless".to_owned(),
+            HashMap::from([("ssid".to_owned(), v(Variant::from(p.ssid.clone())))]),
+        ),
+        (SECURITY.to_owned(), security),
+    ])
+}
+
+fn clone_section(s: &HashMap<String, OwnedVariant>) -> HashMap<String, OwnedVariant> {
+    s.iter()
+        .filter_map(|(k, v)| Some((k.clone(), v.try_clone().ok()?)))
         .collect()
 }
 
@@ -1232,8 +1324,13 @@ async fn activate(
     }
     set_device_state(&conn, &model, dev, 100, 0).await;
     if let (Some(secrets), Some(ask)) = (agent_secrets, ask) {
-        // NetworkManager hands the agent what it learned, to store if it wants to.
-        let _ = call_agent(&conn, &model, "SaveSecrets", &(secrets, opath(&ask.path))).await;
+        // NetworkManager hands the agent what it learned, to store if it wants
+        // to: the whole connection, secrets included.
+        let mut full = clone_settings(&ask.settings);
+        for (setting, values) in secrets {
+            full.entry(setting).or_default().extend(values);
+        }
+        let _ = call_agent(&conn, &model, "SaveSecrets", &(full, opath(&ask.path))).await;
     }
 }
 
@@ -1468,6 +1565,8 @@ impl Settings {
                     settings: clone_settings(&connection),
                     active: 0,
                     fails: false,
+                    asks: None,
+                    answers: None,
                 }),
             }));
             m.profiles.len() - 1
@@ -1577,7 +1676,28 @@ impl Profile {
             p.persisted = true;
             p.version += 1;
             p.settings = settings;
-            p.settings.remove(SECURITY);
+            // Like NetworkManager: the secret itself is not kept with the
+            // settings, but its flags are, and a secret that is not the
+            // agent's moves to the stored one.
+            let psk = p
+                .settings
+                .get_mut(SECURITY)
+                .and_then(|s| s.remove("psk"))
+                .and_then(|v| String::try_from(v).ok());
+            let agent_owned = p
+                .settings
+                .get(SECURITY)
+                .and_then(|s| s.get("psk-flags"))
+                .and_then(|v| u32::try_from(v.try_clone().ok()?).ok())
+                .is_some_and(|f| f & 1 != 0);
+            if agent_owned {
+                p.agent_secrets = true;
+                if let Some((_, secret)) = p.secret.as_mut() {
+                    secret.clear();
+                }
+            } else if let (Some(psk), Some((_, secret))) = (psk, p.secret.as_mut()) {
+                *secret = psk;
+            }
         }
     }
 }
@@ -1634,9 +1754,9 @@ impl Profile {
         }
         // Like NetworkManager, GetSettings leaves the secret itself out.
         if let Some((key_mgmt, _)) = &p.secret {
-            let mut security = HashMap::new();
-            security.insert("key-mgmt".to_owned(), v(Variant::from(key_mgmt.clone())));
-            all.insert("802-11-wireless-security".to_owned(), security);
+            all.entry(SECURITY.to_owned())
+                .or_default()
+                .insert("key-mgmt".to_owned(), v(Variant::from(key_mgmt.clone())));
         }
         all
     }
@@ -1664,6 +1784,7 @@ impl Profile {
         let mut out = HashMap::new();
         if let Some((_, secret)) = &p.secret
             && setting == "802-11-wireless-security"
+            && !agent_owned(p)
         {
             let mut values = HashMap::new();
             values.insert(
@@ -1745,10 +1866,10 @@ impl Profile {
             set_device_state(conn, &self.0, dev, 30, 38).await; // CONNECTION_REMOVED
         }
         // Like NetworkManager, deleting a Profile in use drops its Link.
-        let (in_use, told_agent): (Vec<usize>, bool) = {
+        let (in_use, told_agent): (Vec<usize>, Option<SettingsDict>) = {
             let mut m = self.0.lock().unwrap();
             let gone = m.profiles[self.1].take();
-            let told_agent = gone.as_ref().is_some_and(|p| p.agent_secrets);
+            let told_agent = gone.as_ref().filter(|p| p.agent_secrets).map(agent_view);
             let bdaddr = gone.as_ref().and_then(|p| p.bdaddr.clone());
             let ssid = gone.map(|p| p.ssid).unwrap_or_default();
             let in_use = (0..m.devices.len())
@@ -1764,9 +1885,9 @@ impl Profile {
                 .collect();
             (in_use, told_agent)
         };
-        if told_agent {
+        if let Some(shown) = told_agent {
             // The agent may hold secrets of its own for this profile.
-            let body = (SettingsDict::new(), opath(&profile_path(self.1)));
+            let body = (shown, opath(&profile_path(self.1)));
             let _ = call_agent(conn, &self.0, "DeleteSecrets", &body).await;
         }
         for dev in in_use {
@@ -2361,12 +2482,28 @@ impl FakeNm {
 
     /// Adds a saved plugin VPN Profile (type `vpn`), e.g. an OpenVPN one.
     pub fn add_plugin_vpn(&self, uuid: &str, id: &str) {
+        self.add_plugin_vpn_of(uuid, id, None);
+    }
+
+    /// Like [`FakeNm::add_plugin_vpn`], with the plugin it belongs to
+    /// (`openvpn`: its `vpn.service-type` names the plugin).
+    pub fn add_plugin_vpn_of(&self, uuid: &str, id: &str, plugin: Option<&str>) {
         let v = |x: &str| OwnedVariant::try_from(Variant::from(x)).expect("plain value");
         let connection = HashMap::from([
             ("id".to_owned(), v(id)),
             ("uuid".to_owned(), v(uuid)),
             ("type".to_owned(), v("vpn")),
         ]);
+        let mut settings = HashMap::from([("connection".to_owned(), connection)]);
+        if let Some(plugin) = plugin {
+            settings.insert(
+                "vpn".to_owned(),
+                HashMap::from([(
+                    "service-type".to_owned(),
+                    v(&format!("org.freedesktop.NetworkManager.{plugin}")),
+                )]),
+            );
+        }
         let n = {
             let mut m = self.model.lock().unwrap();
             m.profiles.push(Some(ProfileModel {
@@ -2383,9 +2520,11 @@ impl FakeNm {
                 hotspot: None,
                 vpn: Some(VpnModel {
                     kind: "vpn".into(),
-                    settings: HashMap::from([("connection".to_owned(), connection)]),
+                    settings,
                     active: 0,
                     fails: false,
+                    asks: None,
+                    answers: None,
                 }),
             }));
             m.profiles.len() - 1
@@ -2431,6 +2570,32 @@ impl FakeNm {
         let n = self.vpn_slot(uuid);
         let mut m = self.model.lock().unwrap();
         m.profiles[n].as_mut().unwrap().vpn.as_mut().unwrap().fails = fails;
+    }
+
+    /// Makes activating this VPN ask the secret agent for these secrets
+    /// first (`["password"]`, `["username", "password", "otp"]`, ...), the
+    /// way a plugin that needs a login does. Without an answer it fails.
+    pub fn script_vpn_asks(&self, uuid: &str, secrets: &[&str]) {
+        let n = self.vpn_slot(uuid);
+        let mut m = self.model.lock().unwrap();
+        m.profiles[n].as_mut().unwrap().vpn.as_mut().unwrap().asks =
+            Some(secrets.iter().map(|s| (*s).to_owned()).collect());
+    }
+
+    /// What the secret agent handed over for this VPN on its last
+    /// activation (`vpn.secrets`), sorted by name.
+    pub fn vpn_answers(&self, uuid: &str) -> Vec<(String, String)> {
+        let n = self.vpn_slot(uuid);
+        let m = self.model.lock().unwrap();
+        let mut out: Vec<(String, String)> = m.profiles[n]
+            .as_ref()
+            .and_then(|p| p.vpn.as_ref())
+            .and_then(|v| v.answers.clone())
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        out.sort();
+        out
     }
 
     /// The private key stored in a WireGuard Profile.

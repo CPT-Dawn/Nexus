@@ -57,6 +57,10 @@ _Avoid_: device (that is a hardware interface), handset, PAN client
 A Network that tunnels all or some traffic through another machine: a WireGuard tunnel or a plugin VPN such as OpenVPN. Each VPN has a Profile, is up or down independently of the Link that carries it, and a VPN that goes down without being asked to is a drop, which Nexus announces.
 _Avoid_: tunnel (in the UI; fine for what a WireGuard peer pair is), connection
 
+**VPN plugin**:
+The NetworkManager add-on (its package, e.g. `networkmanager-openvpn`) that knows how to read a provider file such as `.ovpn` and run that kind of tunnel. A plugin VPN's Profile names its plugin; if the plugin is not installed Nexus says which package to install instead of failing obscurely.
+_Avoid_: driver, module
+
 **Public key**:
 The half of a WireGuard key pair that is safe to hand out: the other side of a tunnel needs it. Nexus generates the pair when it creates a VPN, and the private half never leaves NetworkManager except through a Reveal.
 _Avoid_: key (alone, ambiguous with the private key)
@@ -78,6 +82,10 @@ _Avoid_: client, UI
 **Secret prompt**:
 A request from the Backend for something only the user knows, such as a Wi-Fi password or a VPN one-time code, answered through a Front end.
 _Avoid_: password dialog, auth request
+
+**Keyring**:
+The user's Secret Service (gnome-keyring, KWallet, KeePassXC) as an opt-in home for one Profile's Wi-Fi password. A Profile "kept in the keyring" has its password marked agent-owned, so NetworkManager never stores it and asks the Daemon, which answers from the keyring. The system store (NetworkManager's own) stays the default.
+_Avoid_: wallet, vault, password manager
 
 **Reveal**:
 Reading a stored secret back out of the Backend, such as a saved Wi-Fi password, so it can be shown or turned into a QR code. Always an explicit act of the user, and the Backend must authorize it.

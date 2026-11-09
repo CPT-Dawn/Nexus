@@ -76,7 +76,7 @@ fn a_card_that_cannot_host_gets_an_explanation_and_a_refusal() {
     assert_eq!(world.nm.hotspot_profiles(), 0);
     // The CLI says it too, with its own exit code.
     let out = world.run_nexus(&["hotspot", "start"]);
-    assert_eq!(out.status.code(), Some(24));
+    assert_eq!(out.status.code(), Some(26));
     assert!(String::from_utf8_lossy(&out.stderr).contains("cannot host a Hotspot"));
     let out = world.run_nexus(&["hotspot", "status"]);
     assert!(out.status.success());
@@ -200,7 +200,7 @@ fn a_second_hotspot_is_refused_while_one_runs() {
     let (world, _) = world();
     assert!(start(&world, json!({"ssid": "One"})).get("ok").is_some());
     let resp = start(&world, json!({"ssid": "Two"}));
-    assert_eq!(resp["err"]["code"], "hotspot_failed", "{resp}");
+    assert_eq!(resp["err"]["code"], "join_failed", "{resp}");
     assert!(resp["err"]["message"].as_str().unwrap().contains("One"));
     assert_eq!(world.nm.hotspots(), vec!["One".to_owned()]);
 }
@@ -227,13 +227,13 @@ fn a_hotspot_that_dies_on_the_way_up_leaves_nothing_behind() {
     let (world, wlan0) = world();
     world.nm.script_hotspot_failure(true);
     let resp = start(&world, json!({"ssid": "Doomed"}));
-    assert_eq!(resp["err"]["code"], "hotspot_failed", "{resp}");
+    assert_eq!(resp["err"]["code"], "join_failed", "{resp}");
     assert!(resp["err"]["message"].as_str().unwrap().contains("Doomed"));
     assert_eq!(world.nm.hotspot_profiles(), 0);
     assert!(!world.nm.tethered(wlan0));
     assert_eq!(
         world.run_nexus(&["hotspot", "start"]).status.code(),
-        Some(25)
+        Some(8)
     );
 }
 

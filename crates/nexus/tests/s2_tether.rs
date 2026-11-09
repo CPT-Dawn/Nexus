@@ -45,7 +45,16 @@ impl Rig {
                 a.tether().bluetooth() == Bluetooth::Off
             });
         }
+        rig.settle();
         rig
+    }
+
+    /// Drain until the Daemon has been quiet for 400 ms, so a snapshot does
+    /// not race its burst of lists on a slow machine.
+    fn settle(&mut self) {
+        while let Ok(msg) = self.rx.recv_timeout(std::time::Duration::from_millis(400)) {
+            self.app.update(msg);
+        }
     }
 
     fn with(world: World, caps: Caps) -> Rig {
@@ -183,6 +192,8 @@ fn enter_with_bluetooth_off_toasts_how_to_turn_it_on() {
     assert!(rig.toast().contains("Bluetooth is off"), "{}", rig.toast());
     assert!(rig.app.toast().unwrap().bad);
     assert!(rig.app.tether().busy.is_none());
+    rig.settle();
+    assert!(rig.toast().contains("Bluetooth is off"), "{}", rig.toast());
     insta::assert_snapshot!("tether_bluetooth_off_toast", rig.text(STANDARD));
 }
 

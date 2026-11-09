@@ -37,8 +37,9 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::UnknownVpn => 21,
         ErrorCode::InvalidConfig => 22,
         ErrorCode::VpnFailed => 23,
-        ErrorCode::HotspotUnsupported => 24,
-        ErrorCode::HotspotFailed => 25,
+        ErrorCode::MissingPlugin => 24,
+        ErrorCode::KeyringUnavailable => 25,
+        ErrorCode::HotspotUnsupported => 26,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -260,6 +261,12 @@ pub fn wifi_join(ssid: &str, source: PasswordSource, json: bool) -> ExitCode {
     }
     // No password given: the Daemon opens a Secret prompt if the Network needs
     // one, and this terminal answers it.
+    answering_prompts(op, &network, show)
+}
+
+/// Runs `op` while this terminal answers the Secret prompts it opens for
+/// `network` (a Network id, or a VPN Profile id).
+pub fn answering_prompts(op: Op, network: &str, show: impl FnOnce(Value)) -> ExitCode {
     let (mut call, mut events) = match (Connection::connect(), Connection::connect()) {
         (Ok(a), Ok(b)) => (a, b),
         (Err(e), _) | (_, Err(e)) => return unreachable(&e),
@@ -643,14 +650,15 @@ mod tests {
             ErrorCode::UnknownVpn,
             ErrorCode::InvalidConfig,
             ErrorCode::VpnFailed,
+            ErrorCode::MissingPlugin,
             ErrorCode::HotspotUnsupported,
-            ErrorCode::HotspotFailed,
             ErrorCode::BluetoothOff,
             ErrorCode::NoPhone,
             ErrorCode::UnknownPhone,
             ErrorCode::InvalidSettings,
             ErrorCode::Conflict,
             ErrorCode::NothingPending,
+            ErrorCode::KeyringUnavailable,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

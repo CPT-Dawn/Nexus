@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use nexus_ipc::{ErrorCode, Event, Failure, Prompt, PromptClosed, PromptKind, Secret};
+use nexus_ipc::{ErrorCode, Event, Failure, Prompt, PromptClosed, PromptField, PromptKind, Secret};
 use tokio::sync::{broadcast, oneshot};
 
 use crate::config::Settings;
@@ -21,7 +21,12 @@ use crate::text;
 #[derive(Debug, Clone)]
 pub struct Request {
     pub kind: PromptKind,
-    /// The Network's name, for the sentence.
+    /// What is typed (a plugin VPN asks for several things).
+    pub field: PromptField,
+    /// A sentence of the Backend's own (a VPN plugin's message), used instead
+    /// of the stock one.
+    pub message: Option<String>,
+    /// The Network's name (or the VPN's), for the sentence.
     pub network: String,
     /// `WifiNetwork.id`.
     pub network_id: String,
@@ -139,10 +144,16 @@ impl Broker {
                 state.rejected.remove(i);
             }
             let retry = req.retry || was_rejected.is_some();
+            let message = match (req.kind, req.message) {
+                (_, Some(own)) => own,
+                (PromptKind::VpnSecret, None) => text::vpn_prompt(&req.network, req.field, retry),
+                _ => text::password_prompt(&req.network, retry),
+            };
             let prompt = Prompt {
                 id,
                 kind: req.kind,
-                message: text::password_prompt(&req.network, retry),
+                field: req.field,
+                message,
                 network: req.network,
                 network_id: req.network_id,
                 retry,

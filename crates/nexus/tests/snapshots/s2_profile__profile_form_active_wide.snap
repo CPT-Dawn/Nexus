@@ -19,11 +19,11 @@ expression: self.text(size)
 │                                     │   MAC address  permanent (hardware)                          │                                     │
 │                                     │   Metered      no                                            │                                     │
 │                                     │   Priority     0                                             │                                     │
+│                                     │   Keyring      no, system store                              │                                     │
 │                                     │  In use: you will be asked to keep the change.               │                                     │
 │                                     │                                                              │                                     │
 │                                     │ tab next  space change  enter apply  esc cancel              │                                     │
 │                                     ╰──────────────────────────────────────────────────────────────╯                                     │
-│                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │

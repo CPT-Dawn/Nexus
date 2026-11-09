@@ -412,6 +412,28 @@ pub fn change_waiting(ssid: &str) -> Failure {
     )
 }
 
+/// The keyring does not answer; the Profile was left as it was.
+pub fn keyring_unavailable(ssid: &str, why: &str) -> Failure {
+    fail(
+        ErrorCode::KeyringUnavailable,
+        format!(
+            "Nexus cannot use your keyring ({why}). Start a Secret Service such as \
+             gnome-keyring, KWallet or KeePassXC and unlock it. \
+             The password of {ssid} was left where it is."
+        ),
+    )
+}
+
+/// "Keep in keyring" for a Network that has no stored password to move.
+pub fn no_password_to_keep(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::InvalidSettings,
+        format!(
+            "{ssid} has no password Nexus can read, so there is nothing to keep in the keyring."
+        ),
+    )
+}
+
 pub fn nothing_pending() -> Failure {
     fail(
         ErrorCode::NothingPending,
@@ -492,6 +514,40 @@ pub fn invalid_config(why: &str) -> Failure {
         ErrorCode::InvalidConfig,
         format!("That is not a WireGuard config I can use: {why}."),
     )
+}
+
+pub fn missing_plugin(plugin: &str) -> Failure {
+    fail(
+        ErrorCode::MissingPlugin,
+        nexus_tui::plugin::install_hint(plugin),
+    )
+}
+
+pub fn invalid_provider_file(plugin: &str, why: &str) -> Failure {
+    let label = nexus_tui::plugin::by_name(plugin).map_or(plugin, |p| p.label);
+    fail(
+        ErrorCode::InvalidConfig,
+        format!("That is not a {label} file I can use: {why}."),
+    )
+}
+
+pub fn unknown_plugin(plugin: &str) -> Failure {
+    fail(
+        ErrorCode::InvalidConfig,
+        format!("`{plugin}` is not a VPN type I can import."),
+    )
+}
+
+/// The sentence of a plugin VPN's Secret prompt.
+pub fn vpn_prompt(vpn: &str, field: nexus_ipc::PromptField, retry: bool) -> String {
+    use nexus_ipc::PromptField;
+    match (field, retry) {
+        (PromptField::Otp, false) => format!("One-time code for {vpn}"),
+        (PromptField::Otp, true) => format!("That code did not work for {vpn}. Enter a new one."),
+        (PromptField::Username, _) => format!("User name for {vpn}"),
+        (_, false) => format!("Password for {vpn}"),
+        (_, true) => format!("Wrong password for {vpn}. Try again."),
+    }
 }
 
 pub fn not_wireguard(name: &str) -> Failure {
@@ -633,14 +689,14 @@ pub fn card_cannot_host() -> Failure {
 
 pub fn hotspot_running(ssid: &str) -> Failure {
     fail(
-        ErrorCode::HotspotFailed,
+        ErrorCode::JoinFailed,
         format!("The Hotspot {ssid} is already running. Stop it first."),
     )
 }
 
 pub fn hotspot_failed(ssid: &str, why: &str) -> Failure {
     fail(
-        ErrorCode::HotspotFailed,
+        ErrorCode::JoinFailed,
         format!("The Hotspot {ssid} did not start: {why}."),
     )
 }

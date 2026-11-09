@@ -136,6 +136,30 @@ pub fn vpn_busy(world: &World) {
     assert!(up.get("ok").is_some(), "bringing Work up: {up}");
 }
 
+/// An `.ovpn` the plugin scenario can import (documentation host).
+pub const OVPN_CONF: &str =
+    "client\ndev tun\nproto udp\nremote vpn.branch.example 1194\nauth-user-pass\n";
+
+/// Plugin VPNs: the OpenVPN plugin is installed, `Office OpenVPN` asks for a
+/// user name, a password and a one-time code when it starts, and `Legacy L2TP`
+/// belongs to a plugin that is not installed. A stand-in `nmcli` imports
+/// `.ovpn` files; one waits at the returned path.
+pub fn vpn_plugins(world: &World) -> std::path::PathBuf {
+    use crate::{ActiveConnection, NmConnectivity, NmState};
+    let nm = &world.nm;
+    nm.set_primary(Some(ActiveConnection::wifi("Home-5G")));
+    nm.set_connectivity(NmConnectivity::Full);
+    nm.set_state(NmState::ConnectedGlobal);
+    world.install_vpn_plugin("openvpn");
+    world.install_fake_nmcli();
+    nm.add_plugin_vpn_of("uuid-office", "Office OpenVPN", Some("openvpn"));
+    nm.script_vpn_asks("uuid-office", &["username", "password", "otp"]);
+    nm.add_plugin_vpn_of("uuid-l2tp", "Legacy L2TP", Some("l2tp"));
+    let file = world.dir().join("Branch.ovpn");
+    std::fs::write(&file, OVPN_CONF).expect("write the sample .ovpn");
+    file
+}
+
 /// A world with Bluetooth (powered or not) and three paired phones that offer
 /// network access: `Pixel 8` (a Profile is saved, nothing connected),
 /// `Sam's iPhone` (paired only) and one with a name too long for a row. Shared

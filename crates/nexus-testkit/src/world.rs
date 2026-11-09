@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use crate::{Bus, FakeBluez, FakeNm, FakeNotifications, FakeSystemd};
+use crate::{Bus, FakeBluez, FakeNm, FakeNotifications, FakeSecretService, FakeSystemd};
 
 /// How long to wait for the Daemon's socket, and for any single reply.
 pub const PATIENCE: Duration = Duration::from_secs(10);
@@ -21,6 +21,7 @@ pub struct WorldBuilder {
     nm_running: bool,
     start_daemon: bool,
     notifications: bool,
+    keyring: bool,
     env: Vec<(String, String)>,
     bluez: Option<bool>,
 }
@@ -53,6 +54,14 @@ impl WorldBuilder {
         self
     }
 
+    /// Whether a Secret Service (keyring) runs on the private session bus
+    /// (default no: then no keyring answers and the Daemon must cope). Reach
+    /// it with [`World::keyring`].
+    pub fn keyring(mut self, yes: bool) -> Self {
+        self.keyring = yes;
+        self
+    }
+
     /// An extra environment variable for everything the world starts, e.g.
     /// `TERMINAL`.
     pub fn env(mut self, key: &str, value: &str) -> Self {
@@ -62,7 +71,7 @@ impl WorldBuilder {
 
     pub fn start(self) -> World {
         let tmp = tempfile::tempdir().expect("tempdir");
-        for dir in ["run", "home", "bin"] {
+        for dir in ["run", "home", "bin", "plugins"] {
             std::fs::create_dir(tmp.path().join(dir)).expect("mkdir");
         }
         let nm_bus = Bus::start(tmp.path(), "system-bus");
@@ -72,11 +81,15 @@ impl WorldBuilder {
         }
         let systemd = FakeSystemd::start(&nm_bus.address);
         let bluez = self.bluez.map(|on| FakeBluez::start(&nm_bus.address, on));
-        let session = self
-            .notifications
-            .then(|| Bus::start(tmp.path(), "session-bus"));
+        let session =
+            (self.notifications || self.keyring).then(|| Bus::start(tmp.path(), "session-bus"));
+        let keyring = session
+            .as_ref()
+            .filter(|_| self.keyring)
+            .map(|b| FakeSecretService::start(&b.address));
         let notifications = session
             .as_ref()
+            .filter(|_| self.notifications)
             .map(|b| FakeNotifications::start(&b.address));
         let mut world = World {
             bin: self.bin,
@@ -86,6 +99,7 @@ impl WorldBuilder {
             nm_bus,
             session,
             notifications,
+            keyring,
             env: self.env,
             daemon: None,
             kill_group: false,
@@ -108,6 +122,8 @@ pub struct World {
     bluez: Option<FakeBluez>,
     /// The fake notification server, when the builder asked for one.
     pub notifications: Option<FakeNotifications>,
+    /// The fake Secret Service, when the builder asked for one.
+    pub keyring: Option<FakeSecretService>,
     bin: PathBuf,
     nm_bus: Bus,
     session: Option<Bus>,
@@ -125,6 +141,7 @@ impl World {
             nm_running: true,
             start_daemon: true,
             notifications: false,
+            keyring: false,
             env: Vec::new(),
             bluez: None,
         }
@@ -163,6 +180,52 @@ impl World {
         )
         .expect("write tool");
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+
+    /// Makes the NetworkManager VPN plugin `name` (`openvpn`) look installed
+    /// to the Daemon. Worlds start with none.
+    pub fn install_vpn_plugin(&self, name: &str) {
+        std::fs::write(
+            self.tmp
+                .path()
+                .join("plugins")
+                .join(format!("nm-{name}-service.name")),
+            "[VPN Connection]\n",
+        )
+        .expect("write plugin description");
+    }
+
+    /// Puts a stand-in `nmcli` on the `PATH` that supports only
+    /// `connection import type <t> file <f>`: it adds a `vpn` Profile named
+    /// after the file to the fake NetworkManager (over `busctl`), refuses a
+    /// file without a `remote` line, and records what it saw in
+    /// `nmcli.log` (arguments, the file's mode and its directory's mode).
+    pub fn install_fake_nmcli(&self) {
+        self.install_tool(
+            "nmcli",
+            r#"log="$(dirname "$0")/../nmcli.log"
+[ "$1 $2 $3" = "connection import type" ] && [ "$5" = file ] || { echo "Error: unsupported" >&2; exit 2; }
+type="$4"; file="$6"
+echo "args: $*" >> "$log"
+echo "file-mode: $(stat -c %a "$file") dir-mode: $(stat -c %a "$(dirname "$file")")" >> "$log"
+if ! grep -q '^remote ' "$file"; then
+  echo "Error: failed to import '$file': missing remote" >&2
+  exit 1
+fi
+base="$(basename "$file")"; name="${base%.*}"
+uuid="$(cat /proc/sys/kernel/random/uuid)"
+busctl --address "$DBUS_SYSTEM_BUS_ADDRESS" call org.freedesktop.NetworkManager \
+  /org/freedesktop/NetworkManager/Settings org.freedesktop.NetworkManager.Settings \
+  AddConnection 'a{sa{sv}}' 2 \
+  connection 3 id s "$name" type s vpn uuid s "$uuid" \
+  vpn 2 service-type s "org.freedesktop.NetworkManager.$type" data 'a{ss}' 0 >/dev/null || exit 1
+echo "Connection '$name' ($uuid) successfully added.""#,
+        );
+    }
+
+    /// What the stand-in `nmcli` logged (empty if it never ran).
+    pub fn nmcli_log(&self) -> String {
+        std::fs::read_to_string(self.tmp.path().join("nmcli.log")).unwrap_or_default()
     }
 
     /// The process id of the Daemon this world started, if one runs. With
@@ -224,7 +287,8 @@ impl World {
             .env("HOME", self.tmp.path().join("home"))
             .env("XDG_RUNTIME_DIR", self.runtime_dir())
             .env("DBUS_SYSTEM_BUS_ADDRESS", &self.nm_bus.address)
-            .env("DBUS_SESSION_BUS_ADDRESS", self.session_address());
+            .env("DBUS_SESSION_BUS_ADDRESS", self.session_address())
+            .env("NEXUS_VPN_PLUGIN_DIRS", self.tmp.path().join("plugins"));
         for (k, v) in &self.env {
             cmd.env(k, v);
         }
