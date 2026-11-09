@@ -12,15 +12,26 @@ use tempfile::TempDir;
 
 use crate::world::{PATIENCE, Wire};
 
-/// The only bus address real mode accepts: the one the rig creates.
-const RIG_BUS_PREFIX: &str = "unix:path=/run/nexus-rig/";
+/// The only directory real mode accepts a bus socket in: the one the rig creates.
+const RIG_BUS_DIR: &str = "/run/nexus-rig";
+
+/// Whether `address` is a `unix:path=` bus socket that really lives under the
+/// rig's directory (symlinks and `..` resolved, so `/run/nexus-rig/../x` or a
+/// look-alike such as `/run/nexus-rig-x` do not pass).
+fn is_rig_bus(address: &str) -> bool {
+    let Some(rest) = address.strip_prefix("unix:path=") else {
+        return false;
+    };
+    let path = rest.split(',').next().unwrap_or_default();
+    std::fs::canonicalize(path).is_ok_and(|p| p.starts_with(RIG_BUS_DIR))
+}
 
 /// A Daemon on the rig's private system bus.
 #[derive(Debug)]
 pub struct RealWorld {
     bin: PathBuf,
     bus: String,
-    daemon: Child,
+    daemon: Option<Child>,
     tmp: TempDir,
 }
 
@@ -38,7 +49,7 @@ impl RealWorld {
         }
         let bus = std::env::var("NEXUS_RIG_BUS").expect("NEXUS_RIG_BUS is set by the rig");
         assert!(
-            bus.starts_with(RIG_BUS_PREFIX),
+            is_rig_bus(&bus),
             "refusing to run: {bus} is not the rig's private bus"
         );
         for entry in std::fs::read_dir("/sys/class/net").expect("list interfaces") {
@@ -60,19 +71,18 @@ impl RealWorld {
         }
         let bin = bin.into();
         let mut world = RealWorld {
-            daemon: Command::new("true").spawn().expect("placeholder child"),
+            daemon: None,
             bin,
             bus,
             tmp,
         };
-        let _ = world.daemon.wait();
         let log = std::fs::File::create(world.tmp.path().join("daemon.log")).expect("log");
         let mut cmd = world.nexus();
         cmd.arg("daemon")
             .stdin(Stdio::null())
             .stdout(log.try_clone().expect("clone log"))
             .stderr(log);
-        world.daemon = cmd.spawn().expect("spawn nexus daemon");
+        world.daemon = Some(cmd.spawn().expect("spawn nexus daemon"));
         let socket = world.socket();
         let start = std::time::Instant::now();
         while std::os::unix::net::UnixStream::connect(&socket).is_err() {
@@ -126,7 +136,25 @@ impl RealWorld {
 
 impl Drop for RealWorld {
     fn drop(&mut self) {
-        let _ = self.daemon.kill();
-        let _ = self.daemon.wait();
+        if let Some(daemon) = &mut self.daemon {
+            let _ = daemon.kill();
+            let _ = daemon.wait();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_rig_bus;
+
+    #[test]
+    fn only_a_socket_inside_the_rig_directory_is_the_rig_bus() {
+        assert!(!is_rig_bus("unix:path=/run/dbus/system_bus_socket"));
+        assert!(!is_rig_bus(
+            "unix:path=/run/nexus-rig/../dbus/system_bus_socket"
+        ));
+        assert!(!is_rig_bus("unix:path=/run/nexus-rig-evil/bus"));
+        assert!(!is_rig_bus("tcp:host=localhost,port=1"));
+        assert!(!is_rig_bus("unix:path=/run/nexus-rig/missing"));
     }
 }
