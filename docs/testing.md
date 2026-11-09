@@ -104,6 +104,11 @@ Add an AP: drop a hostapd config in `rig/aps.d/<name>.conf` with `interface=@IFA
 - The Daemon coalesces bursts, so a test that goes online and offline right after lets a Front end read the `activity` events in between (`front_end(&world)` then `next_event("activity")`), or the two changes merge into nothing. A subscribed Front end also means "someone is looking": no Secret prompt notification is sent while any connection is subscribed.
 - The terminal launcher is never mocked in code: `world.install_tool("xdg-terminal-exec", "printf '%s\n' \"$@\" >> log")` shadows the real one on the Daemon's `PATH`. `WorldBuilder::env("TERMINAL", ..)` sets a variable for the Daemon. The choice between `xdg-terminal-exec` and `$TERMINAL -e` is unit-tested in `daemon/notify.rs`.
 
+## Bluetooth Tethering (ticket #23)
+
+- S1 (`crates/nexus/tests/s1_tether.rs`): `World::builder(bin).bluez(true)` (or `.bluez(false)` for an adapter that is off) starts a fake `org.bluez` on the same private system bus: one `org.bluez.Adapter1` and an ObjectManager. `world.bluez().set_powered(bool)` flips it and emits `PropertiesChanged`; `stop()`/`restart()` take the service away. Without `.bluez(..)` nobody owns `org.bluez` (Bluetooth reads as `absent`), and the Daemon must not start it by looking.
+- Phones are the fake NetworkManager's Bluetooth Devices: `nm.add_phone(addr, name)` (NAP, listed), `nm.add_dialup_only_phone(..)` (DUN only, not listed). A Tethering Link is a state walk 40, 50, 70, 100 like a join; `nm.script_tether_failure(addr, died_in, reason)` kills it. Assert with `nm.tethered(dev)`, `nm.phone_profiles(addr)` (memory + disk), `nm.phone_profiles_persisted(addr)`.
+- S2 (`crates/nexus/tests/s2_tether.rs`): Tethering lives on the Hotspot tab (key `5`). `scenarios::tether_world(bin, powered)` is shared with `demo tether` / `demo tether-off`; the tests' own `Rig` waits for `app.tether().has_data()`.
 ## Profile settings and checkpoints (ticket #18)
 
 - S1 (`crates/nexus/tests/s1_profile.rs`): `profile_get`, `profile_update`, `profile_confirm`, `profile_revert` over the wire, the `nexus profile show|set` CLI, and `profile_pending` / `profile_settled` events. `profile_update` takes `rollback_secs`, so the missed-confirmation test runs the real timer for one second instead of fifteen.

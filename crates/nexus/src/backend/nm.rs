@@ -13,7 +13,8 @@ use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
     AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind,
-    Radio, Radios, ScanOutcome, Secret, State, Status, WifiList, WifiShare,
+    Radio, Radios, ScanOutcome, Secret, State, Status, Tethered, Tethers, Untethered, WifiList,
+    WifiShare,
 };
 use std::pin::Pin;
 
@@ -296,9 +297,30 @@ impl NetworkManager {
             .member("NameOwnerChanged")
             .arg(0, SERVICE)
             .build()?;
+        // Bluetooth being switched, or its service coming and going, changes
+        // what Tethering can do; NetworkManager says nothing about it.
+        let adapter = MatchRule::builder()
+            .msg_type(Type::Signal)
+            .sender("org.bluez")
+            .interface("org.freedesktop.DBus.Properties")
+            .member("PropertiesChanged")
+            .arg(0, "org.bluez.Adapter1")
+            .build()?;
+        let bluez_owner = MatchRule::builder()
+            .msg_type(Type::Signal)
+            .sender("org.freedesktop.DBus")
+            .interface("org.freedesktop.DBus")
+            .member("NameOwnerChanged")
+            .arg(0, "org.bluez")
+            .build()?;
         let a = MessageStream::for_match_rule(nm_signals, &conn, None).await?;
         let b = MessageStream::for_match_rule(owner, &conn, None).await?;
-        Ok(Box::pin(stream::select(a, b)))
+        let c = MessageStream::for_match_rule(adapter, &conn, None).await?;
+        let d = MessageStream::for_match_rule(bluez_owner, &conn, None).await?;
+        Ok(Box::pin(stream::select(
+            stream::select(a, b),
+            stream::select(c, d),
+        )))
     }
 
     /// logind's `PrepareForSleep(b)`: true before suspend, false after resume.
@@ -428,6 +450,23 @@ impl Backend for NetworkManager {
 
     async fn wifi_reveal(&self, network: String) -> Result<WifiShare, BackendError> {
         self.with_bus(|c| async move { super::wifi::reveal(&c, &network).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn tethers(&self) -> Result<Tethers, BackendError> {
+        self.with_bus(|c| async move { super::tether::list(&c).await })
+            .await
+    }
+
+    async fn tether_connect(&self, phone: Option<String>) -> Result<Tethered, BackendError> {
+        self.with_bus(|c| async move { super::tether::connect(&c, phone.as_deref()).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn tether_disconnect(&self) -> Result<Untethered, BackendError> {
+        self.with_bus(|c| async move { super::tether::disconnect(&c).await })
             .await?
             .map_err(BackendError::Refused)
     }

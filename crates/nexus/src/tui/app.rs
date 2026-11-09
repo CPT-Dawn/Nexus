@@ -10,13 +10,14 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
     ActivityEntry, ActivityKind, Connectivity, Event, Finding, Op, PromptClosed, PromptKind,
-    Secret, Status, Traffic, WifiList, WifiShare,
+    Secret, Status, Tethers, Traffic, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
 use super::hits::Hit;
 use super::profile::{Action, Editor, ProfileMsg};
 use super::share::{Share, Stage};
+use super::tether::TetherTab;
 use super::theme::{Look, Theme};
 use super::wifi::{Cmd, Confirm, Done, Entry, PasswordField, Runner, SWEEP_FRAME, Toast, WifiTab};
 
@@ -39,6 +40,8 @@ pub enum Msg {
     Status(Status),
     /// A fresh Wi-Fi list (first connect or `networks_changed`).
     Wifi(WifiList),
+    /// The Daemon's picture of Bluetooth and the paired phones.
+    Tethers(Tethers),
     /// A Secret prompt opened or closed.
     Prompt(Event),
     /// A command the person gave has finished.
@@ -187,6 +190,7 @@ pub struct App {
     size: (u16, u16),
     quit: bool,
     wifi: WifiTab,
+    tether: TetherTab,
     /// An open Secret prompt: it has the keys until answered or cancelled.
     field: Option<PasswordField>,
     confirm: Option<Confirm>,
@@ -222,6 +226,7 @@ impl App {
             size: (80, 24),
             quit: false,
             wifi: WifiTab::default(),
+            tether: TetherTab::default(),
             field: None,
             confirm: None,
             editor: None,
@@ -252,6 +257,7 @@ impl App {
     pub fn selected(&self) -> usize {
         match self.tab {
             Tab::WiFi => self.wifi.cursor(),
+            Tab::Hotspot => self.tether.cursor(),
             _ => self.selected,
         }
     }
@@ -260,12 +266,17 @@ impl App {
     pub fn rows(&self) -> usize {
         match self.tab {
             Tab::WiFi => self.wifi.len(),
+            Tab::Hotspot => self.tether.len(),
             other => other.rows(),
         }
     }
 
     pub fn wifi(&self) -> &WifiTab {
         &self.wifi
+    }
+
+    pub fn tether(&self) -> &TetherTab {
+        &self.tether
     }
 
     pub fn field(&self) -> Option<&PasswordField> {
@@ -481,6 +492,7 @@ impl App {
                 changed
             }
             Msg::Wifi(list) => self.wifi.refresh(list),
+            Msg::Tethers(tethers) => self.tether.refresh(tethers),
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
             Msg::Profile(m) => self.profile_msg(m),
@@ -593,6 +605,26 @@ impl App {
                     ssid: ssid.clone(),
                 };
                 self.say(format!("Disconnected from {ssid}."), false, Some(undo));
+            }
+            (Cmd::Tether { phone, name }, result) => {
+                self.tether.busy = None;
+                match result {
+                    Ok(_) => {
+                        let undo = Cmd::Untether {
+                            phone: phone.clone(),
+                            name: name.clone(),
+                        };
+                        self.say(format!("Tethered through {name}."), false, Some(undo));
+                    }
+                    Err(message) => self.say(message, true, None),
+                }
+            }
+            (Cmd::Untether { phone, name }, Ok(_)) => {
+                let undo = Cmd::Tether {
+                    phone: phone.clone(),
+                    name: name.clone(),
+                };
+                self.say(format!("Dropped the tether to {name}."), false, Some(undo));
             }
             (Cmd::Forget { ssid, .. }, Ok(_)) => {
                 self.say(format!("Forgot {ssid}."), false, None);
@@ -815,7 +847,7 @@ impl App {
             KeyCode::Enter if self.tab == Tab::Overview => {
                 self.go_tab(Tab::ALL[1 + self.selected.min(3)])
             }
-            KeyCode::Enter if self.narrow() && self.tab != Tab::WiFi => {
+            KeyCode::Enter if self.narrow() && !matches!(self.tab, Tab::WiFi | Tab::Hotspot) => {
                 self.layer = Layer::Sheet;
                 true
             }
@@ -832,8 +864,46 @@ impl App {
     fn tab_key(&mut self, key: KeyEvent) -> bool {
         match self.tab {
             Tab::WiFi => self.wifi_key(key),
+            Tab::Hotspot => self.tether_key(key),
             _ => false,
         }
+    }
+
+    /// Keys of the Tethering list: enter tethers, x drops it, u undoes.
+    fn tether_key(&mut self, key: KeyEvent) -> bool {
+        if key.code == KeyCode::Char('u') {
+            return match self.toast.take().and_then(|t| t.undo) {
+                Some(undo) => {
+                    self.run_tether(undo);
+                    true
+                }
+                None => false,
+            };
+        }
+        let Some(phone) = self.tether.selected().cloned() else {
+            return false;
+        };
+        let (id, name) = (phone.id.clone(), phone.name.clone());
+        match key.code {
+            KeyCode::Enter if !phone.connected && self.tether.busy.is_none() => {
+                self.run_tether(Cmd::Tether { phone: id, name });
+                true
+            }
+            KeyCode::Char('x') if phone.connected => {
+                self.run_tether(Cmd::Untether { phone: id, name });
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Sends a Tethering command, marking a connect as in flight.
+    fn run_tether(&mut self, cmd: Cmd) {
+        if let Cmd::Tether { phone, .. } = &cmd {
+            self.tether.busy = Some(phone.clone());
+        }
+        self.toast = None;
+        self.send(cmd);
     }
 
     fn wifi_key(&mut self, key: KeyEvent) -> bool {
@@ -1028,6 +1098,9 @@ impl App {
         if self.tab == Tab::WiFi {
             return self.wifi.move_to(row);
         }
+        if self.tab == Tab::Hotspot {
+            return self.tether.move_to(row);
+        }
         let changed = row != self.selected;
         self.selected = row;
         changed
@@ -1071,6 +1144,8 @@ impl App {
                 let mut v = vec![("esc", "back")];
                 if self.tab == Tab::WiFi {
                     v.extend(self.wifi_hints(false));
+                } else if self.tab == Tab::Hotspot {
+                    v.extend(self.tether_hints());
                 }
                 v.push(("?", "help"));
                 v
@@ -1084,6 +1159,11 @@ impl App {
                     // No list and nothing to open on the setup screen.
                 } else if self.tab == Tab::WiFi {
                     v.extend(self.wifi_hints(!narrow));
+                } else if self.tab == Tab::Hotspot {
+                    v.extend(self.tether_hints());
+                    if narrow && self.rows() > 0 {
+                        v.push(("d", "details"));
+                    }
                 } else if self.tab == Tab::Overview || (narrow && self.rows() > 0) {
                     v.push(("enter", "open"));
                 }
@@ -1103,6 +1183,22 @@ impl App {
                 v
             }
         }
+    }
+
+    /// Tethering keys that apply to the selected phone.
+    fn tether_hints(&self) -> Vec<(&'static str, &'static str)> {
+        let mut v = Vec::new();
+        if let Some(phone) = self.tether.selected() {
+            if phone.connected {
+                v.push(("x", "drop tether"));
+            } else {
+                v.push(("enter", "tether"));
+            }
+        }
+        if self.toast.as_ref().is_some_and(|t| t.undo.is_some()) {
+            v.push(("u", "undo"));
+        }
+        v
     }
 
     /// Wi-Fi keys that apply to the selected row; `more` adds the less common ones.

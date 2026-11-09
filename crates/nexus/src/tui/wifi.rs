@@ -104,6 +104,16 @@ pub enum Cmd {
     Cancel {
         prompt: u64,
     },
+    /// Tether through a paired phone (`phone` is its address).
+    Tether {
+        phone: String,
+        name: String,
+    },
+    /// Drop the tether to `name`.
+    Untether {
+        phone: String,
+        name: String,
+    },
     /// Open the Portal's login page in the browser.
     OpenPortal,
 }
@@ -131,6 +141,10 @@ impl Cmd {
                 secret: secret.clone(),
             },
             Cmd::Cancel { prompt } => Op::SecretCancel { prompt: *prompt },
+            Cmd::Tether { phone, .. } => Op::TetherConnect {
+                phone: Some(phone.clone()),
+            },
+            Cmd::Untether { .. } => Op::TetherDisconnect,
             Cmd::OpenPortal => Op::PortalOpen,
         }
     }

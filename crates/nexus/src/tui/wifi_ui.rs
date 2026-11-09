@@ -396,12 +396,24 @@ pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &
         if body.height < 5 || width < 8 {
             return;
         }
+        // A long message wraps (up to four lines) instead of being cut off.
+        let need = toast.text.chars().count() + undo.len();
+        let inner_width = (width as usize).saturating_sub(4).max(1);
+        let lines = if need <= inner_width {
+            1
+        } else {
+            // Words break early: leave some slack.
+            need.div_ceil(inner_width.saturating_sub(8).max(1))
+        }
+        .clamp(1, 4)
+        .min(body.height.saturating_sub(4).max(1) as usize) as u16;
+        let height = lines + 2;
         let rect = Rect {
             // Inside the frame: one column and one row clear of the border.
             x: body.right().saturating_sub(width + 2),
-            y: body.bottom().saturating_sub(4),
+            y: body.bottom().saturating_sub(height + 1),
             width,
-            height: 3,
+            height,
         };
         f.render_widget(Clear, rect);
         let block = sym.block(look, if toast.bad { "Problem" } else { "Done" }, false);
@@ -412,7 +424,8 @@ pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &
             Paragraph::new(Line::from(vec![
                 Span::styled(toast.text.clone(), style),
                 Span::styled(undo, look.accent()),
-            ])),
+            ]))
+            .wrap(Wrap { trim: false }),
             inner,
         );
     }

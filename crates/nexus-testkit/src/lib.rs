@@ -10,6 +10,7 @@
 //! Usage notes for later tickets live in `docs/testing.md`.
 
 mod bus;
+mod fake_bluez;
 mod fake_nm;
 mod fake_notifications;
 mod fake_systemd;
@@ -18,6 +19,7 @@ pub mod scenarios;
 mod world;
 
 pub use bus::Bus;
+pub use fake_bluez::FakeBluez;
 pub use fake_nm::{
     ActiveConnection, Ap, ApId, DeviceId, FakeNm, NmConnectivity, NmState, SCAN_RATE_LIMIT_MS,
     boottime_ms,

@@ -17,6 +17,7 @@ use super::layout::{self, Areas, Mode};
 use super::overlays;
 use super::overview;
 use super::profile_ui;
+use super::tether_ui;
 use super::theme::Look;
 use super::wifi_ui;
 use super::words;
@@ -325,6 +326,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::WiFi {
         return wifi_ui::master(f, app, area, look, sym);
     }
+    if app.tab() == Tab::Hotspot {
+        return tether_ui::master(f, app, area, look, sym);
+    }
     if app.tab().rows() > 0 {
         overview::cards_panel(f, app, area, look, sym, true);
         return;
@@ -341,6 +345,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
 fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::WiFi && app.conn() == Conn::Up {
         return wifi_ui::detail(f, app, area, look, sym);
+    }
+    if app.tab() == Tab::Hotspot && app.conn() == Conn::Up {
+        return tether_ui::detail(f, app, area, look, sym);
     }
     let title = match app.tab() {
         Tab::Overview => "Status",

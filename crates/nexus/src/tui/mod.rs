@@ -17,6 +17,8 @@ mod overview;
 mod profile;
 mod profile_ui;
 mod share;
+mod tether;
+mod tether_ui;
 mod theme;
 mod verbs;
 mod view;

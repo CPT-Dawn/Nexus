@@ -3,13 +3,14 @@
 
 mod agent;
 pub mod nm;
+mod tether;
 mod wifi;
 
 use std::future::Future;
 
 use nexus_ipc::{
     AutoconnectSet, Disconnected, Forgotten, Joined, ProfileSettings, ProfileView, Radios,
-    ScanOutcome, Secret, Status, WifiList, WifiShare,
+    ScanOutcome, Secret, Status, Tethered, Tethers, Untethered, WifiList, WifiShare,
 };
 
 use crate::text::Failure;
@@ -128,6 +129,20 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
     ) -> impl Future<Output = Result<WifiShare, BackendError>> + Send;
+
+    /// Bluetooth's state and the paired phones that offer network access.
+    fn tethers(&self) -> impl Future<Output = Result<Tethers, BackendError>> + Send;
+
+    /// Tethers through a phone (address or name; the only one when `None`) and
+    /// waits until the Link is up or has failed. A Profile exists afterwards
+    /// only if it worked. Refused with `bluetooth_off` or `no_phone`.
+    fn tether_connect(
+        &self,
+        phone: Option<String>,
+    ) -> impl Future<Output = Result<Tethered, BackendError>> + Send;
+
+    /// Drops the Tethering Link, keeping the Profile.
+    fn tether_disconnect(&self) -> impl Future<Output = Result<Untethered, BackendError>> + Send;
 
     /// Switches Wi-Fi on or off. Refused with `hard_blocked` while a hardware
     /// switch holds it off.
