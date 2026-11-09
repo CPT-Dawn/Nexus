@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 mod doctor;
+mod eap;
+pub use eap::{Eap, EapError, EapField, EapMethod, Phase2};
 pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
 
 /// The protocol version this crate speaks.
@@ -63,6 +65,11 @@ pub enum Op {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         password: Option<Secret>,
     },
+    /// Join a WPA-Enterprise (802.1X) Network such as eduroam, with the
+    /// settings in `eap`. Like `wifi_join` otherwise (result [`Joined`]);
+    /// `invalid_settings` when `eap` fails its validation, `wrong_password`
+    /// when the server refuses the sign-in.
+    WifiJoinEap { network: String, eap: Eap },
     /// Drop the current Wi-Fi Link, keeping its Profile. Result: [`Disconnected`];
     /// `not_connected` when there is nothing to drop.
     WifiDisconnect,
@@ -221,6 +228,8 @@ pub enum ErrorCode {
     NotConfirmed,
     /// No finding with that id has a fix to run.
     UnknownFinding,
+    /// Settings were refused before anything was tried (802.1X form errors).
+    InvalidSettings,
     /// A fix command failed or was not authorized.
     FixFailed,
     #[serde(other)]
