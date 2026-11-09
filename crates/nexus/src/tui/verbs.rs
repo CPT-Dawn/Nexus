@@ -53,7 +53,7 @@ pub struct Verb {
 }
 
 /// Every table of Verbs, in the order the help overlay lists them.
-pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, TETHER, UNDO];
+pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI, VPN, TETHER, UNDO];
 
 pub fn all() -> impl Iterator<Item = &'static Verb> {
     TABLES.iter().flat_map(|t| t.iter())
@@ -241,6 +241,98 @@ static WIFI: &[Verb] = &[
         "Share as a QR code (asks first)",
         KeyCode::Char('s'),
         saved,
+    ),
+];
+
+// ---- VPN ------------------------------------------------------------------------
+
+fn vpn_open(app: &App) -> Result<(), &'static str> {
+    if app.tab() == Tab::Vpn {
+        Ok(())
+    } else {
+        Err("Open the VPN tab first.")
+    }
+}
+
+fn vpn_picked(app: &App) -> Result<&nexus_ipc::Vpn, &'static str> {
+    vpn_open(app)?;
+    app.vpn().selected().ok_or("No VPN is selected.")
+}
+
+fn vpn_wireguard(app: &App) -> Result<(), &'static str> {
+    if vpn_picked(app)?.kind == nexus_ipc::VpnKind::Wireguard {
+        Ok(())
+    } else {
+        Err("Only WireGuard VPNs have keys to show.")
+    }
+}
+
+const fn vpn(
+    verb: &'static str,
+    words: &'static str,
+    key: &'static str,
+    help: &'static str,
+    code: KeyCode,
+    ready: fn(&App) -> Result<(), &'static str>,
+) -> Verb {
+    Verb {
+        verb,
+        words,
+        key,
+        help,
+        scope: Scope::Tab(Tab::Vpn),
+        run: Run::Key(Tab::Vpn, code),
+        ready,
+    }
+}
+
+static VPN: &[Verb] = &[
+    vpn(
+        "Toggle VPN",
+        "vpn up down connect disconnect start stop wireguard",
+        "Enter",
+        "Bring the VPN up or down",
+        KeyCode::Enter,
+        |app| {
+            vpn_picked(app)?;
+            if app.vpn().busy.is_some() {
+                Err("A VPN is already changing.")
+            } else {
+                Ok(())
+            }
+        },
+    ),
+    vpn(
+        "Import WireGuard config",
+        "vpn wireguard conf file add",
+        "i",
+        "Import a WireGuard .conf",
+        KeyCode::Char('i'),
+        vpn_open,
+    ),
+    vpn(
+        "Create WireGuard VPN",
+        "vpn wireguard new tunnel generate keys add",
+        "c",
+        "Create a WireGuard VPN with new keys",
+        KeyCode::Char('c'),
+        vpn_open,
+    ),
+    vpn(
+        "Show VPN public key",
+        "vpn wireguard key peer",
+        "p",
+        "Show a VPN's public key",
+        KeyCode::Char('p'),
+        vpn_wireguard,
+    ),
+    vpn(
+        "Share VPN config",
+        "vpn wireguard qr code phone private key",
+        "s",
+        "Share a VPN's config as a QR code (asks first)",
+        KeyCode::Char('s'),
+        vpn_wireguard,
     ),
 ];
 

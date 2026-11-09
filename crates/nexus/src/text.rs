@@ -453,6 +453,69 @@ pub fn share_scan_hint(ssid: &str) -> String {
     format!("Point a phone camera at the code to join {ssid}.")
 }
 
+// VPN
+
+pub fn unknown_vpn() -> Failure {
+    fail(
+        ErrorCode::UnknownVpn,
+        "No VPN with that name or id is saved.",
+    )
+}
+
+pub fn vpn_not_up(name: &str) -> Failure {
+    fail(ErrorCode::NotConnected, format!("{name} is not up."))
+}
+
+pub fn vpn_failed(name: &str, why: &str) -> Failure {
+    fail(
+        ErrorCode::VpnFailed,
+        format!("{name} did not come up: {why}."),
+    )
+}
+
+pub fn vpn_timed_out(name: &str) -> Failure {
+    vpn_failed(name, "it took too long")
+}
+
+pub fn vpn_reveal_denied(name: &str) -> Failure {
+    fail(
+        ErrorCode::RevealDenied,
+        format!(
+            "NetworkManager did not authorize showing the keys of {name}. \
+             Approve the authorization request and try again."
+        ),
+    )
+}
+
+pub fn invalid_config(why: &str) -> Failure {
+    fail(
+        ErrorCode::InvalidConfig,
+        format!("That is not a WireGuard config I can use: {why}."),
+    )
+}
+
+pub fn not_wireguard(name: &str) -> Failure {
+    fail(
+        ErrorCode::InvalidConfig,
+        format!("{name} is not a WireGuard VPN, so it has no keys to show."),
+    )
+}
+
+pub fn no_stored_key(name: &str) -> Failure {
+    fail(
+        ErrorCode::InvalidConfig,
+        format!("{name} has no private key stored."),
+    )
+}
+
+pub fn vpn_dropped(name: &str) -> String {
+    format!("{name} went down. Your traffic is no longer tunnelled.")
+}
+
+pub fn vpn_scan_hint(name: &str) -> String {
+    format!("Scan with the WireGuard app to copy {name} to a phone.")
+}
+
 // Bluetooth Tethering.
 
 pub fn bluetooth_off() -> Failure {

@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_vpn.rs
+expression: ask
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
+╭ VPN ───────────────────────╮╭ Work ──────────────────────────────────────────────────────────────╮
+│   ○ Home Lab          down ││ ● Up                                                               │
+│   ○ Office OpenV…     down ││                                                                    │
+│ ▸ ● Work                up ││ Kind        WireGuard                                              │
+│                            ││ Address     10.8.0.2/32                                            │
+│                            ││ Endpoint    vpn.work.example:51820                                 │
+│                            ││                                                                    │
+│                            ││ Press enter to bring it down.                                      │
+│                            ││ p shows its public key, s its config as a QR code.                 │
+│                ╭ Share Work ────────────────────────────────────────────────────╮                │
+│                │ Show this config's QR code?                                    │                │
+│                │ It contains the PRIVATE key. Anyone who can see this screen    │                │
+│                │ can use the tunnel.                                            │                │
+│                │                                                                │                │
+│                │ enter reveal   esc cancel                                      │                │
+│                │                                                                │                │
+│                ╰────────────────────────────────────────────────────────────────╯                │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ enter reveal  esc cancel

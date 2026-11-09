@@ -3,6 +3,7 @@
 //!
 //! ```text
 //! cargo build -p nexus
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|vpn]
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|tether|tether-off]
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|wifi-enterprise|profile]
 //! ```
@@ -26,6 +27,12 @@
 //!   check, `ctrl-r` shows passwords, `enter` joins, `esc` cancels. The right
 //!   login is `you@uni.example` / `correct-horse`, server name `radius.uni.example`.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
+//! - `vpn`: online, with three VPNs: Work (WireGuard, up), Home Lab
+//!   (WireGuard, down) and Office OpenVPN (plugin, down). Press `4` for the
+//!   VPN tab; `enter` brings the selected one up or down, `p` shows its public
+//!   key, `s` then `enter` reveals its config as a QR code (needs a window of
+//!   about 70 by 38 cells), `i` imports a `.conf` (type a path), `c` creates a
+//!   tunnel with generated keys, `esc` closes a layer.
 //! - `tether`: Bluetooth on and three paired phones (Pixel 8 with a saved
 //!   Profile, Sam's iPhone, a long-named Galaxy). Press `5` for the Hotspot tab
 //!   (Tethering lives there until the Hotspot arrives); `j`/`k` move, `enter`
@@ -83,6 +90,7 @@ fn main() {
             world.nm.set_connectivity(NmConnectivity::Full);
             world.nm.set_state(NmState::ConnectedGlobal);
         }
+        "vpn" => nexus_testkit::scenarios::vpn_busy(&world),
         "portal" => {
             // No browser: the stand-in records the URL, which also plays "signed in".
             world.install_tool(

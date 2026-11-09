@@ -36,6 +36,8 @@ pub struct Notifications {
     /// A Secret prompt opened while no Front end is running, with an action
     /// that opens the TUI on it.
     pub secret_prompt: bool,
+    /// A VPN went down without being asked to.
+    pub vpn_dropped: bool,
     /// "Login required for <network>" (with an action that opens the login
     /// page) and "You're online" once the login is done.
     pub portal: bool,
@@ -48,6 +50,7 @@ impl Default for Notifications {
             lost: true,
             wrong_password: true,
             secret_prompt: true,
+            vpn_dropped: true,
             portal: true,
         }
     }

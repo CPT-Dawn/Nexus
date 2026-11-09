@@ -159,6 +159,7 @@ fn on_path(name: &str) -> bool {
 /// What the notifier task is told besides the Daemon's events.
 enum Input {
     WrongPassword(String),
+    VpnDropped(String),
     Action {
         note: u32,
         key: String,
@@ -203,6 +204,11 @@ impl Notifier {
         };
         tokio::spawn(task.run(feed, backlog, rx));
         Notifier { tx }
+    }
+
+    /// A VPN went down without anyone asking.
+    pub fn vpn_dropped(&self, name: &str) {
+        let _ = self.tx.send(Input::VpnDropped(name.to_owned()));
     }
 
     /// A join was refused for a wrong password; `message` is the sentence
@@ -325,6 +331,18 @@ impl Task {
                 if self.settings.notifications().wrong_password {
                     self.show("Wrong password", &message, URGENCY_NORMAL, &[], BRIEF_MS)
                         .await;
+                }
+            }
+            Input::VpnDropped(name) => {
+                if self.settings.notifications().vpn_dropped {
+                    self.show(
+                        "VPN dropped",
+                        &crate::text::vpn_dropped(&name),
+                        URGENCY_CRITICAL,
+                        &[],
+                        0,
+                    )
+                    .await;
                 }
             }
             Input::Action { note, key } => {

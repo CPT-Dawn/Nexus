@@ -31,12 +31,37 @@ impl Log {
             .into_iter()
             .map(|(kind, text)| ActivityEntry { at, kind, text })
             .collect();
+        self.push(&new);
+        new
+    }
+
+    /// Records a line that does not come from a status change (a VPN going
+    /// up or down) and returns the entry, unless the newest line already
+    /// says the same (a VPN that is also the primary Link is seen twice).
+    pub fn record(&self, kind: ActivityKind, text: String) -> Option<ActivityEntry> {
+        if self
+            .entries
+            .lock()
+            .expect("log")
+            .front()
+            .is_some_and(|e| e.text == text)
+        {
+            return None;
+        }
+        let at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let entry = ActivityEntry { at, kind, text };
+        self.push(std::slice::from_ref(&entry));
+        Some(entry)
+    }
+
+    fn push(&self, new: &[ActivityEntry]) {
         let mut log = self.entries.lock().expect("log");
-        for entry in &new {
+        for entry in new {
             log.push_front(entry.clone());
         }
         log.truncate(KEEP);
-        new
     }
 }
 
@@ -78,6 +103,9 @@ fn diff(before: &Status, after: &Status) -> Vec<(ActivityKind, String)> {
     let mut out = Vec::new();
     match (&before.link, &after.link) {
         (None, Some(l)) => out.push(joined(l)),
+        // A VPN that stops being the primary Link is reported from the VPN
+        // list, which also knows whether anyone asked for it.
+        (Some(l), None) if is_vpn(l) => {}
         (Some(l), None) => out.push(lost(l)),
         (Some(a), Some(b)) if a != b => out.push(joined(b)),
         _ => {}

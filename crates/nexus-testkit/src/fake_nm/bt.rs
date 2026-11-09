@@ -101,6 +101,7 @@ pub(super) async fn add_and_activate(
             settings: Default::default(),
             version: 1,
             bdaddr: Some(addr),
+            vpn: None,
         }));
         m.profiles.len() - 1
     };

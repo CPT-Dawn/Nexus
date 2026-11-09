@@ -14,7 +14,7 @@ expression: rig.text(STANDARD)
 │     Not started  │  d                    Details sheet (small windows)        █                  │
 │                  │  Esc                  Back out; never quits                █ks healthy.       │
 │                  │  o                    Open a Portal's login page           █                  │
-│                  │  f                    Overview: run the fix (asks first)   █──────────────────╯
+│                  │  f                    Overview: run the fix (asks first)   │──────────────────╯
 │                  │  ?                    Show or hide this help               │──────────────────╮
 │                  │  q                    Quit (Ctrl-C works anywhere)         │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
 │                  │  Wi-Fi: Enter         Join the selected Network            │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
@@ -24,9 +24,9 @@ expression: rig.text(STANDARD)
 │                  │  Wi-Fi: a             Toggle autoconnect                   │──────────────────╮
 │                  │  Wi-Fi: e             Edit the Profile's settings          │                  │
 │                  │  Wi-Fi: s             Share as a QR code (asks first)      │                  │
-│                  │  Hotspot: Enter       Use the selected phone's data        │                  │
-│                  │  Hotspot: x           Drop the phone's tether              │                  │
-│                  │  u                    Wi-Fi, Hotspot: undo the toast       │                  │
-│                  │                                                            │                  │
+│                  │  VPN: Enter           Bring the VPN up or down             │                  │
+│                  │  VPN: i               Import a WireGuard .conf             │                  │
+│                  │  VPN: c               Create a WireGuard VPN with new keys │                  │
+│                  │  VPN: p               Show a VPN's public key              │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

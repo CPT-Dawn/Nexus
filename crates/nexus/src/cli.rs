@@ -34,6 +34,9 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::Conflict => 16,
         ErrorCode::NothingPending => 17,
         ErrorCode::RevealDenied => 14,
+        ErrorCode::UnknownVpn => 30,
+        ErrorCode::InvalidConfig => 31,
+        ErrorCode::VpnFailed => 32,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -449,7 +452,7 @@ pub fn tether_disconnect(json: bool) -> ExitCode {
     })
 }
 
-fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
+pub(crate) fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
     let mut conn = match Connection::connect() {
         Ok(c) => c,
         Err(e) => return unreachable(&e),
@@ -457,7 +460,7 @@ fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
     report(conn.call(op), show)
 }
 
-fn report(
+pub(crate) fn report(
     result: std::io::Result<Result<Value, nexus_ipc::Failure>>,
     show: impl FnOnce(Value),
 ) -> ExitCode {
@@ -543,6 +546,9 @@ mod tests {
             ErrorCode::PasswordRequired,
             ErrorCode::NotConnected,
             ErrorCode::HardBlocked,
+            ErrorCode::UnknownVpn,
+            ErrorCode::InvalidConfig,
+            ErrorCode::VpnFailed,
             ErrorCode::BluetoothOff,
             ErrorCode::NoPhone,
             ErrorCode::UnknownPhone,

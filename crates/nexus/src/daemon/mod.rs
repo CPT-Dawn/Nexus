@@ -6,11 +6,14 @@ mod portal;
 mod profile;
 mod socket;
 mod traffic;
+mod vpns;
 
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use nexus_ipc::{ErrorCode, Event, Op, Portal, Request, Response, Status, Tethers, WifiList};
+use nexus_ipc::{
+    ErrorCode, Event, Op, Portal, Request, Response, Status, Tethers, VpnList, WifiList,
+};
 
 use crate::backend::BackendError;
 use tokio::sync::broadcast;
@@ -63,16 +66,11 @@ async fn serve() -> std::io::Result<()> {
             backend.wifi_list().await.ok(),
             backend.status().await.ok(),
             backend.tethers().await.ok(),
+            backend.vpn_list().await.ok(),
         )
     })
     .await
     .unwrap_or_default();
-    tokio::spawn(watch_backend(
-        backend.clone(),
-        events.clone(),
-        live.clone(),
-        baseline,
-    ));
     tokio::spawn({
         let backend = backend.clone();
         async move { backend.secrets().await }
@@ -85,6 +83,13 @@ async fn serve() -> std::io::Result<()> {
         Arc::new(notify::SystemTerminal),
         opener,
     );
+    tokio::spawn(watch_backend(
+        backend.clone(),
+        events.clone(),
+        live.clone(),
+        notifier.clone(),
+        baseline,
+    ));
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -125,6 +130,7 @@ async fn serve() -> std::io::Result<()> {
 struct Seen {
     status: Option<Status>,
     wifi: Option<WifiList>,
+    vpns: Option<VpnList>,
     tethers: Option<Tethers>,
     portal: Option<Portal>,
 }
@@ -145,6 +151,7 @@ async fn sync<B: Backend>(
     backend: &B,
     events: &broadcast::Sender<Event>,
     live: &Live,
+    notifier: &notify::Notifier,
     seen: &mut Seen,
     push: Push,
 ) {
@@ -187,6 +194,38 @@ async fn sync<B: Backend>(
         let _ = events.send(Event::NetworksChanged { wifi: list.clone() });
     }
     seen.wifi = Some(list);
+    sync_vpns(backend, events, live, notifier, seen, push).await;
+}
+
+/// Pushes `vpns_changed`, logs VPNs coming and going, and sounds the alarm
+/// for one that dropped without being asked to. A Backend that is gone
+/// leaves the last list standing: its tunnels are judged when it returns.
+async fn sync_vpns<B: Backend>(
+    backend: &B,
+    events: &broadcast::Sender<Event>,
+    live: &Live,
+    notifier: &notify::Notifier,
+    seen: &mut Seen,
+    push: Push,
+) {
+    let Ok(list) = backend.vpn_list().await else {
+        return;
+    };
+    if let Some(before) = &seen.vpns {
+        let changes = live.vpns.observe(before, &list);
+        for (kind, text) in changes.activity {
+            if let Some(entry) = live.activity.record(kind, text) {
+                let _ = events.send(Event::Activity { entry });
+            }
+        }
+        for name in changes.dropped {
+            notifier.vpn_dropped(&name);
+        }
+    }
+    if push == Push::All || (push == Push::Changes && seen.vpns.as_ref() != Some(&list)) {
+        let _ = events.send(Event::VpnsChanged { vpns: list.clone() });
+    }
+    seen.vpns = Some(list);
 }
 
 /// Pushes `tethers_changed` when Bluetooth or a phone's Link differs from
@@ -222,6 +261,7 @@ struct Live {
     traffic: traffic::Sampler,
     activity: activity::Log,
     doctor: crate::doctor::Memory,
+    vpns: vpns::Asked,
     settings: Arc<Settings>,
     opener: portal::SharedOpener,
     profile: Arc<profile::Gate>,
@@ -240,6 +280,7 @@ impl Live {
             activity: activity::Log::default(),
             profile: Arc::new(profile::Gate::new(events.clone())),
             doctor: crate::doctor::Memory::new(events),
+            vpns: vpns::Asked::default(),
         }
     }
 }
@@ -254,7 +295,13 @@ async fn watch_backend<B: Backend>(
     backend: Arc<B>,
     events: broadcast::Sender<Event>,
     live: Arc<Live>,
-    (wifi, status, tethers): (Option<WifiList>, Option<Status>, Option<Tethers>),
+    notifier: notify::Notifier,
+    (wifi, status, tethers, vpns): (
+        Option<WifiList>,
+        Option<Status>,
+        Option<Tethers>,
+        Option<VpnList>,
+    ),
 ) {
     let portal = status
         .as_ref()
@@ -264,6 +311,7 @@ async fn watch_backend<B: Backend>(
         wifi,
         tethers,
         portal,
+        vpns,
     };
     loop {
         let push = tokio::select! {
@@ -273,7 +321,7 @@ async fn watch_backend<B: Backend>(
                 Push::All
             }
         };
-        sync(&*backend, &events, &live, &mut seen, push).await;
+        sync(&*backend, &events, &live, &notifier, &mut seen, push).await;
         if push == Push::All
             && let Err(e) = backend.wifi_scan().await
         {
@@ -368,6 +416,22 @@ async fn answer<B: Backend>(
             }
             backend_reply(req.id, result)
         }
+        Op::VpnList => backend_reply(req.id, backend.vpn_list().await),
+        Op::VpnUp { vpn } => backend_reply(req.id, backend.vpn_up(vpn).await),
+        Op::VpnDown { vpn } => {
+            live.vpns.down(&vpn);
+            let result = backend.vpn_down(vpn.clone()).await;
+            if result.is_err() {
+                live.vpns.forget(&vpn);
+            }
+            backend_reply(req.id, result)
+        }
+        Op::VpnImport { name, config } => {
+            backend_reply(req.id, backend.vpn_import(name, config).await)
+        }
+        Op::VpnCreate(tunnel) => backend_reply(req.id, backend.vpn_create(tunnel).await),
+        Op::VpnKey { vpn } => backend_reply(req.id, backend.vpn_key(vpn).await),
+        Op::VpnReveal { vpn } => backend_reply(req.id, backend.vpn_reveal(vpn).await),
         Op::WifiJoinEap { network, eap } => {
             let result = backend.wifi_join_eap(network, eap).await;
             if let Err(BackendError::Refused(f)) = &result

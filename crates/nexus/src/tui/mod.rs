@@ -24,6 +24,8 @@ mod tether_ui;
 mod theme;
 mod verbs;
 mod view;
+mod vpn;
+mod vpn_ui;
 mod wifi;
 mod wifi_ui;
 mod words;

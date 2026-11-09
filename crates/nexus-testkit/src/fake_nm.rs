@@ -160,6 +160,8 @@ struct ProfileModel {
     agent_secrets: bool,
     /// The stored Wi-Fi secret: `(key-mgmt, psk)`. `None` is an open Network.
     secret: Option<(String, String)>,
+    /// Set for VPN Profiles.
+    vpn: Option<VpnModel>,
     /// Set for a Bluetooth Profile: the phone's address as six bytes.
     bdaddr: Option<Vec<u8>>,
     /// Every setting a client wrote with `Update`/`Update2`, merged over the
@@ -167,6 +169,19 @@ struct ProfileModel {
     settings: SettingsDict,
     /// `VersionId`: bumped by every change.
     version: u64,
+}
+
+/// What makes a Profile a VPN.
+#[derive(Debug)]
+struct VpnModel {
+    /// The connection type: `wireguard` or `vpn`.
+    kind: String,
+    /// The settings as added, secrets included.
+    settings: SettingsDict,
+    /// `NMActiveConnectionState`; 0 is not active.
+    active: u32,
+    /// Activation ends in failure (state 4) instead of success.
+    fails: bool,
 }
 
 /// A checkpoint: the Profiles as they were, to put back on rollback.
@@ -329,6 +344,38 @@ impl Manager {
         self.0.lock().unwrap().version.clone()
     }
 
+    /// The VPNs that are up or coming up. (The primary connection of the
+    /// other fixtures is not listed: nothing here reads it.)
+    #[zbus(property)]
+    fn active_connections(&self) -> Vec<OwnedObjectPath> {
+        let m = self.0.lock().unwrap();
+        (0..m.profiles.len())
+            .filter(|n| {
+                m.profiles[*n]
+                    .as_ref()
+                    .and_then(|p| p.vpn.as_ref())
+                    .is_some_and(|v| v.active > 0)
+            })
+            .map(|n| opath(&vpn_active_path(n)))
+            .collect()
+    }
+
+    async fn deactivate_connection(
+        &self,
+        active: OwnedObjectPath,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<()> {
+        let n: usize = active
+            .as_str()
+            .rsplit('/')
+            .next()
+            .and_then(|s| s.strip_prefix("vpn"))
+            .and_then(|n| n.parse().ok())
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("not an active connection".into()))?;
+        end_vpn(conn, &self.0, n).await;
+        Ok(())
+    }
+
     /// Like NetworkManager: on only if the software switch is on and no
     /// hardware switch holds the radio.
     #[zbus(property)]
@@ -438,6 +485,7 @@ impl Manager {
                 version: 1,
                 secret: text("802-11-wireless-security", "key-mgmt")
                     .zip(text("802-11-wireless-security", "psk")),
+                vpn: None,
             }));
             m.profiles.len() - 1
         };
@@ -491,6 +539,18 @@ impl Manager {
             .next()
             .and_then(|n| n.parse().ok())
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs("bad connection path".into()))?;
+        let is_vpn = self
+            .0
+            .lock()
+            .unwrap()
+            .profiles
+            .get(n)
+            .and_then(|p| p.as_ref())
+            .is_some_and(|p| p.vpn.is_some());
+        if is_vpn {
+            start_vpn(conn, &self.0, n).await?;
+            return Ok(opath(&vpn_active_path(n)));
+        }
         let (ssid, is_bt) = self
             .0
             .lock()
@@ -691,6 +751,132 @@ impl Active {
             vec![opath(&device_path(0))]
         }
     }
+}
+
+fn vpn_active_path(n: usize) -> String {
+    format!("{MANAGER_PATH}/ActiveConnection/vpn{n}")
+}
+
+/// A VPN's `Connection.Active` object, served while it is up or coming up.
+struct VpnActive(Shared, usize);
+
+impl VpnActive {
+    fn read<T>(&self, f: impl FnOnce(&ProfileModel, &VpnModel) -> T) -> Option<T> {
+        let m = self.0.lock().unwrap();
+        let p = m.profiles[self.1].as_ref()?;
+        Some(f(p, p.vpn.as_ref()?))
+    }
+}
+
+#[interface(name = "org.freedesktop.NetworkManager.Connection.Active")]
+impl VpnActive {
+    #[zbus(property)]
+    fn id(&self) -> String {
+        self.read(|p, _| p.id.clone()).unwrap_or_default()
+    }
+
+    #[zbus(property, name = "Type")]
+    fn kind(&self) -> String {
+        self.read(|_, v| v.kind.clone()).unwrap_or_default()
+    }
+
+    #[zbus(property)]
+    fn uuid(&self) -> String {
+        self.read(|p, _| p.uuid.clone()).unwrap_or_default()
+    }
+
+    #[zbus(property)]
+    fn state(&self) -> u32 {
+        self.read(|_, v| v.active).unwrap_or(4)
+    }
+}
+
+async fn manager_changed(conn: &Connection) {
+    if let Ok(iface) = conn
+        .object_server()
+        .interface::<_, Manager>(MANAGER_PATH)
+        .await
+    {
+        let guard = iface.get().await;
+        let _ = guard
+            .active_connections_changed(iface.signal_emitter())
+            .await;
+    }
+}
+
+/// Sets a VPN's `State` and tells whoever listens.
+async fn vpn_state(conn: &Connection, model: &Shared, n: usize, state: u32) {
+    if let Some(v) = model.lock().unwrap().profiles[n]
+        .as_mut()
+        .and_then(|p| p.vpn.as_mut())
+    {
+        v.active = state;
+    }
+    if let Ok(iface) = conn
+        .object_server()
+        .interface::<_, VpnActive>(vpn_active_path(n))
+        .await
+    {
+        let guard = iface.get().await;
+        let _ = guard.state_changed(iface.signal_emitter()).await;
+    }
+}
+
+/// A VPN stops being active: observers see state 4, then the object goes.
+async fn end_vpn(conn: &Connection, model: &Shared, n: usize) {
+    let was_active = model.lock().unwrap().profiles[n]
+        .as_ref()
+        .and_then(|p| p.vpn.as_ref())
+        .is_some_and(|v| v.active > 0);
+    if !was_active {
+        return;
+    }
+    vpn_state(conn, model, n, 4).await;
+    if let Some(v) = model.lock().unwrap().profiles[n]
+        .as_mut()
+        .and_then(|p| p.vpn.as_mut())
+    {
+        v.active = 0;
+    }
+    let _ = conn
+        .object_server()
+        .remove::<VpnActive, _>(vpn_active_path(n))
+        .await;
+    manager_changed(conn).await;
+}
+
+/// `ActivateConnection` on a VPN Profile: coming up (1), then up (2) or
+/// failed, on the fake's own task.
+async fn start_vpn(conn: &Connection, model: &Shared, n: usize) -> zbus::fdo::Result<()> {
+    {
+        let mut m = model.lock().unwrap();
+        let Some(v) = m.profiles[n].as_mut().and_then(|p| p.vpn.as_mut()) else {
+            return Err(zbus::fdo::Error::InvalidArgs("no such connection".into()));
+        };
+        if v.active > 0 {
+            return Ok(());
+        }
+        v.active = 1;
+    }
+    conn.object_server()
+        .at(vpn_active_path(n), VpnActive(model.clone(), n))
+        .await?;
+    manager_changed(conn).await;
+    let (c, m) = (conn.clone(), model.clone());
+    let task = tokio::spawn(async move {
+        tokio::task::yield_now().await;
+        let fails = m.lock().unwrap().profiles[n]
+            .as_ref()
+            .and_then(|p| p.vpn.as_ref())
+            .is_some_and(|v| v.fails);
+        if fails {
+            end_vpn(&c, &m, n).await;
+        } else {
+            vpn_state(&c, &m, n, 2).await;
+        }
+    });
+    model.lock().unwrap().tasks.push(task.abort_handle());
+    Ok(())
 }
 
 struct Ip4Config(Shared);
@@ -1201,6 +1387,61 @@ struct Settings(Shared);
 
 #[interface(name = "org.freedesktop.NetworkManager.Settings")]
 impl Settings {
+    /// Saves a VPN Profile (the only kind a client adds this way here).
+    async fn add_connection(
+        &self,
+        connection: SettingsDict,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+        #[zbus(object_server)] os: &zbus::ObjectServer,
+    ) -> zbus::fdo::Result<OwnedObjectPath> {
+        let text = |key: &str| -> Option<String> {
+            connection
+                .get("connection")?
+                .get(key)?
+                .try_clone()
+                .ok()?
+                .try_into()
+                .ok()
+        };
+        let kind = text("type").unwrap_or_default();
+        if kind != "wireguard" && kind != "vpn" {
+            return Err(zbus::fdo::Error::InvalidArgs(format!(
+                "the fake only adds VPN profiles, not {kind}"
+            )));
+        }
+        let n = {
+            let mut m = self.0.lock().unwrap();
+            m.profiles.push(Some(ProfileModel {
+                uuid: text("uuid").unwrap_or_default(),
+                id: text("id").unwrap_or_default(),
+                ssid: Vec::new(),
+                autoconnect: false,
+                persisted: true,
+                agent_secrets: false,
+                secret: None,
+                settings: Default::default(),
+                version: 1,
+                bdaddr: None,
+                vpn: Some(VpnModel {
+                    kind,
+                    settings: clone_settings(&connection),
+                    active: 0,
+                    fails: false,
+                }),
+            }));
+            m.profiles.len() - 1
+        };
+        os.at(profile_path(n), Profile(self.0.clone(), n)).await?;
+        Self::new_connection(&emitter, opath(&profile_path(n))).await?;
+        Ok(opath(&profile_path(n)))
+    }
+
+    #[zbus(signal)]
+    async fn new_connection(
+        emitter: &SignalEmitter<'_>,
+        connection: OwnedObjectPath,
+    ) -> zbus::Result<()>;
+
     fn list_connections(&self) -> Vec<OwnedObjectPath> {
         let m = self.0.lock().unwrap();
         (0..m.profiles.len())
@@ -1208,6 +1449,72 @@ impl Settings {
             .map(|n| opath(&profile_path(n)))
             .collect()
     }
+}
+
+/// Rows of an `aa{sv}` value.
+fn rows_of(v: &OwnedVariant) -> Vec<HashMap<String, OwnedVariant>> {
+    v.try_clone()
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .unwrap_or_default()
+}
+
+fn rows_value(rows: Vec<HashMap<String, OwnedVariant>>) -> OwnedVariant {
+    let rows: Vec<HashMap<String, zbus::Variant<'static>>> = rows
+        .into_iter()
+        .map(|r| r.into_iter().map(|(k, v)| (k, v.into())).collect())
+        .collect();
+    OwnedVariant::try_from(zbus::Variant::new(rows)).expect("plain rows")
+}
+
+/// What `GetSettings` shows of a VPN Profile: no private key, no pre-shared keys.
+fn vpn_visible(settings: &SettingsDict) -> SettingsDict {
+    let mut all = clone_settings(settings);
+    if let Some(wg) = all.get_mut("wireguard") {
+        wg.remove("private-key");
+        if let Some(peers) = wg.get("peers") {
+            let rows = rows_of(peers)
+                .into_iter()
+                .map(|mut r| {
+                    r.remove("preshared-key");
+                    r
+                })
+                .collect();
+            wg.insert("peers".into(), rows_value(rows));
+        }
+    }
+    all
+}
+
+/// What `GetSecrets` hands over for a VPN Profile's `setting`.
+fn vpn_secrets(settings: &SettingsDict, setting: &str) -> SettingsDict {
+    let mut out = HashMap::new();
+    if setting != "wireguard" {
+        return out;
+    }
+    let Some(wg) = settings.get("wireguard") else {
+        return out;
+    };
+    let mut values = HashMap::new();
+    if let Some(k) = wg.get("private-key").and_then(|k| k.try_clone().ok()) {
+        values.insert("private-key".to_owned(), k);
+    }
+    if let Some(peers) = wg.get("peers") {
+        let rows: Vec<_> = rows_of(peers)
+            .into_iter()
+            .filter(|r| r.contains_key("preshared-key"))
+            .map(|r| {
+                r.into_iter()
+                    .filter(|(k, _)| k == "public-key" || k == "preshared-key")
+                    .collect()
+            })
+            .collect();
+        if !rows.is_empty() {
+            values.insert("peers".to_owned(), rows_value(rows));
+        }
+    }
+    out.insert("wireguard".to_owned(), values);
+    out
 }
 
 #[derive(Debug, zbus::DBusError)]
@@ -1246,6 +1553,9 @@ impl Profile {
     fn get_settings(&self) -> HashMap<String, HashMap<String, OwnedVariant>> {
         let m = self.0.lock().unwrap();
         let p = m.profiles[self.1].as_ref().expect("served profile exists");
+        if let Some(vpn) = &p.vpn {
+            return vpn_visible(&vpn.settings);
+        }
         let v = |v: Variant<'_>| OwnedVariant::try_from(v).expect("plain value");
         let mut connection = HashMap::new();
         connection.insert("id".to_owned(), v(Variant::from(p.id.clone())));
@@ -1301,6 +1611,9 @@ impl Profile {
         }
         m.secret_reads += 1;
         let p = m.profiles[self.1].as_ref().expect("served profile exists");
+        if let Some(vpn) = &p.vpn {
+            return Ok(vpn_secrets(&vpn.settings, setting));
+        }
         let mut out = HashMap::new();
         if let Some((_, secret)) = &p.secret
             && setting == "802-11-wireless-security"
@@ -1375,6 +1688,7 @@ impl Profile {
         #[zbus(object_server)] os: &zbus::ObjectServer,
         #[zbus(connection)] conn: &Connection,
     ) -> zbus::fdo::Result<()> {
+        end_vpn(conn, &self.0, self.1).await;
         // Like NetworkManager, deleting a Profile in use drops its Link.
         let (in_use, told_agent): (Vec<usize>, bool) = {
             let mut m = self.0.lock().unwrap();
@@ -1577,6 +1891,11 @@ impl FakeNm {
         for p in &mut m.profiles {
             if p.as_ref().is_some_and(|p| !p.persisted) {
                 *p = None;
+            }
+        }
+        for p in m.profiles.iter_mut().flatten() {
+            if let Some(v) = p.vpn.as_mut() {
+                v.active = 0;
             }
         }
         for d in &mut m.devices {
@@ -1852,6 +2171,7 @@ impl FakeNm {
                 settings: SettingsDict::new(),
                 version: 1,
                 secret: None,
+                vpn: None,
                 bdaddr: None,
             }));
             m.profiles.len() - 1
@@ -1976,6 +2296,113 @@ impl FakeNm {
             .flatten()
             .find(|p| p.uuid == uuid)
             .map(|p| p.autoconnect)
+    }
+
+    /// Adds a saved plugin VPN Profile (type `vpn`), e.g. an OpenVPN one.
+    pub fn add_plugin_vpn(&self, uuid: &str, id: &str) {
+        let v = |x: &str| OwnedVariant::try_from(Variant::from(x)).expect("plain value");
+        let connection = HashMap::from([
+            ("id".to_owned(), v(id)),
+            ("uuid".to_owned(), v(uuid)),
+            ("type".to_owned(), v("vpn")),
+        ]);
+        let n = {
+            let mut m = self.model.lock().unwrap();
+            m.profiles.push(Some(ProfileModel {
+                uuid: uuid.into(),
+                id: id.into(),
+                ssid: Vec::new(),
+                autoconnect: false,
+                persisted: true,
+                agent_secrets: false,
+                secret: None,
+                settings: Default::default(),
+                version: 1,
+                bdaddr: None,
+                vpn: Some(VpnModel {
+                    kind: "vpn".into(),
+                    settings: HashMap::from([("connection".to_owned(), connection)]),
+                    active: 0,
+                    fails: false,
+                }),
+            }));
+            m.profiles.len() - 1
+        };
+        let model = self.model.clone();
+        self.with_conn(move |c| async move {
+            let _ = c
+                .object_server()
+                .at(profile_path(n), Profile(model, n))
+                .await;
+        });
+    }
+
+    fn vpn_slot(&self, uuid: &str) -> usize {
+        let m = self.model.lock().unwrap();
+        m.profiles
+            .iter()
+            .position(|p| {
+                p.as_ref()
+                    .is_some_and(|p| p.vpn.is_some() && p.uuid == uuid)
+            })
+            .unwrap_or_else(|| panic!("no VPN profile {uuid}"))
+    }
+
+    /// `NMActiveConnectionState` of a VPN Profile: 0 not active, 1 coming
+    /// up, 2 up.
+    pub fn vpn_active_state(&self, uuid: &str) -> u32 {
+        let n = self.vpn_slot(uuid);
+        let m = self.model.lock().unwrap();
+        m.profiles[n].as_ref().unwrap().vpn.as_ref().unwrap().active
+    }
+
+    /// The tunnel dies on its own (the peer vanished, the link broke): no
+    /// client asked for it.
+    pub fn drop_vpn(&self, uuid: &str) {
+        let n = self.vpn_slot(uuid);
+        let model = self.model.clone();
+        self.with_conn(move |c| async move { end_vpn(&c, &model, n).await });
+    }
+
+    /// Makes every activation of this VPN fail (state 4) instead of working.
+    pub fn script_vpn_failure(&self, uuid: &str, fails: bool) {
+        let n = self.vpn_slot(uuid);
+        let mut m = self.model.lock().unwrap();
+        m.profiles[n].as_mut().unwrap().vpn.as_mut().unwrap().fails = fails;
+    }
+
+    /// The private key stored in a WireGuard Profile.
+    pub fn vpn_private_key(&self, uuid: &str) -> Option<String> {
+        let n = self.vpn_slot(uuid);
+        let m = self.model.lock().unwrap();
+        let v = m.profiles[n].as_ref()?.vpn.as_ref()?;
+        v.settings
+            .get("wireguard")?
+            .get("private-key")?
+            .try_clone()
+            .ok()?
+            .try_into()
+            .ok()
+    }
+
+    /// The Profile's settings as NetworkManager stored them (secrets
+    /// included): the value of `section`/`key` as text, for assertions.
+    pub fn vpn_setting(&self, uuid: &str, section: &str, key: &str) -> Option<String> {
+        let n = self.vpn_slot(uuid);
+        let m = self.model.lock().unwrap();
+        let v = m.profiles[n].as_ref()?.vpn.as_ref()?;
+        let value = v.settings.get(section)?.get(key)?;
+        Some(format!("{value:?}"))
+    }
+
+    /// The UUID of the first VPN Profile with this name.
+    pub fn vpn_uuid(&self, name: &str) -> Option<String> {
+        let m = self.model.lock().unwrap();
+        m.profiles
+            .iter()
+            .flatten()
+            .find(|p| p.vpn.is_some() && p.id == name)
+            .map(|p| p.uuid.clone())
     }
 
     /// A text setting of the Profile with this UUID, as a client wrote it.

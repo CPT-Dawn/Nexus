@@ -20,6 +20,7 @@ use super::overview;
 use super::profile_ui;
 use super::tether_ui;
 use super::theme::Look;
+use super::vpn_ui;
 use super::wifi_ui;
 use super::words;
 
@@ -154,6 +155,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         ..a.header
     };
     wifi_ui::overlays(f, app, body, &look, &sym);
+    vpn_ui::overlays(f, app, body, &look, &sym);
     if let Some(form) = app.eap_form() {
         eap_ui::draw(f, form, body, &look, &sym);
     }
@@ -330,6 +332,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::WiFi {
         return wifi_ui::master(f, app, area, look, sym);
     }
+    if app.tab() == Tab::Vpn {
+        return vpn_ui::master(f, app, area, look, sym);
+    }
     if app.tab() == Tab::Hotspot {
         return tether_ui::master(f, app, area, look, sym);
     }
@@ -349,6 +354,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
 fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::WiFi && app.conn() == Conn::Up {
         return wifi_ui::detail(f, app, area, look, sym);
+    }
+    if app.tab() == Tab::Vpn && app.conn() == Conn::Up {
+        return vpn_ui::detail(f, app, area, look, sym);
     }
     if app.tab() == Tab::Hotspot && app.conn() == Conn::Up {
         return tether_ui::detail(f, app, area, look, sym);

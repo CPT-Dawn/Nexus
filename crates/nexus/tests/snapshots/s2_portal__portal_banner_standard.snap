@@ -5,10 +5,10 @@ expression: frame
  Login required for CafeGuest. Press o to open it.
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Portal
 ╭ VPN ───────────────────────╮╭ VPN ───────────────────────────────────────────────────────────────╮
-│ Nothing to list yet.       ││ VPN arrives in a later release.                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
+│ No VPNs yet.               ││ Nothing selected.                                                  │
+│ Press i to import a        ││                                                                    │
+│ WireGuard .conf,           ││                                                                    │
+│ or c to create a tunnel.   ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
@@ -29,4 +29,4 @@ expression: frame
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- o login  h/l tab  : palette  ? help  q quit
+ i import  c create  o login  h/l tab  : palette  ? help  q quit

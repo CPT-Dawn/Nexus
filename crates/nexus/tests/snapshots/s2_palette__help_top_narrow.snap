@@ -9,7 +9,7 @@ expression: top
 │  g / G                Jump to top / bottom               █
 │  h / l, Left / Right  Previous / next tab                █
 │  Tab / Shift-Tab      Next / previous tab                █
-│  1 - 6                Jump to a tab                      █
+│  1 - 6                Jump to a tab                      │
 │  Enter                Open the selected card's tab       │
 │  d                    Details sheet (small windows)      │
 │  Esc                  Back out; never quits              │

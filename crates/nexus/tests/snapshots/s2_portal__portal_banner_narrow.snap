@@ -5,9 +5,9 @@ expression: frame
  Login required for CafeGuest. Press o to open it.
  Nexus  VPN ▾  4/6                                 ● Portal
 ╭ VPN ─────────────────────────────────────────────────────╮
-│ Nothing to list yet.                                     │
-│                                                          │
-│                                                          │
+│ No VPNs yet.                                             │
+│ Press i to import a WireGuard .conf,                     │
+│ or c to create a tunnel.                                 │
 │                                                          │
 │                                                          │
 │                                                          │
@@ -21,4 +21,4 @@ expression: frame
 │                                                          │
 │                                                          │
 ╰──────────────────────────────────────────────────────────╯
- o login  h/l tab  : palette  ? help  q quit
+ i import  c create  o login  h/l tab  : palette  ? help
