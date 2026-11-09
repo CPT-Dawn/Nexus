@@ -1241,13 +1241,20 @@ impl App {
 
     /// Keys that belong to the current tab (the sheet passes them through).
     fn tab_key(&mut self, key: KeyEvent) -> bool {
-        match self.tab {
+        self.keys_of(self.tab, key)
+    }
+
+    /// Presses `key` as `tab`'s handler sees it. The one place that maps a
+    /// tab to its handler, so the palette cannot miss a tab: a new tab is a
+    /// compile error here, not a Verb that quietly does nothing.
+    pub(super) fn keys_of(&mut self, tab: Tab, key: KeyEvent) -> bool {
+        match tab {
             Tab::WiFi => self.wifi_key(key),
             Tab::Vpn => self.vpn_key(key),
             Tab::Ethernet => self.eth_key(key),
             Tab::Hotspot => self.hotspot_tab_key(key),
             Tab::Settings => self.settings_key(key),
-            _ => false,
+            Tab::Overview => false,
         }
     }
 
