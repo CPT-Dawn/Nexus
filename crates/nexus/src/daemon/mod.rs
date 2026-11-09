@@ -432,6 +432,15 @@ async fn answer<B: Backend>(
         Op::VpnCreate(tunnel) => backend_reply(req.id, backend.vpn_create(tunnel).await),
         Op::VpnKey { vpn } => backend_reply(req.id, backend.vpn_key(vpn).await),
         Op::VpnReveal { vpn } => backend_reply(req.id, backend.vpn_reveal(vpn).await),
+        Op::WifiJoinEap { network, eap } => {
+            let result = backend.wifi_join_eap(network, eap).await;
+            if let Err(BackendError::Refused(f)) = &result
+                && f.code == ErrorCode::WrongPassword
+            {
+                notifier.wrong_password(&f.message);
+            }
+            backend_reply(req.id, result)
+        }
         Op::Tethers => backend_reply(req.id, backend.tethers().await),
         Op::TetherConnect { phone } => backend_reply(req.id, backend.tether_connect(phone).await),
         Op::TetherDisconnect => backend_reply(req.id, backend.tether_disconnect().await),

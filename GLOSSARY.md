@@ -22,6 +22,9 @@ _Avoid_: adapter, interface (in the UI), NIC
 A Device's live state while it carries a Network: the joined Network, addresses, speed and traffic.
 _Avoid_: active connection, session
 
+**Enterprise Network**:
+A Network that makes each person sign in with their own identity and a password or certificate, such as eduroam or an office Wi-Fi or Ethernet port. Joined through a guided sign-in form.
+_Avoid_: WPA-Enterprise, 802.1X, EAP (in the UI; fine in code and the CLI flags)
 **Pending change**:
 An edit to the Profile carrying the current Link that has been applied but not yet kept. It reverts by itself unless the person confirms within the countdown (ADR-0004).
 _Avoid_: draft, transaction, trial

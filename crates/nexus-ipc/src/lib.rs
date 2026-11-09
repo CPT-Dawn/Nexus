@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 mod doctor;
+mod eap;
 pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
+pub use eap::{Eap, EapError, EapField, EapMethod, Phase2};
 
 pub mod profile;
 pub use profile::{
@@ -69,6 +71,11 @@ pub enum Op {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         password: Option<Secret>,
     },
+    /// Join a WPA-Enterprise (802.1X) Network such as eduroam, with the
+    /// settings in `eap`. Like `wifi_join` otherwise (result [`Joined`]);
+    /// `invalid_settings` when `eap` fails its validation, `wrong_password`
+    /// when the server refuses the sign-in.
+    WifiJoinEap { network: String, eap: Eap },
     /// Drop the current Wi-Fi Link, keeping its Profile. Result: [`Disconnected`];
     /// `not_connected` when there is nothing to drop.
     WifiDisconnect,
@@ -313,7 +320,7 @@ pub enum ErrorCode {
     NoPortal,
     /// The browser could not be started.
     OpenFailed,
-    /// Profile settings are not valid; the message says which and why.
+    /// Settings are not valid (Profile settings, 802.1X sign-in); the message says which and why.
     InvalidSettings,
     /// The Profile changed since it was read (or a change still waits for
     /// confirmation); read it again.

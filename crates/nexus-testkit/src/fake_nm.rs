@@ -114,6 +114,11 @@ impl Ap {
     }
 
     /// An open access point.
+    /// A WPA2-Enterprise (802.1X) access point, like eduroam.
+    pub fn enterprise(ssid: &str, bssid: &str, strength: u8) -> Self {
+        Self::wpa2(ssid, bssid, strength).security(0x1, 0, 0x208) // KEY_MGMT_802_1X | PAIR_CCMP
+    }
+
     pub fn open(ssid: &str, bssid: &str, strength: u8) -> Self {
         Self::wpa2(ssid, bssid, strength).security(0, 0, 0)
     }
@@ -257,6 +262,8 @@ struct Model {
     profiles: Vec<Option<ProfileModel>>,
     /// The password a Network wants; a join with another one fails.
     psks: HashMap<Vec<u8>, String>,
+    /// The `802-1x` setting of the last Profile added for each SSID, as text.
+    eap_settings: HashMap<Vec<u8>, HashMap<String, String>>,
     /// Joins that die on purpose: `(NMDeviceState died in, reason)`.
     join_failures: HashMap<Vec<u8>, (u32, u32)>,
     /// Tethering Links that die on purpose, by phone address.
@@ -449,8 +456,21 @@ impl Manager {
             .get("persist")
             .and_then(|v| v.try_clone().ok()?.try_into().ok());
         // A secured profile without its secret: NetworkManager asks the agent.
-        let needs_agent = connection.contains_key("802-11-wireless-security")
+        let eap = connection.get("802-1x");
+        let needs_agent = eap.is_none()
+            && connection.contains_key("802-11-wireless-security")
             && text("802-11-wireless-security", "psk").is_none();
+        if let Some(eap) = eap {
+            let shown = eap
+                .iter()
+                .map(|(k, v)| (k.clone(), show_variant(v)))
+                .collect();
+            self.0
+                .lock()
+                .unwrap()
+                .eap_settings
+                .insert(ssid.clone(), shown);
+        }
         let n = {
             let mut m = self.0.lock().unwrap();
             m.profiles.push(Some(ProfileModel {
@@ -471,8 +491,17 @@ impl Manager {
         };
         os.at(profile_path(n), Profile(self.0.clone(), n)).await?;
         let dev = device_index(device.as_str())?;
-        let given = text("802-11-wireless-security", "psk").unwrap_or_default();
+        let given = match eap {
+            // Identity and password stand in for the psk of a Wi-Fi Network.
+            Some(_) => format!(
+                "{}\0{}",
+                text("802-1x", "identity").unwrap_or_default(),
+                text("802-1x", "password").unwrap_or_default()
+            ),
+            None => text("802-11-wireless-security", "psk").unwrap_or_default(),
+        };
         let wrong_inline = !needs_agent
+            && eap.is_none()
             && self
                 .0
                 .lock()
@@ -962,6 +991,28 @@ async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u3
         let _ = i.get().await.state_changed(i.signal_emitter()).await;
         let _ = Device::device_state_changed(i.signal_emitter(), new, old, reason).await;
     }
+}
+
+/// A settings value as readable text, for [`FakeNm::eap_setting`].
+fn show_variant(v: &OwnedVariant) -> String {
+    let Ok(v) = v.try_clone() else {
+        return String::new();
+    };
+    if let Ok(s) = <String>::try_from(v.try_clone().expect("clone")) {
+        return s;
+    }
+    if let Ok(b) = <bool>::try_from(v.try_clone().expect("clone")) {
+        return b.to_string();
+    }
+    if let Ok(list) = <Vec<String>>::try_from(v.try_clone().expect("clone")) {
+        return list.join(",");
+    }
+    if let Ok(bytes) = <Vec<u8>>::try_from(v.try_clone().expect("clone")) {
+        return String::from_utf8_lossy(&bytes)
+            .trim_end_matches('\0')
+            .to_owned();
+    }
+    format!("{:?}", *v)
 }
 
 type SettingsDict = HashMap<String, HashMap<String, OwnedVariant>>;
@@ -1715,6 +1766,7 @@ impl FakeNm {
             next_ap: 1,
             profiles: Vec::new(),
             psks: HashMap::new(),
+            eap_settings: HashMap::new(),
             secret_reads: 0,
             deny_secret_reads: false,
             join_failures: HashMap::new(),
@@ -2131,6 +2183,24 @@ impl FakeNm {
                 .at(profile_path(n), Profile(model, n))
                 .await;
         });
+    }
+
+    /// Makes joining the enterprise Network `ssid` need this identity and
+    /// password; any other pair is refused like a wrong password.
+    pub fn set_eap_user(&self, ssid: &str, identity: &str, password: &str) {
+        self.model
+            .lock()
+            .unwrap()
+            .psks
+            .insert(ssid.as_bytes().to_vec(), format!("{identity}\0{password}"));
+    }
+
+    /// One key of the `802-1x` setting the Daemon sent when it added the
+    /// Profile for `ssid`, as text (lists joined by `,`, byte arrays as
+    /// their UTF-8 text without the trailing NUL, so a certificate shows as `file://<path>`).
+    pub fn eap_setting(&self, ssid: &str, key: &str) -> Option<String> {
+        let m = self.model.lock().unwrap();
+        m.eap_settings.get(ssid.as_bytes())?.get(key).cloned()
     }
 
     /// Makes joining `ssid` need `psk`; any other password fails like a wrong one.

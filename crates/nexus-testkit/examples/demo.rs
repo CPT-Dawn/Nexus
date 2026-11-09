@@ -5,7 +5,7 @@
 //! cargo build -p nexus
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|vpn]
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|tether|tether-off]
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|profile]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|wifi-enterprise|profile]
 //! ```
 //!
 //! Scenarios:
@@ -21,6 +21,11 @@
 //!   disconnects, `f` forgets, `a` toggles autoconnect, `u` undoes. `s` on a saved
 //!   row (Home-5G, Parents House, Hotel Lobby) opens the share view; `enter`
 //!   reveals the QR code, `p` shows the password, `esc` closes.
+//! - `wifi-enterprise`: `wifi` plus eduroam (WPA-Enterprise). Press `2`, move
+//!   to eduroam (`j`), `enter` opens the sign-in form: type an identity,
+//!   `tab` to move, `←`/`→` change the method, `space` toggles the server
+//!   check, `ctrl-r` shows passwords, `enter` joins, `esc` cancels. The right
+//!   login is `you@uni.example` / `correct-horse`, server name `radius.uni.example`.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
 //! - `vpn`: online, with three VPNs: Work (WireGuard, up), Home Lab
 //!   (WireGuard, down) and Office OpenVPN (plugin, down). Press `4` for the
@@ -71,9 +76,11 @@ fn main() {
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" | "profile" => {
+        "wifi" | "wifi-prompt" | "wifi-enterprise" | "profile" => {
             if scenario == "wifi" {
                 nexus_testkit::scenarios::wifi_busy(&world);
+            } else if scenario == "wifi-enterprise" {
+                nexus_testkit::scenarios::wifi_enterprise(&world);
             } else if scenario == "profile" {
                 nexus_testkit::scenarios::profile_busy(&world);
             } else {

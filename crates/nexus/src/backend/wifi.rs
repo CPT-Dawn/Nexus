@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet};
 
 use nexus_ipc::{
-    AutoconnectSet, Band, Disconnected, Forgotten, Joined, SavedWifi, ScanOutcome, Secret,
+    AutoconnectSet, Band, Disconnected, Eap, Forgotten, Joined, SavedWifi, ScanOutcome, Secret,
     Security, ShareAuth, WifiDevice, WifiList, WifiNetwork, WifiShare,
 };
 use zbus::proxy::CacheProperties;
@@ -464,6 +464,7 @@ fn new_profile(
     uuid: &str,
     security: Security,
     password: Option<&str>,
+    eap: Option<&Eap>,
 ) -> Settings {
     let mut connection = HashMap::new();
     connection.insert("id".to_owned(), variant(name));
@@ -480,6 +481,14 @@ fn new_profile(
         ("ipv4".to_owned(), auto("ipv4")),
         ("ipv6".to_owned(), auto("ipv6")),
     ]);
+    if let Some(eap) = eap {
+        all.insert(
+            "802-11-wireless-security".to_owned(),
+            HashMap::from([("key-mgmt".to_owned(), variant("wpa-eap"))]),
+        );
+        all.insert("802-1x".to_owned(), super::eap::setting(eap));
+        return all;
+    }
     let key_mgmt = match security {
         Security::Wpa3 => Some("sae"),
         Security::Owe => Some("owe"),
@@ -508,10 +517,11 @@ pub async fn join(
     broker: &Broker,
     network: &str,
     password: Option<&Secret>,
+    eap: Option<&Eap>,
 ) -> zbus::Result<Result<Joined, Failure>> {
     broker.forget_ended(network);
     loop {
-        let result = join_once(conn, broker, network, password).await?;
+        let result = join_once(conn, broker, network, password, eap).await?;
         let Err(failure) = &result else {
             return Ok(result);
         };
@@ -536,15 +546,25 @@ async fn join_once(
     broker: &Broker,
     network: &str,
     password: Option<&Secret>,
+    eap: Option<&Eap>,
 ) -> zbus::Result<Result<Joined, Failure>> {
     let Some(ssid) = nexus_ipc::parse_network_id(network) else {
         return Ok(Err(text::bad_network_id()));
     };
     let name = String::from_utf8_lossy(&ssid).into_owned();
+    if let Some(eap) = eap {
+        let errors = eap.validate();
+        if !errors.is_empty() {
+            return Ok(Err(text::invalid_eap(&name, &errors)));
+        }
+    }
     let list = list(conn).await?;
     let Some(net) = list.networks.iter().find(|n| n.id == network) else {
         return Ok(Err(text::out_of_range(&name)));
     };
+    if eap.is_some() && net.security != Security::Enterprise {
+        return Ok(Err(text::not_enterprise(&name, net.security.label())));
+    }
     let secured = !matches!(net.security, Security::Open | Security::Owe);
     let device_path = net.device.clone();
     let saved = match &net.profile {
@@ -581,7 +601,10 @@ async fn join_once(
         }
         None => {
             match net.security {
-                Security::Wep | Security::Enterprise | Security::Unknown => {
+                Security::Enterprise if eap.is_none() => {
+                    return Ok(Err(text::needs_eap(&name)));
+                }
+                Security::Wep | Security::Unknown => {
                     return Ok(Err(text::unsupported_security(&name, net.security.label())));
                 }
                 _ => {}
@@ -595,7 +618,7 @@ async fn join_once(
             }
             let uuid = new_uuid();
             inline = password.map(|_| broker.inline_password(&uuid));
-            let settings = new_profile(&ssid, &name, &uuid, net.security, password);
+            let settings = new_profile(&ssid, &name, &uuid, net.security, password, eap);
             let options = HashMap::from([("persist".to_owned(), variant("memory"))]);
             match nm
                 .add_and_activate_connection2(settings, &device_obj, &none, options)
@@ -622,7 +645,10 @@ async fn join_once(
                 profile: uuid,
             }))
         }
-        Err(failure) => {
+        Err(mut failure) => {
+            if eap.is_some() && failure.code == nexus_ipc::ErrorCode::WrongPassword {
+                failure = text::eap_refused(&name);
+            }
             if created {
                 // No lingering Profile for a join that never worked.
                 let _ = settings.delete().await;

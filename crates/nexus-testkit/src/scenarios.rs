@@ -51,6 +51,19 @@ pub fn wifi_busy(world: &World) -> DeviceId {
     wlan0
 }
 
+/// [`wifi_busy`], plus `eduroam`, a WPA-Enterprise Network in range that
+/// accepts `you@uni.example` with `correct-horse`. Returns the Device.
+pub fn wifi_enterprise(world: &World) -> DeviceId {
+    let wlan0 = wifi_busy(world);
+    world
+        .nm
+        .add_ap(wlan0, Ap::enterprise("eduroam", "AA:00:00:00:00:07", 74));
+    world
+        .nm
+        .set_eap_user("eduroam", "you@uni.example", "correct-horse");
+    wlan0
+}
+
 /// [`wifi_busy`], plus a saved Profile (Parents House) that already has its
 /// own settings: a static address, custom DNS, metered, a priority. The
 /// joined Home-5G has defaults, so editing it shows the checkpoint countdown.

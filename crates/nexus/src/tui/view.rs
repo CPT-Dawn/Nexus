@@ -12,6 +12,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wr
 use super::app::{App, Conn, Layer, Tab};
 use super::caps::Glyphs;
 use super::doctor_view;
+use super::eap_ui;
 use super::hits::{Hit, hint_key};
 use super::layout::{self, Areas, Mode};
 use super::overlays;
@@ -155,6 +156,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     };
     wifi_ui::overlays(f, app, body, &look, &sym);
     vpn_ui::overlays(f, app, body, &look, &sym);
+    if let Some(form) = app.eap_form() {
+        eap_ui::draw(f, form, body, &look, &sym);
+    }
     profile_ui::overlay(f, app, body, &look, &sym);
     if app.layer() == Layer::Help {
         overlays::help(f, app, body, &look, &sym);

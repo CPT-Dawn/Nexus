@@ -104,6 +104,11 @@ Add an AP: drop a hostapd config in `rig/aps.d/<name>.conf` with `interface=@IFA
 - The Daemon coalesces bursts, so a test that goes online and offline right after lets a Front end read the `activity` events in between (`front_end(&world)` then `next_event("activity")`), or the two changes merge into nothing. A subscribed Front end also means "someone is looking": no Secret prompt notification is sent while any connection is subscribed.
 - The terminal launcher is never mocked in code: `world.install_tool("xdg-terminal-exec", "printf '%s\n' \"$@\" >> log")` shadows the real one on the Daemon's `PATH`. `WorldBuilder::env("TERMINAL", ..)` sets a variable for the Daemon. The choice between `xdg-terminal-exec` and `$TERMINAL -e` is unit-tested in `daemon/notify.rs`.
 
+## Enterprise Wi-Fi / 802.1X (ticket #16)
+
+- S1 (`crates/nexus/tests/s1_enterprise.rs`): `wifi_join_eap` over the wire and `nexus wifi join <ssid> --eap peap ...` on the CLI. `Ap::enterprise(..)` is an 802.1X access point; `nm.set_eap_user(ssid, identity, password)` makes any other pair fail like a refused sign-in; `nm.eap_setting(ssid, key)` reads back what the Daemon put in the Profile's `802-1x` setting as text (certificates show as `file://<path>`).
+- S2 (`crates/nexus/tests/s2_enterprise.rs`): the sign-in form at narrow/standard/wide. World: `nexus_testkit::scenarios::wifi_enterprise` (also `demo wifi-enterprise`). The form starts on Identity; `Tab`/`BackTab` move, `Left`/`Right` change a choice.
+- Real mode: `rig/aps.d/eap.conf` is a hostapd access point (`NexusEap`) with the built-in EAP server; `rig/inner.sh` generates a throwaway CA, server certificate (`radius.nexus.test`) and a `student` client certificate under `/run/nexus-rig/pki`. User `student` / `correct-horse-4`. Needs `openssl` on the machine.
 ## Bluetooth Tethering (ticket #23)
 
 - S1 (`crates/nexus/tests/s1_tether.rs`): `World::builder(bin).bluez(true)` (or `.bluez(false)` for an adapter that is off) starts a fake `org.bluez` on the same private system bus: one `org.bluez.Adapter1` and an ObjectManager. `world.bluez().set_powered(bool)` flips it and emits `PropertiesChanged`; `stop()`/`restart()` take the service away. Without `.bluez(..)` nobody owns `org.bluez` (Bluetooth reads as `absent`), and the Daemon must not start it by looking.

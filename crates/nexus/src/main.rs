@@ -288,6 +288,88 @@ struct JoinArgs {
     /// Print the result as JSON.
     #[arg(long)]
     json: bool,
+    /// Join a WPA-Enterprise Network (eduroam, office Wi-Fi) with this outer method.
+    #[arg(long, value_enum)]
+    eap: Option<EapKind>,
+    /// Inner method for PEAP and TTLS (default: mschapv2).
+    #[arg(long, value_enum, requires = "eap")]
+    phase2: Option<InnerKind>,
+    /// Your identity, usually your email or username.
+    #[arg(long, requires = "eap")]
+    identity: Option<String>,
+    /// The outer identity sent in the clear (eduroam: anonymous@your.domain).
+    #[arg(long, requires = "eap")]
+    anonymous_identity: Option<String>,
+    /// The server name (or its tail) the certificate must match, e.g. radius.uni.example.
+    #[arg(long, requires = "eap")]
+    domain: Option<String>,
+    /// CA certificate file. Without it the system's CAs are used (needs --domain).
+    #[arg(long, requires = "eap")]
+    ca_cert: Option<String>,
+    /// Do not check the server's certificate at all. Anyone can pose as the network.
+    #[arg(long, requires = "eap")]
+    no_ca_validation: bool,
+    /// Client certificate file (TLS).
+    #[arg(long, requires = "eap")]
+    client_cert: Option<String>,
+    /// Private key file (TLS).
+    #[arg(long, requires = "eap")]
+    private_key: Option<String>,
+    /// Private key password. Visible in the process list.
+    #[arg(long, requires = "eap")]
+    private_key_password: Option<String>,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum EapKind {
+    Peap,
+    Ttls,
+    Tls,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum InnerKind {
+    Mschapv2,
+    Mschap,
+    Pap,
+    Chap,
+    Gtc,
+    Md5,
+}
+
+impl JoinArgs {
+    /// The 802.1X settings the flags describe, if `--eap` was given.
+    fn eap(&self) -> Option<nexus_ipc::Eap> {
+        use nexus_ipc::{Eap, EapMethod, Phase2};
+        let method = match self.eap? {
+            EapKind::Peap => EapMethod::Peap,
+            EapKind::Ttls => EapMethod::Ttls,
+            EapKind::Tls => EapMethod::Tls,
+        };
+        let mut eap = Eap::new(method);
+        if let Some(p) = self.phase2 {
+            eap.phase2 = Some(match p {
+                InnerKind::Mschapv2 => Phase2::Mschapv2,
+                InnerKind::Mschap => Phase2::Mschap,
+                InnerKind::Pap => Phase2::Pap,
+                InnerKind::Chap => Phase2::Chap,
+                InnerKind::Gtc => Phase2::Gtc,
+                InnerKind::Md5 => Phase2::Md5,
+            });
+        }
+        eap.identity = self.identity.clone().unwrap_or_default();
+        eap.anonymous_identity.clone_from(&self.anonymous_identity);
+        eap.domain_suffix.clone_from(&self.domain);
+        eap.ca_cert.clone_from(&self.ca_cert);
+        eap.no_ca_validation = self.no_ca_validation;
+        eap.client_cert.clone_from(&self.client_cert);
+        eap.private_key.clone_from(&self.private_key);
+        eap.private_key_password = self
+            .private_key_password
+            .clone()
+            .map(nexus_ipc::Secret::new);
+        Some(eap)
+    }
 }
 
 #[derive(Subcommand)]
@@ -320,12 +402,16 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Join(a),
         } => {
+            let eap = a.eap();
             let source = match (a.password, a.password_stdin) {
                 (Some(p), _) => cli::PasswordSource::Flag(p),
                 (None, true) => cli::PasswordSource::Stdin,
                 (None, false) => cli::PasswordSource::None,
             };
-            cli::wifi_join(&a.ssid, source, a.json)
+            match eap {
+                Some(eap) => cli::wifi_join_eap(&a.ssid, eap, source, a.json),
+                None => cli::wifi_join(&a.ssid, source, a.json),
+            }
         }
         Command::Wifi {
             action: WifiAction::On { json },

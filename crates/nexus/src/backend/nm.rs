@@ -142,6 +142,12 @@ trait Statistics {
 /// NetworkManager only updates a Device's counters while this is non-zero.
 const STATISTICS_REFRESH_MS: u32 = 1000;
 
+/// Room for each watch stream's queue. The streams are polled only between
+/// re-reads of the world; with zbus's default of 64, a burst of signals during
+/// one re-read fills the queue and the bus connection stops receiving, replies
+/// included, until a call times out.
+const WATCH_QUEUE: std::num::NonZeroUsize = std::num::NonZeroUsize::new(65_536).unwrap();
+
 /// Property-change bursts are folded into one update per tick.
 const TICK: Duration = Duration::from_millis(100);
 /// How long to wait before re-opening a watch that could not be opened.
@@ -320,10 +326,10 @@ impl NetworkManager {
             .member("NameOwnerChanged")
             .arg(0, "org.bluez")
             .build()?;
-        let a = MessageStream::for_match_rule(nm_signals, &conn, None).await?;
-        let b = MessageStream::for_match_rule(owner, &conn, None).await?;
-        let c = MessageStream::for_match_rule(adapter, &conn, None).await?;
-        let d = MessageStream::for_match_rule(bluez_owner, &conn, None).await?;
+        let a = MessageStream::for_match_rule(nm_signals, &conn, Some(WATCH_QUEUE)).await?;
+        let b = MessageStream::for_match_rule(owner, &conn, Some(WATCH_QUEUE)).await?;
+        let c = MessageStream::for_match_rule(adapter, &conn, Some(WATCH_QUEUE)).await?;
+        let d = MessageStream::for_match_rule(bluez_owner, &conn, Some(WATCH_QUEUE)).await?;
         Ok(Box::pin(stream::select(
             stream::select(a, b),
             stream::select(c, d),
@@ -391,7 +397,20 @@ impl Backend for NetworkManager {
     ) -> Result<Joined, BackendError> {
         let broker = self.broker.clone();
         self.with_bus(|c| async move {
-            super::wifi::join(&c, &broker, &network, password.as_ref()).await
+            super::wifi::join(&c, &broker, &network, password.as_ref(), None).await
+        })
+        .await?
+        .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_join_eap(
+        &self,
+        network: String,
+        eap: nexus_ipc::Eap,
+    ) -> Result<Joined, BackendError> {
+        let broker = self.broker.clone();
+        self.with_bus(|c| async move {
+            super::wifi::join(&c, &broker, &network, None, Some(&eap)).await
         })
         .await?
         .map_err(BackendError::Refused)
