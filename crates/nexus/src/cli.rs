@@ -27,16 +27,16 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::NotConnected => 11,
         ErrorCode::HardBlocked => 12,
         // 13 is `nexus doctor` finding a problem.
-        ErrorCode::BluetoothOff => 18,
-        ErrorCode::NoPhone => 19,
-        ErrorCode::UnknownPhone => 20,
+        ErrorCode::RevealDenied => 14,
         ErrorCode::InvalidSettings => 15,
         ErrorCode::Conflict => 16,
         ErrorCode::NothingPending => 17,
-        ErrorCode::RevealDenied => 14,
-        ErrorCode::UnknownVpn => 30,
-        ErrorCode::InvalidConfig => 31,
-        ErrorCode::VpnFailed => 32,
+        ErrorCode::BluetoothOff => 18,
+        ErrorCode::NoPhone => 19,
+        ErrorCode::UnknownPhone => 20,
+        ErrorCode::UnknownVpn => 21,
+        ErrorCode::InvalidConfig => 22,
+        ErrorCode::VpnFailed => 23,
         _ => EXIT_DAEMON_ERROR,
     }
 }
