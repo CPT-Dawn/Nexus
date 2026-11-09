@@ -65,6 +65,29 @@ mapfile -t ap_ifaces < <(in_ap iw dev | awk '$1 == "Interface" {print $2}' | sor
 confs=("$here"/aps.d/*.conf)
 (( ${#ap_ifaces[@]} == ${#confs[@]} )) || die "have ${#ap_ifaces[@]} AP radios for ${#confs[@]} AP configs"
 
+# ---- a throwaway PKI for the 802.1X access point ---------------------------
+# Server name radius.nexus.test; the user "student" signs in with PEAP,
+# TTLS or TLS (the client certificate "student" is signed by the same CA).
+pki="$bus_dir/pki"
+mkdir -p "$pki"
+command -v openssl >/dev/null || die "openssl is needed to build the 802.1X test certificates"
+openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 -subj "/CN=Nexus Rig CA" \
+    -keyout "$pki/ca.key" -out "$pki/ca.pem" 2>/dev/null
+issue() { # name subject extfile-body
+    openssl req -newkey rsa:2048 -nodes -sha256 -subj "$2" -keyout "$pki/$1.key" -out "$pki/$1.csr" 2>/dev/null
+    printf '%s\n' "$3" >"$pki/$1.ext"
+    openssl x509 -req -sha256 -days 2 -in "$pki/$1.csr" -CA "$pki/ca.pem" -CAkey "$pki/ca.key" \
+        -CAcreateserial -extfile "$pki/$1.ext" -out "$pki/$1.pem" 2>/dev/null
+}
+issue server "/CN=radius.nexus.test" $'subjectAltName=DNS:radius.nexus.test\nextendedKeyUsage=serverAuth'
+issue student "/CN=student" $'extendedKeyUsage=clientAuth'
+cat >"$pki/eap.users" <<'EOF2'
+# phase 1 methods, then the inner ones
+*          PEAP,TTLS,TLS
+"student"  MSCHAPV2,TTLS-PAP  "correct-horse-4"  [2]
+EOF2
+chmod 0644 "$pki"/*
+
 dnsmasq_args=(--keep-in-foreground --conf-file=/dev/null --port=0 --bind-interfaces
     --dhcp-leasefile="$bus_dir/leases" --pid-file="$bus_dir/dnsmasq.pid" --dhcp-authoritative)
 i=0
@@ -72,7 +95,7 @@ for conf in "${confs[@]}"; do
     i=$((i + 1))
     iface="${ap_ifaces[$((i - 1))]}"
     in_ap ip addr add "10.99.$i.1/24" dev "$iface"
-    sed "s/@IFACE@/$iface/" "$conf" >"$bus_dir/$(basename "$conf")"
+    sed -e "s/@IFACE@/$iface/" -e "s|@PKI@|$pki|g" "$conf" >"$bus_dir/$(basename "$conf")"
     in_ap hostapd "$bus_dir/$(basename "$conf")" >"$bus_dir/hostapd-$(basename "$conf" .conf).log" 2>&1 &
     dnsmasq_args+=(--interface="$iface" "--dhcp-range=10.99.$i.10,10.99.$i.50,12h")
 done
@@ -103,12 +126,6 @@ done
 mkdir -p /run/udev
 "$udevd" >"$bus_dir/udevd.log" 2>&1 &
 for _ in $(seq 100); do [[ -S /run/udev/control ]] && break; sleep 0.05; done
-# A WireGuard device for the VPN test (named like the Profile it activates).
-# NetworkManager keeps a device it creates itself unmanaged here, so make it
-# first, set it up (a device that is down and not NetworkManager's own stays
-# unmanaged) and let udev initialise it with the radios. No peer is configured:
-# WireGuard is connectionless, so NetworkManager calls the tunnel up anyway.
-ip link add rigwg type wireguard 2>/dev/null && ip link set rigwg up || echo "rig: no wireguard in this kernel; the VPN test will skip bringing it up" >&2
 udevadm trigger --action=add --subsystem-match=net --subsystem-match=ieee80211
 udevadm settle --timeout=20
 
