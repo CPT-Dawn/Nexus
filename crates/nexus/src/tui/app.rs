@@ -10,10 +10,12 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use nexus_ipc::{
     ActivityEntry, Event, Finding, Op, PromptClosed, PromptKind, Secret, Status, Traffic, WifiList,
+    WifiShare,
 };
 
 use super::caps::Caps;
 use super::profile::{Action, Editor, ProfileMsg};
+use super::share::{Share, Stage};
 use super::theme::{Look, Theme};
 use super::wifi::{Cmd, Confirm, Done, Entry, PasswordField, Runner, SWEEP_FRAME, Toast, WifiTab};
 
@@ -33,6 +35,8 @@ pub enum Msg {
     Prompt(Event),
     /// A command the person gave has finished.
     Done(Done),
+    /// The Daemon answered a reveal for the share view.
+    Shared(Result<WifiShare, String>),
     /// A traffic sample, asked for only while the graphs are visible.
     Traffic(Traffic),
     /// The Daemon's whole activity log (on connect), newest first.
@@ -180,6 +184,8 @@ pub struct App {
     confirm: Option<Confirm>,
     /// The Profile settings editor, while open: it has the keys.
     editor: Option<Editor>,
+    /// The share view (QR code) of a saved Network.
+    share: Option<Share>,
     toast: Option<Toast>,
     runner: Option<Runner>,
 }
@@ -205,6 +211,7 @@ impl App {
             field: None,
             confirm: None,
             editor: None,
+            share: None,
             toast: None,
             runner: None,
         }
@@ -254,6 +261,10 @@ impl App {
 
     pub fn confirm(&self) -> Option<&Confirm> {
         self.confirm.as_ref()
+    }
+
+    pub(super) fn share(&self) -> Option<&Share> {
+        self.share.as_ref()
     }
 
     pub fn toast(&self) -> Option<&Toast> {
@@ -438,9 +449,18 @@ impl App {
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
             Msg::Profile(m) => self.profile_msg(m),
+            Msg::Shared(result) => match self.share.as_mut() {
+                Some(share) if matches!(share.stage, Stage::Reading) => {
+                    share.arrived(result);
+                    true
+                }
+                _ => false, // closed meanwhile: the details drop here, wiped
+            },
             Msg::Down => {
                 // A prompt dies with the link; the Daemon replays it if it lives.
-                let mut changed = self.conn != Conn::Down || self.field.take().is_some();
+                let mut changed = self.conn != Conn::Down
+                    || self.field.take().is_some()
+                    || self.share.take().is_some();
                 match self.editor.take() {
                     Some(e) if e.is_pending() => {
                         self.say(
@@ -583,6 +603,10 @@ impl App {
         if self.editor.is_some() {
             return self.editor_key(key);
         }
+
+        if self.share.is_some() {
+            return self.share_key(key);
+        }
         match self.layer {
             Layer::Help => {
                 if matches!(key.code, KeyCode::Esc | KeyCode::Char('?')) {
@@ -650,6 +674,32 @@ impl App {
             KeyCode::Char('u') if ctrl => field.clear(),
             KeyCode::Backspace => field.pop(),
             KeyCode::Char(c) if !ctrl => field.push(c),
+            _ => return false,
+        }
+        true
+    }
+
+    /// The share view: Enter reveals, Esc drops everything.
+    fn share_key(&mut self, key: KeyEvent) -> bool {
+        let Some(share) = self.share.as_mut() else {
+            return false;
+        };
+        match (&mut share.stage, key.code) {
+            (_, KeyCode::Esc) => self.share = None,
+            (Stage::Ask | Stage::Failed(_), KeyCode::Enter) => {
+                share.stage = Stage::Reading;
+                if let Some(runner) = &self.runner {
+                    runner.reveal(share.network.clone());
+                }
+            }
+            (
+                Stage::Shown {
+                    letters, share: s, ..
+                },
+                KeyCode::Char('p'),
+            ) if s.password.is_some() => {
+                *letters = !*letters;
+            }
             _ => return false,
         }
         true
@@ -753,6 +803,11 @@ impl App {
                     }
                     KeyCode::Char('x') if entry.joined() => {
                         self.run_wifi(Cmd::Disconnect { network, ssid });
+                        true
+                    }
+                    KeyCode::Char('s') if entry.saved() => {
+                        self.toast = None;
+                        self.share = Some(Share::ask(network, ssid));
                         true
                     }
                     KeyCode::Char('f') if entry.saved() => {
@@ -942,6 +997,10 @@ impl App {
         if let Some(editor) = &self.editor {
             return editor_hints(editor);
         }
+
+        if let Some(share) = &self.share {
+            return share.hints();
+        }
         match self.layer {
             Layer::Help => vec![("esc", "close")],
             Layer::Confirm => vec![("y", "run"), ("n", "cancel")],
@@ -993,6 +1052,9 @@ impl App {
             }
             if e.saved() {
                 v.push(("f", "forget"));
+            }
+            if e.saved() {
+                v.push(("s", "share"));
             }
             if e.autoconnect().is_some() {
                 v.push(("a", "auto"));

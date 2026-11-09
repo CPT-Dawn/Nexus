@@ -75,6 +75,16 @@ fn wifi_name(connection: &Settings) -> Option<Vec<u8>> {
         .ok()
 }
 
+fn connection_uuid(connection: &Settings) -> Option<String> {
+    connection
+        .get("connection")?
+        .get("uuid")?
+        .try_clone()
+        .ok()?
+        .try_into()
+        .ok()
+}
+
 fn key(connection_path: &str, setting_name: &str) -> String {
     format!("{connection_path}\n{setting_name}")
 }
@@ -99,6 +109,16 @@ impl Agent {
             // Background request (autoconnect): nobody asked a person.
             return Err(AgentError::NoSecrets(
                 "interaction is not allowed for this request".into(),
+            ));
+        }
+        if flags & REQUEST_NEW != 0
+            && connection_uuid(&connection).is_some_and(|u| self.broker.is_inline(&u))
+        {
+            // The caller typed this password into the join itself: tell
+            // NetworkManager there is no better one, so the join fails as a
+            // wrong password and the caller decides what to ask next.
+            return Err(AgentError::NoSecrets(
+                "the password given with the join was wrong".into(),
             ));
         }
         let field = hints

@@ -113,11 +113,9 @@ fn joining_open_wpa2_and_sae_works_and_forget_removes_the_profile() {
             .wire()
             .call(json!({"op": "wifi_forget", "network": id(ssid)}));
         assert_eq!(gone["ok"]["ssid"], ssid, "{gone}");
-        // NetworkManager drops the active access point a moment after
-        // Forget returns, so `joined` settles rather than flips.
-        let r = eventually(&format!("{ssid} no longer joined"), || {
-            row(&list(&world), ssid).filter(|r| r["joined"] == false)
-        });
+        // Never joined, not even for a moment, once the Profile is gone.
+        let r = row(&list(&world), ssid).expect("still listed");
+        assert_eq!(r["joined"], false, "{r}");
         assert!(r.get("profile").is_none(), "{r}");
     }
 }
@@ -144,28 +142,20 @@ fn join_in_background(
 }
 
 #[test]
-fn a_wrong_password_asks_again_and_cancelling_leaves_no_profile() {
+fn a_wrong_password_is_reported_as_one_and_leaves_no_profile() {
     let Some(world) = world() else { return };
     for ssid in [WPA2, SAE] {
         let mut fe = front_end(&world);
         let join = join_in_background(&world, ssid, Some("not-the-password"));
-        // Known gap found by the rig: real NetworkManager does not always
-        // ask the Secret agent again after a failed handshake (WPA3-SAE
-        // reports reason 53 first; with the agent registered a WPA2 join can
-        // run into the Daemon's 45 s deadline). So: answer a prompt by
-        // cancelling it if one opens, and only require that the join ends in
-        // a clean error that names the network.
+        // The password came with the join, so no Secret prompt may open: the
+        // caller gets the error and decides what to ask next.
         while !join.is_finished() {
-            if let Some(ev) = fe.try_read_line(Duration::from_millis(500))
-                && ev["event"] == "secret_prompt_opened"
-            {
-                let cancel = fe.call(json!({"op": "secret_cancel", "prompt": ev["prompt"]["id"]}));
-                assert!(cancel.get("ok").is_some(), "{cancel}");
+            if let Some(ev) = fe.try_read_line(Duration::from_millis(500)) {
+                assert_ne!(ev["event"], "secret_prompt_opened", "{ssid}: {ev}");
             }
         }
-
         let resp = join.join().unwrap();
-        assert!(resp["err"]["code"].is_string(), "{ssid}: {resp}");
+        assert_eq!(resp["err"]["code"], "wrong_password", "{ssid}: {resp}");
         assert!(resp["err"]["message"].as_str().unwrap().contains(ssid));
         let r = row(&list(&world), ssid).expect("still listed");
         assert!(

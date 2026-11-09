@@ -39,6 +39,7 @@ pub fn wifi_busy(world: &World) -> DeviceId {
         Ap::wpa2("Rooftop-6E", "AA:00:00:00:00:06", 14).frequency(6135),
     );
     nm.add_wifi_profile("uuid-parents", "Parents House", b"Parents House", true);
+    nm.set_profile_secret("uuid-parents", "wpa-psk", "parents-wifi-2024");
     nm.add_wifi_profile("uuid-hotel", "Hotel Lobby", b"Hotel Lobby", false);
     // Join Home-5G for real, so it is joined and saved.
     let resp = world.wire().call(json!({

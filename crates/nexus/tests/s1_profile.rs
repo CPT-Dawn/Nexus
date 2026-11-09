@@ -334,7 +334,7 @@ fn the_cli_refuses_a_typo_with_its_own_exit_code() {
         "--ipv4-address",
         "192.168.1.300/24",
     ]);
-    assert_eq!(out.status.code(), Some(14), "{out:?}");
+    assert_eq!(out.status.code(), Some(15), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("192.168.1.300"));
     assert_eq!(world.nm.profile_text(UUID, "ipv4", "method"), None);
 }

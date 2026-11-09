@@ -14,6 +14,7 @@ mod layout;
 mod overview;
 mod profile;
 mod profile_ui;
+mod share;
 mod theme;
 mod view;
 mod wifi;

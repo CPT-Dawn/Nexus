@@ -20,12 +20,12 @@ expression: rig.text(STANDARD)
 │                    │  Wi-Fi: f             Forget (asks first)              │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
 │                    │  Wi-Fi: a             Toggle autoconnect               │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
 │                    │  Wi-Fi: e             Edit the Profile's settings      │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    │  Wi-Fi: u             Undo the toast's action          │────────────────────╯
-│                    │  Esc                  Back out; never quits            │────────────────────╮
+│                    │  Wi-Fi: s             Share as a QR code (asks first)  │────────────────────╯
+│                    │  Wi-Fi: u             Undo the toast's action          │────────────────────╮
+│                    │  Esc                  Back out; never quits            │                    │
 │                    │  ?                    Show or hide this help           │                    │
 │                    │  q, Ctrl-C            Quit                             │                    │
 │                    ╰────────────────────────────────────────────────────────╯                    │
-│                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

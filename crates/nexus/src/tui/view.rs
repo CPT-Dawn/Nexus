@@ -317,7 +317,7 @@ fn daemon_lines(app: &App, look: &Look) -> Vec<Line<'static>> {
 }
 
 fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
-    const KEYS: [(&str, &str); 17] = [
+    const KEYS: [(&str, &str); 18] = [
         ("j / k, Down / Up", "Move in the list"),
         ("g / G", "Jump to top / bottom"),
         ("h / l, Left / Right", "Previous / next tab"),
@@ -331,6 +331,7 @@ fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
         ("Wi-Fi: f", "Forget (asks first)"),
         ("Wi-Fi: a", "Toggle autoconnect"),
         ("Wi-Fi: e", "Edit the Profile's settings"),
+        ("Wi-Fi: s", "Share as a QR code (asks first)"),
         ("Wi-Fi: u", "Undo the toast's action"),
         ("Esc", "Back out; never quits"),
         ("?", "Show or hide this help"),

@@ -57,13 +57,15 @@ pub fn same_user(stream: &UnixStream) -> bool {
 
 /// Reads request lines until the peer hangs up, answering each in order.
 /// After a `subscribe` op, events from `events` are interleaved with responses.
-pub async fn serve_connection<F, Fut, S>(
+pub async fn serve_connection<F, Fut, S, G>(
     stream: UnixStream,
     subscribe: S,
     answer: F,
 ) -> io::Result<()>
 where
-    S: Fn() -> (broadcast::Receiver<Event>, Vec<Event>),
+    S: Fn() -> (broadcast::Receiver<Event>, Vec<Event>, G),
+    // Held for as long as the connection stays subscribed.
+    G: Send + 'static,
     F: Fn(Request) -> Fut,
     Fut: Future<Output = Response>,
 {
@@ -104,7 +106,7 @@ where
                 ..
             }) => {
                 if forwarder.is_none() {
-                    let (mut rx, backlog) = subscribe();
+                    let (mut rx, backlog, held) = subscribe();
                     let out = out.clone();
                     // Prompts that opened before this Front end came.
                     let ok = encode(&Response::ok(id, serde_json::json!({})));
@@ -121,6 +123,7 @@ where
                         }
                     }
                     forwarder = Some(tokio::spawn(async move {
+                        let _held = held;
                         loop {
                             match rx.recv().await {
                                 Ok(event) => {

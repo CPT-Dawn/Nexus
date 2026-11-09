@@ -313,6 +313,11 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
 /// The layers over the tab: password field, Forget confirmation, toast.
 /// They show on any tab, because a Secret prompt can open anywhere.
 pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &Sym) {
+    if app.field().is_none()
+        && let Some(share) = app.share()
+    {
+        super::share::draw(f, share, body, look, sym);
+    }
     if let Some(field) = app.field() {
         let rect = centered(body, 62, 7);
         f.render_widget(Clear, rect);

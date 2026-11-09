@@ -1,6 +1,7 @@
 //! The Daemon: owns the socket and the Backend, answers Front ends.
 
 mod activity;
+mod notify;
 mod profile;
 mod socket;
 mod traffic;
@@ -70,6 +71,13 @@ async fn serve() -> std::io::Result<()> {
         let backend = backend.clone();
         async move { backend.secrets().await }
     });
+    let frontends = notify::Frontends::default();
+    let notifier = notify::Notifier::spawn(
+        settings.clone(),
+        &broker,
+        frontends.clone(),
+        Arc::new(notify::SystemTerminal),
+    );
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -85,9 +93,14 @@ async fn serve() -> std::io::Result<()> {
                 let settings = settings.clone();
                 let live = live.clone();
                 let broker = broker.clone();
+                let frontends = frontends.clone();
+                let notifier = notifier.clone();
                 tokio::spawn(async move {
-                    let subscribe = || broker.subscribe();
-                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| dispatch(&backend, &settings, &broker, &live, req)).await {
+                    let subscribe = || {
+                        let (rx, backlog) = broker.subscribe();
+                        (rx, backlog, frontends.join())
+                    };
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| dispatch(&backend, &settings, &broker, &live, &notifier, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -219,12 +232,13 @@ async fn dispatch<B: Backend>(
     settings: &Settings,
     broker: &Broker,
     live: &Live,
+    notifier: &notify::Notifier,
     req: Request,
 ) -> Response {
     if profile::handles(&req.op) {
         profile::answer(backend, &live.profile, req).await
     } else {
-        answer(&**backend, settings, broker, live, req).await
+        answer(&**backend, settings, broker, live, notifier, req).await
     }
 }
 
@@ -234,6 +248,7 @@ async fn answer<B: Backend>(
     settings: &Settings,
     broker: &Broker,
     live: &Live,
+    notifier: &notify::Notifier,
     req: Request,
 ) -> Response {
     match req.op {
@@ -276,7 +291,13 @@ async fn answer<B: Backend>(
         Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
         Op::WifiJoin { network, password } => {
-            backend_reply(req.id, backend.wifi_join(network, password).await)
+            let result = backend.wifi_join(network, password).await;
+            if let Err(BackendError::Refused(f)) = &result
+                && f.code == ErrorCode::WrongPassword
+            {
+                notifier.wrong_password(&f.message);
+            }
+            backend_reply(req.id, result)
         }
         Op::WifiPower { on } => backend_reply(req.id, backend.wifi_power(on).await),
         Op::Airplane { on } => backend_reply(req.id, backend.airplane(on).await),
@@ -285,6 +306,7 @@ async fn answer<B: Backend>(
         Op::WifiAutoconnect { network, enabled } => {
             backend_reply(req.id, backend.wifi_autoconnect(network, enabled).await)
         }
+        Op::WifiReveal { network } => backend_reply(req.id, backend.wifi_reveal(network).await),
         Op::SecretAnswer { prompt, secret } => reply(
             req.id,
             broker

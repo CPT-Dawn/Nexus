@@ -123,6 +123,18 @@ enum WifiAction {
         #[arg(long)]
         json: bool,
     },
+    /// Reveal a saved Network's password, or show it as a QR code a phone can scan.
+    /// NetworkManager may ask you to authorize reading the password.
+    Share {
+        /// The Network's name (SSID).
+        ssid: String,
+        /// Draw the join details as a QR code instead of printing the password.
+        #[arg(long)]
+        qr: bool,
+        /// Print the result, password included, as JSON.
+        #[arg(long, conflicts_with = "qr")]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -221,6 +233,9 @@ fn main() -> ExitCode {
         Command::Profile {
             action: ProfileAction::Set(args),
         } => profile_cli::set(args),
+        Command::Wifi {
+            action: WifiAction::Share { ssid, qr, json },
+        } => cli::wifi_share(&ssid, qr, json),
         Command::Doctor { json, fix } => cli::doctor(json, fix),
         Command::Config {
             action: ConfigAction::Get { key },

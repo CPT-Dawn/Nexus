@@ -12,7 +12,9 @@
 //! - `portal`: joined to CafeGuest behind a sign-in page.
 //! - `wifi`: six Wi-Fi Networks in range (Home-5G joined), two saved ones out
 //!   of range. Press `2` for the Wi-Fi tab; `r` rescans, `enter` joins, `x`
-//!   disconnects, `f` forgets, `a` toggles autoconnect, `u` undoes.
+//!   disconnects, `f` forgets, `a` toggles autoconnect, `u` undoes. `s` on a saved
+//!   row (Home-5G, Parents House, Hotel Lobby) opens the share view; `enter`
+//!   reveals the QR code, `p` shows the password, `esc` closes.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
 //! - `profile`: `wifi`, where Parents House (saved, out of range) already has a
 //!   static address, custom DNS, metered and a priority. Press `2`, then `e`

@@ -13,7 +13,7 @@ use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
     AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind,
-    Radio, Radios, ScanOutcome, Secret, State, Status, WifiList,
+    Radio, Radios, ScanOutcome, Secret, State, Status, WifiList, WifiShare,
 };
 use std::pin::Pin;
 
@@ -424,6 +424,12 @@ impl Backend for NetworkManager {
     async fn checkpoint_rollback(&self, checkpoint: String) -> Result<(), BackendError> {
         self.with_bus(|c| async move { super::wifi::profile::rollback(&c, &checkpoint).await })
             .await
+    }
+
+    async fn wifi_reveal(&self, network: String) -> Result<WifiShare, BackendError> {
+        self.with_bus(|c| async move { super::wifi::reveal(&c, &network).await })
+            .await?
+            .map_err(BackendError::Refused)
     }
 
     async fn wifi_power(&self, on: bool) -> Result<Radios, BackendError> {
