@@ -24,15 +24,15 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-before="$(iw dev 2>/dev/null | awk '/^phy#/{print $1}' | sort || true)"
+ls /sys/class/ieee80211 2>/dev/null | sort >"$work/phys.before" || true
 modprobe mac80211_hwsim radios="$radios" || {
     echo "rig: cannot load mac80211_hwsim (on Debian/Ubuntu: apt install linux-modules-extra-\$(uname -r))" >&2
     exit 1
 }
 loaded=1
 # Only phys born from our modprobe are ever moved.
-after="$(ls /sys/class/ieee80211 | sort)"
-mapfile -t phys < <(comm -13 <(sed 's/^phy#/phy/' <<<"$before") <<<"$after")
+ls /sys/class/ieee80211 | sort >"$work/phys.after"
+mapfile -t phys < <(comm -13 "$work/phys.before" "$work/phys.after")
 (( ${#phys[@]} == radios )) || { echo "rig: expected $radios new radios, got ${#phys[@]}" >&2; exit 1; }
 
 # AP namespace: a bare network namespace kept alive by a sleeper.
