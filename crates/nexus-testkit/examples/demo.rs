@@ -3,10 +3,20 @@
 //!
 //! ```text
 //! cargo build -p nexus
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy]
 //! ```
 //!
+//! Scenarios:
+//! - `online`: joined to Home-5G, no traffic.
+//! - `offline`: nothing connected.
+//! - `portal`: joined to CafeGuest behind a sign-in page.
+//! - `busy`: online with live, wandering traffic on the graphs, and a VPN
+//!   going up and down every few seconds so the activity strip moves.
+//!
 //! Extra arguments after the scenario go to `nexus` (e.g. `--ascii`).
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use nexus_testkit::{ActiveConnection, NmConnectivity, NmState, World};
 
@@ -14,11 +24,12 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let bin = args
         .next()
-        .expect("usage: demo <path-to-nexus> [online|offline|portal] [nexus args]");
+        .expect("usage: demo <path-to-nexus> [online|offline|portal|busy] [nexus args]");
     let scenario = args.next().unwrap_or_else(|| "online".into());
     let rest: Vec<String> = args.collect();
 
     let world = World::start(&bin);
+    let mut wlan0 = None;
     match scenario.as_str() {
         "offline" => {}
         "portal" => {
@@ -28,7 +39,10 @@ fn main() {
             world.nm.set_connectivity(NmConnectivity::Portal);
             world.nm.set_state(NmState::ConnectedGlobal);
         }
-        _ => {
+        other => {
+            if other == "busy" {
+                wlan0 = Some(world.nm.add_wifi_device("wlan0"));
+            }
             world
                 .nm
                 .set_primary(Some(ActiveConnection::wifi("Home-5G")));
@@ -44,7 +58,33 @@ fn main() {
             cmd.env(var, v);
         }
     }
-    let status = cmd.args(&rest).status().expect("run nexus");
+    let done = AtomicBool::new(false);
+    let status = std::thread::scope(|scope| {
+        if let Some(dev) = wlan0 {
+            let (done, nm) = (&done, &world.nm);
+            scope.spawn(move || {
+                // A tiny deterministic wobble: bursts of download, a trickle of upload.
+                let (mut rx, mut tx, mut tick) = (0u64, 0u64, 0u64);
+                while !done.load(Ordering::SeqCst) {
+                    tick += 1;
+                    let wave = (tick % 24) as f64 / 24.0 * std::f64::consts::TAU;
+                    rx +=
+                        (900_000.0 + 800_000.0 * wave.sin() + (tick % 5) as f64 * 150_000.0) as u64;
+                    tx += (90_000.0 + 70_000.0 * (wave * 2.0).cos()) as u64;
+                    nm.set_traffic(dev, rx, tx);
+                    if tick % 8 == 0 {
+                        nm.set_primary(Some(ActiveConnection::vpn("Work")));
+                    } else if tick % 8 == 4 {
+                        nm.set_primary(Some(ActiveConnection::wifi("Home-5G")));
+                    }
+                    std::thread::sleep(Duration::from_secs(1));
+                }
+            });
+        }
+        let status = cmd.args(&rest).status().expect("run nexus");
+        done.store(true, Ordering::SeqCst);
+        status
+    });
     drop(world);
     std::process::exit(status.code().unwrap_or(1));
 }

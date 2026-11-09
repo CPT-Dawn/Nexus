@@ -1,10 +1,11 @@
 //! TUI state and its single `update` function. No I/O here: input and Daemon
 //! events arrive as [`Msg`]s, and `update` says whether the screen changed.
 
+use std::collections::VecDeque;
 use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use nexus_ipc::Status;
+use nexus_ipc::{ActivityEntry, Status, Traffic};
 
 use super::caps::Caps;
 use super::theme::{Look, Theme};
@@ -16,6 +17,12 @@ pub enum Msg {
     Resize(u16, u16),
     /// A fresh status from the Daemon (first connect, event or poll).
     Status(Status),
+    /// A traffic sample, asked for only while the graphs are visible.
+    Traffic(Traffic),
+    /// The Daemon's whole activity log (on connect), newest first.
+    Activity(Vec<ActivityEntry>),
+    /// One new activity entry.
+    Happened(ActivityEntry),
     /// The Daemon cannot be reached (never connected, or the link dropped).
     Down,
     /// A running effect asked for a frame.
@@ -66,6 +73,36 @@ impl Tab {
     }
 }
 
+/// How many samples of traffic history to keep (one per second).
+pub const HISTORY: usize = 300;
+/// How many activity entries to keep.
+const ACTIVITY: usize = 20;
+
+/// Recent traffic rates, oldest first.
+#[derive(Debug, Default, Clone)]
+pub struct Rates {
+    pub down: VecDeque<u64>,
+    pub up: VecDeque<u64>,
+}
+
+impl Rates {
+    /// Adds a sample. Returns whether any graph would look different: a
+    /// zero entering a window that drops a zero is a flat line staying flat.
+    fn push(&mut self, t: Traffic) -> bool {
+        let mut changed = false;
+        for (series, v) in [(&mut self.down, t.rx_bps), (&mut self.up, t.tx_bps)] {
+            series.push_back(v);
+            let dropped = if series.len() > HISTORY {
+                series.pop_front().unwrap_or(0)
+            } else {
+                0
+            };
+            changed |= v != 0 || dropped != 0;
+        }
+        changed
+    }
+}
+
 /// Link between the TUI and the Daemon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Conn {
@@ -92,6 +129,9 @@ pub struct App {
     layer: Layer,
     conn: Conn,
     status: Option<Status>,
+    rates: Rates,
+    samples: usize,
+    activity: Vec<ActivityEntry>,
     size: (u16, u16),
     quit: bool,
 }
@@ -105,6 +145,9 @@ impl App {
             layer: Layer::Root,
             conn: Conn::Connecting,
             status: None,
+            rates: Rates::default(),
+            samples: 0,
+            activity: Vec::new(),
             size: (80, 24),
             quit: false,
         }
@@ -138,6 +181,41 @@ impl App {
         self.status.as_ref()
     }
 
+    /// Recent traffic, for the graphs.
+    pub fn rates(&self) -> &Rates {
+        &self.rates
+    }
+
+    /// The latest traffic sample, if any since the graphs last appeared.
+    pub fn traffic_now(&self) -> Option<Traffic> {
+        Some(Traffic {
+            rx_bps: *self.rates.down.back()?,
+            tx_bps: *self.rates.up.back()?,
+        })
+    }
+
+    /// How many samples arrived since the graphs last appeared.
+    pub fn traffic_samples(&self) -> usize {
+        self.samples
+    }
+
+    /// Recent activity, newest first.
+    pub fn activity(&self) -> &[ActivityEntry] {
+        &self.activity
+    }
+
+    /// Whether the traffic graphs are on screen. The Daemon link polls
+    /// traffic at 1 Hz exactly while this holds, and not otherwise.
+    pub fn traffic_visible(&self) -> bool {
+        let (true, Some(status)) = (
+            self.conn == Conn::Up && self.tab == Tab::Overview && self.layer == Layer::Root,
+            &self.status,
+        ) else {
+            return false;
+        };
+        super::overview::traffic_shown(&self.look, status, self.size.0, self.size.1)
+    }
+
     pub fn should_quit(&self) -> bool {
         self.quit
     }
@@ -156,7 +234,36 @@ impl App {
     /// Applies one message. Returns whether the screen needs a redraw: an
     /// event that changes nothing must not cost a frame.
     pub fn update(&mut self, msg: Msg) -> bool {
+        let was_visible = self.traffic_visible();
+        let dirty = self.apply(msg);
+        if was_visible && !self.traffic_visible() {
+            // The history would be stale and gappy on return: start over.
+            self.rates = Rates::default();
+            self.samples = 0;
+        }
+        dirty
+    }
+
+    fn apply(&mut self, msg: Msg) -> bool {
         match msg {
+            Msg::Traffic(t) => {
+                if !self.traffic_visible() {
+                    return false; // a late sample from before the graphs left
+                }
+                self.samples += 1;
+                self.rates.push(t)
+            }
+            Msg::Activity(list) => {
+                let changed = self.activity != list;
+                self.activity = list;
+                self.activity.truncate(ACTIVITY);
+                changed && self.tab == Tab::Overview
+            }
+            Msg::Happened(entry) => {
+                self.activity.insert(0, entry);
+                self.activity.truncate(ACTIVITY);
+                self.tab == Tab::Overview
+            }
             Msg::Key(key) => self.key(key),
             Msg::Resize(w, h) => {
                 self.size = (w, h);
@@ -232,6 +339,9 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => self.select(self.selected.saturating_sub(1)),
             KeyCode::Char('g') | KeyCode::Home => self.select(0),
             KeyCode::Char('G') | KeyCode::End => self.select(last_row),
+            KeyCode::Enter if self.tab == Tab::Overview => {
+                self.go_tab(Tab::ALL[1 + self.selected.min(3)])
+            }
             KeyCode::Enter if self.narrow() => {
                 self.layer = Layer::Sheet;
                 true
@@ -270,7 +380,7 @@ impl App {
                 if self.tab.rows() > 0 {
                     v.push(("j/k", "move"));
                 }
-                if narrow && self.tab.rows() > 0 {
+                if self.tab == Tab::Overview || (narrow && self.tab.rows() > 0) {
                     v.push(("enter", "open"));
                 }
                 v.push(("h/l", "tab"));
