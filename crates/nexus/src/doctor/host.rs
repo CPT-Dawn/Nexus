@@ -102,20 +102,26 @@ pub struct Radio {
 }
 
 /// Reads `rfkill` state from sysfs (`/sys/class/rfkill`), `None` when no
-/// Wi-Fi radio is listed.
+/// Wi-Fi radio is listed. Laptops list phantom switches next to the real
+/// radio (an `acer-wireless` that stays blocked while `phy0` works), so Wi-Fi
+/// counts as blocked only when no listed radio is free to transmit.
 pub fn wifi_radio(root: &Path) -> Option<Radio> {
-    let mut found = None;
+    let mut radios = Vec::new();
     for entry in std::fs::read_dir(root).ok()?.flatten() {
         let dir = entry.path();
         let read = |name: &str| std::fs::read_to_string(dir.join(name)).unwrap_or_default();
-        if read("type").trim() != "wlan" {
-            continue;
+        if read("type").trim() == "wlan" {
+            radios.push((read("soft").trim() == "1", read("hard").trim() == "1"));
         }
-        let radio: &mut Radio = found.get_or_insert_with(Radio::default);
-        radio.soft_blocked |= read("soft").trim() == "1";
-        radio.hard_blocked |= read("hard").trim() == "1";
     }
-    found
+    if radios.is_empty() {
+        return None;
+    }
+    let usable = radios.iter().any(|(soft, hard)| !soft && !hard);
+    Some(Radio {
+        soft_blocked: !usable && radios.iter().any(|(soft, _)| *soft),
+        hard_blocked: !usable && radios.iter().any(|(_, hard)| *hard),
+    })
 }
 
 /// The default IPv4 gateway from the kernel's route table text
@@ -223,5 +229,8 @@ mod tests {
                 hard_blocked: false
             })
         );
+        // A phantom platform switch stays blocked while the real radio works.
+        radio("rfkill2", "wlan", "0", "0");
+        assert_eq!(wifi_radio(dir.path()), Some(Radio::default()));
     }
 }
