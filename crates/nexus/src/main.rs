@@ -5,7 +5,8 @@ mod daemon;
 
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -31,6 +32,13 @@ enum Command {
     },
     /// Run the Daemon in the foreground (systemd socket activation also uses this).
     Daemon,
+    /// Print shell completions to stdout.
+    Completions {
+        /// Shell to generate for.
+        shell: Shell,
+    },
+    /// Print the man page (roff) to stdout.
+    Man,
 }
 
 #[derive(Subcommand)]
@@ -51,5 +59,17 @@ fn main() -> ExitCode {
             action: ConfigAction::Set { key, value },
         } => cli::config_set(key, &value),
         Command::Daemon => daemon::run(),
+        Command::Completions { shell } => {
+            clap_complete::generate(shell, &mut Args::command(), "nexus", &mut std::io::stdout());
+            ExitCode::SUCCESS
+        }
+        Command::Man => match clap_mangen::Man::new(Args::command()).render(&mut std::io::stdout())
+        {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("nexus: cannot write the man page: {e}");
+                ExitCode::FAILURE
+            }
+        },
     }
 }

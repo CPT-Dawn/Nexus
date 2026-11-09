@@ -1,0 +1,186 @@
+name: Release
+
+# Runs on v2.* tags. Final tags (v2.0.0) build, publish a GitHub Release and
+# update both AUR packages. Prerelease tags (v2.0.0-beta.1) build and publish a
+# GitHub prerelease only; the AUR job is skipped.
+on:
+  push:
+    tags: ["v2.*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check the tag matches the crate version
+        shell: bash
+        run: |
+          set -euo pipefail
+          want="${GITHUB_REF_NAME#v}"
+          have=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "nexus") | .version')
+          if [[ "$want" != "$have" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match crate version $have" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: cargo build --release --locked -p nexus
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          name="nexus-${ver}-${{ matrix.arch }}-linux"
+          mkdir -p "dist/$name"
+          packaging/stage.sh target/release/nexus "dist/$name"
+          cp LICENSE README.md "dist/$name/"
+          cp docs/polkit.md "dist/$name/POLKIT.md"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flags=(--title "Nexus ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag)
+          # A hyphen in the tag (v2.0.0-beta.1) marks a prerelease.
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" dist/*.tar.gz dist/*.sha256
+
+  aur:
+    name: Update the AUR
+    needs: release
+    # Prerelease tags never reach the AUR.
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm git openssh curl
+
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Configure SSH for the AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$AUR_SSH_PRIVATE_KEY" ]]; then
+            echo "AUR_SSH_PRIVATE_KEY is empty." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
+          # Accept a raw private key or a base64-encoded one; strip CRLF.
+          if grep -q "BEGIN .*PRIVATE KEY" <<< "$AUR_SSH_PRIVATE_KEY"; then
+            printf '%s\n' "$AUR_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/aur"
+          else
+            printf '%s' "$AUR_SSH_PRIVATE_KEY" | tr -d '\r\n' | base64 -d > "$HOME/.ssh/aur"
+          fi
+          chmod 600 "$HOME/.ssh/aur"
+
+          if ! ssh-keygen -y -f "$HOME/.ssh/aur" > /dev/null 2>&1; then
+            echo "Invalid private key in AUR_SSH_PRIVATE_KEY." >&2
+            exit 1
+          fi
+
+          ssh-keyscan -t rsa,ed25519 aur.archlinux.org >> "$HOME/.ssh/known_hosts"
+          cat > "$HOME/.ssh/config" << 'EOF'
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Render and push both packages
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          pkgver="${TAG#v}"
+
+          # makepkg refuses to run as root: render as an unprivileged user.
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory '*'
+
+          curl -fsSL "https://github.com/${REPO}/archive/refs/tags/${TAG}.tar.gz" -o src.tar.gz
+          sha_src=$(sha256sum src.tar.gz | cut -d' ' -f1)
+          sha_x86=$(cut -d' ' -f1 "dist/nexus-${pkgver}-x86_64-linux.tar.gz.sha256")
+          sha_arm=$(cut -d' ' -f1 "dist/nexus-${pkgver}-aarch64-linux.tar.gz.sha256")
+
+          for pkg in nexus-nm nexus-nm-bin; do
+            su builder -c "SHA256='$sha_src' SHA256_X86_64='$sha_x86' SHA256_AARCH64='$sha_arm' \
+              $GITHUB_WORKSPACE/packaging/aur/render.sh $pkg $pkgver $GITHUB_WORKSPACE/out/$pkg"
+
+            git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-$pkg"
+            cp "out/$pkg/PKGBUILD" "out/$pkg/.SRCINFO" "aur-$pkg/"
+            (
+              cd "aur-$pkg"
+              git config user.name "CPT Dawn"
+              git config user.email "ping@cptdawn.dev"
+              git add PKGBUILD .SRCINFO
+              if git diff --cached --quiet; then
+                echo "$pkg: nothing to update"
+              else
+                git commit -m "$pkg: update to ${pkgver}"
+                git push origin HEAD:master
+              fi
+            )
+          done

@@ -1,0 +1,20 @@
+// OPTIONAL and NOT enabled. Copy to /etc/polkit-1/rules.d/50-nexus.rules to use.
+//
+// Nexus never runs as root; NetworkManager's polkit actions decide what your
+// user may do. A stock logind session is allowed most Wi-Fi actions already.
+// Use this only if Nexus reports "auth required" for actions you want to allow
+// without a password, for example on a session that polkit treats as inactive
+// (lingering user services, SSH logins). It lets members of `wheel` change
+// system-wide connections and manage radios without authenticating.
+polkit.addRule(function (action, subject) {
+    var allowed = [
+        "org.freedesktop.NetworkManager.network-control",
+        "org.freedesktop.NetworkManager.wifi.scan",
+        "org.freedesktop.NetworkManager.enable-disable-wifi",
+        "org.freedesktop.NetworkManager.settings.modify.own",
+        "org.freedesktop.NetworkManager.settings.modify.system"
+    ];
+    if (allowed.indexOf(action.id) !== -1 && subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+});

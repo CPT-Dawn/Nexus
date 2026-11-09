@@ -11,6 +11,8 @@ publish = false
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+clap_mangen = "0.2"
 listenfd = "1"
 nexus-ipc.workspace = true
 rustix = { version = "1", features = ["event", "fs", "process"] }
