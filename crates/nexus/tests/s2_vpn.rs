@@ -176,7 +176,7 @@ fn enter_brings_a_vpn_up_and_down_with_a_toast() {
     let mut rig = Rig::busy();
     assert_eq!(
         rig.footer(STANDARD),
-        "j/k move  enter up  i import  c create  p key  s share  h/l tab  ? help  q quit"
+        "j/k move  enter up  i import  c create  p key  s share  h/l tab  : palette  ? help  q quit"
     );
     rig.key(KeyCode::Enter);
     rig.pump_until("Home Lab up", |a| {

@@ -9,6 +9,7 @@ use ratatui::widgets::{HighlightSpacing, List, ListItem, ListState, Paragraph, W
 
 use super::app::App;
 use super::caps::Glyphs;
+use super::hits::Hit;
 use super::theme::Look;
 use super::view::Sym;
 
@@ -126,6 +127,13 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
         .highlight_spacing(HighlightSpacing::Always);
     let mut state = ListState::default().with_selected(Some(tether.cursor()));
     f.render_stateful_widget(list, rest, &mut state);
+    for row in state.offset()..tether.len() {
+        let y = rest.y + (row - state.offset()) as u16;
+        if y >= rest.bottom() {
+            break;
+        }
+        app.hit(Rect::new(rest.x, y, rest.width, 1), Hit::Row(row));
+    }
 }
 
 pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {

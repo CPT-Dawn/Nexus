@@ -9,6 +9,7 @@ use ratatui::widgets::{Clear, HighlightSpacing, List, ListItem, ListState, Parag
 
 use super::app::{App, Tab};
 use super::caps::Glyphs;
+use super::hits::Hit;
 use super::share::{centered, code_style};
 use super::theme::Look;
 use super::view::Sym;
@@ -86,6 +87,14 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
         .highlight_spacing(HighlightSpacing::Always);
     let mut state = ListState::default().with_selected(Some(vpn.cursor()));
     f.render_stateful_widget(list, inner, &mut state);
+    // A click selects a row; a click on the selected one brings it up or down.
+    for row in state.offset()..vpn.len() {
+        let y = inner.y + (row - state.offset()) as u16;
+        if y >= inner.bottom() {
+            break;
+        }
+        app.hit(Rect::new(inner.x, y, inner.width, 1), Hit::Row(row));
+    }
 }
 
 pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {

@@ -12,7 +12,9 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wr
 use super::app::{App, Conn, Layer, Tab};
 use super::caps::Glyphs;
 use super::doctor_view;
+use super::hits::{Hit, hint_key};
 use super::layout::{self, Areas, Mode};
+use super::overlays;
 use super::overview;
 use super::profile_ui;
 use super::tether_ui;
@@ -112,6 +114,7 @@ impl Sym {
 }
 
 pub fn draw(f: &mut Frame, app: &App) {
+    app.hit_reset();
     let look = app.look();
     let sym = Sym {
         glyphs: look.caps.glyphs,
@@ -154,8 +157,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     vpn_ui::overlays(f, app, body, &look, &sym);
     profile_ui::overlay(f, app, body, &look, &sym);
     if app.layer() == Layer::Help {
-        help(f, area, &look, &sym);
+        overlays::help(f, app, body, &look, &sym);
     }
+    overlays::palette(f, app, area, &look, &sym);
     if app.layer() == Layer::Confirm {
         doctor_view::confirm(f, app, area, &look, &sym);
     }
@@ -195,13 +199,21 @@ fn header(f: &mut Frame, app: &App, a: &Areas, look: &Look, sym: &Sym) {
             } else {
                 look.muted()
             };
-            left.push(Span::styled(label, style));
+            let span = Span::styled(label, style);
+            let x = a.header.x + Line::from(left.clone()).width() as u16;
+            let rect = Rect::new(x, a.header.y, span.width() as u16, 1);
+            app.hit(rect.intersection(a.header), Hit::Tab(tab));
+            left.push(span);
         }
     } else {
-        left.push(Span::styled(
+        let name = Span::styled(
             format!(" {} {} ", app.tab().title(), sym.caret()),
             look.selected(),
-        ));
+        );
+        let x = a.header.x + Line::from(left.clone()).width() as u16;
+        let rect = Rect::new(x, a.header.y, name.width() as u16, 1);
+        app.hit(rect.intersection(a.header), Hit::NextTab);
+        left.push(name);
         left.push(Span::styled(
             format!(" {}/{}", app.tab().index() + 1, Tab::ALL.len()),
             look.dim(),
@@ -228,9 +240,39 @@ fn header(f: &mut Frame, app: &App, a: &Areas, look: &Look, sym: &Sym) {
     );
 }
 
+/// Drops the least needed hints (quit, tab, move: all known or on screen
+/// elsewhere) until the row fits. Everything else stays.
+fn fit_hints(
+    mut hints: Vec<(&'static str, &'static str)>,
+    width: u16,
+) -> Vec<(&'static str, &'static str)> {
+    let used = |h: &[(&str, &str)]| {
+        1 + h
+            .iter()
+            .map(|(k, w)| k.chars().count() + 1 + w.chars().count() + 2)
+            .sum::<usize>()
+    };
+    for drop in ["q", "h/l", "j/k"] {
+        if used(&hints) <= width as usize {
+            break;
+        }
+        hints.retain(|(k, _)| *k != drop);
+    }
+    hints
+}
+
 fn footer(f: &mut Frame, app: &App, a: &Areas, look: &Look) {
     let mut spans = vec![Span::raw(" ")];
-    for (key, what) in app.hints(!a.mode.split()) {
+    for (key, what) in fit_hints(app.hints(!a.mode.split()), a.footer.width) {
+        // Each hint is a button: a click presses the key it names.
+        if let Some((code, mods)) = hint_key(key) {
+            let x = a.footer.x + Line::from(spans.clone()).width() as u16;
+            let w = (key.chars().count() + 1 + what.chars().count()) as u16;
+            app.hit(
+                Rect::new(x, a.footer.y, w, 1).intersection(a.footer),
+                Hit::Key(code, mods),
+            );
+        }
         spans.push(Span::styled(key, look.accent()));
         spans.push(Span::styled(format!(" {what}  "), look.muted()));
     }
@@ -350,76 +392,3 @@ fn daemon_lines(app: &App, look: &Look) -> Vec<Line<'static>> {
         )],
     }
 }
-
-fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
-    const KEYS: &[(&str, &str)] = &[
-        ("j / k, Down / Up", "Move in the list"),
-        ("g / G", "Jump to top / bottom"),
-        ("h / l, Left / Right", "Previous / next tab"),
-        ("Tab / Shift-Tab", "Next / previous tab"),
-        ("1 - 6", "Jump to a tab"),
-        ("Enter", "Open the selected card's tab"),
-        ("d", "Details sheet (small windows)"),
-        ("Wi-Fi: Enter", "Join the selected Network"),
-        ("Wi-Fi: r", "Rescan"),
-        ("Wi-Fi: x", "Disconnect"),
-        ("Wi-Fi: f", "Forget (asks first)"),
-        ("Wi-Fi: a", "Toggle autoconnect"),
-        ("Wi-Fi: e", "Edit the Profile's settings"),
-        ("Wi-Fi: s", "Share as a QR code (asks first)"),
-        ("Wi-Fi: u", "Undo the toast's action"),
-        ("VPN: Enter", "Up or down (more keys in the footer)"),
-        ("o", "Open a Portal's login page"),
-        ("Esc", "Back out; never quits"),
-        ("?", "Show or hide this help"),
-        ("q, Ctrl-C", "Quit"),
-    ];
-    // Why a Portal's page may not show, when the window has room to say so.
-    let note = if area.height >= KEYS.len() as u16 + 8 {
-        PORTAL_NOTE
-    } else {
-        ""
-    };
-    let note_lines = if note.is_empty() { 0 } else { 5 };
-    let height = KEYS.len() as u16 + 2 + note_lines;
-    let width = 58.min(area.width);
-    let rect = Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + area.height.saturating_sub(height) / 2,
-        width,
-        height: height.min(area.height),
-    };
-    f.render_widget(Clear, rect);
-    let block = sym.block(look, "All keys", true);
-    let inner = block.inner(rect);
-    f.render_widget(block, rect);
-    let lines: Vec<Line> = KEYS
-        .iter()
-        .map(|(k, what)| {
-            Line::from(vec![
-                Span::styled(format!(" {k:<21}"), look.accent()),
-                Span::styled(*what, look.text()),
-            ])
-        })
-        .collect();
-    let keys = Rect {
-        height: KEYS.len() as u16,
-        ..inner
-    };
-    f.render_widget(Paragraph::new(lines), keys);
-    if !note.is_empty() {
-        let below = Rect {
-            y: keys.bottom() + 1,
-            height: inner.height.saturating_sub(keys.height + 1),
-            ..inner
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(note, look.muted())).wrap(Wrap { trim: true }),
-            below,
-        );
-    }
-}
-
-/// Browsers with secure DNS (DNS over HTTPS) skip the network's own resolver,
-/// which is how a Portal steers you to its page.
-const PORTAL_NOTE: &str = "Login page won't show? A browser with secure DNS (DNS over HTTPS) hides the Portal by skipping the network's resolver. Turn it off until you have signed in, or press o: Nexus opens a plain http:// page.";

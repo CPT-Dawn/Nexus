@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_palette.rs
+expression: rig.text()
+---
+ Nexus  Overview ▾  1/6                           ● Offline
+╭╭ Command palette ───────────────────────────────────────╮╮
+││ : ▏                                                    ││
+││ ────────────────────────────────────────────────────── ││
+╰│ ▸ Go to Overview                                     1 │╯
+╭│   Go to Wi-Fi                                        2 │╮
+││   Go to Ethernet                                     3 ││
+││   Go to VPN                                          4 ││
+╰│   Go to Hotspot                                      5 │╯
+╭│   Go to Settings                                     6 │╮
+││   Show all keys                                      ? ││
+││   Quit Nexus                                         q ││
+││   Rescan Wi-Fi                                       r ││
+││   Open login page                                    o ││
+╰│                                                        │╯
+╭╰────────────────────────────────────────────────────────╯╮
+│ Nothing yet. Joins, losses, VPNs and sign-in pages show  │
+│ up here.                                                 │
+╰──────────────────────────────────────────────────────────╯
+ enter run  esc close

@@ -29,4 +29,4 @@ expression: frame
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter join  r scan  f forget  s share  a auto  e settings  h/l tab  ? help  q quit
+ j/k move  enter join  r scan  f forget  s share  a auto  e settings  h/l tab  : palette  ? help

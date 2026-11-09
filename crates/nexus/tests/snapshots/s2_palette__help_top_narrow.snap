@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_palette.rs
+expression: top
+---
+ Nexus  Overview ▾  1/6                           ● Offline
+╭ All keys (j/k scroll) ───────────────────────────────────╮
+│  :                    Open the command palette           █
+│  j / k, Down / Up     Move in the list                   █
+│  g / G                Jump to top / bottom               █
+│  h / l, Left / Right  Previous / next tab                █
+│  Tab / Shift-Tab      Next / previous tab                █
+│  1 - 6                Jump to a tab                      │
+│  Enter                Open the selected card's tab       │
+│  d                    Details sheet (small windows)      │
+│  Esc                  Back out; never quits              │
+│  o                    Open a Portal's login page         │
+│  f                    Overview: run the fix (asks first) │
+│  ?                    Show or hide this help             │
+│  q                    Quit (Ctrl-C works anywhere)       │
+│  Wi-Fi: Enter         Join the selected Network          │
+│  Wi-Fi: r             Rescan                             │
+│  Wi-Fi: x             Disconnect                         │
+╰──────────────────────────────────────────────────────────╯
+ j/k scroll  esc close

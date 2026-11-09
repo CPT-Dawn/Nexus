@@ -29,4 +29,4 @@ expression: frame
 │                            ││                                                │ Home Lab is up. │ │
 │                            ││                                                ╰─────────────────╯ │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter down  i import  c create  p key  s share  h/l tab  ? help  q quit
+ j/k move  enter down  i import  c create  p key  s share  h/l tab  : palette  ? help  q quit

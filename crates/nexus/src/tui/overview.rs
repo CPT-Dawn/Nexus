@@ -17,6 +17,7 @@ use super::bigtype::{self, Px};
 use super::caps::{ColorTier, Glyphs};
 use super::doctor_view;
 use super::graph;
+use super::hits::Hit;
 use super::layout::{Areas, Mode};
 use super::theme::Look;
 use super::view::{Sym, state_style};
@@ -359,6 +360,15 @@ pub fn cards_panel(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym,
         .highlight_spacing(HighlightSpacing::Always);
     let mut state = ListState::default().with_selected(Some(app.selected()));
     f.render_stateful_widget(list, inner, &mut state);
+    let step = if roomy { 2 } else { 1 };
+    for row in state.offset()..app.tab().rows() {
+        let y = inner.y + ((row - state.offset()) as u16) * step;
+        if y >= inner.bottom() {
+            break;
+        }
+        let rect = Rect::new(inner.x, y, inner.width, step.min(inner.bottom() - y));
+        app.hit(rect, Hit::Row(row));
+    }
 }
 
 // ---- activity -------------------------------------------------------------------

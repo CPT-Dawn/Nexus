@@ -10,7 +10,9 @@ mod caps;
 mod client;
 mod doctor_view;
 mod graph;
+mod hits;
 mod layout;
+mod overlays;
 mod overview;
 mod profile;
 mod profile_ui;
@@ -18,6 +20,7 @@ mod share;
 mod tether;
 mod tether_ui;
 mod theme;
+mod verbs;
 mod view;
 mod vpn;
 mod vpn_ui;
@@ -34,7 +37,7 @@ use ratatui::Terminal;
 use ratatui::backend::{Backend, TestBackend};
 use ratatui::buffer::Buffer;
 
-pub use app::{App, Conn, FixState, Layer, Msg, Tab};
+pub use app::{App, Conn, FixState, Layer, Msg, Palette, Tab};
 pub use caps::{Caps, ColorTier, Glyphs};
 pub use client::Client;
 pub use profile::{Editor, Phase, ProfileMsg, Row};
@@ -88,6 +91,7 @@ fn spawn_input(tx: Sender<Msg>) {
             while let Ok(ev) = event::read() {
                 let msg = match ev {
                     Event::Key(k) => Msg::Key(k),
+                    Event::Mouse(m) => Msg::Mouse(m),
                     Event::Resize(w, h) => Msg::Resize(w, h),
                     _ => continue,
                 };
@@ -99,6 +103,23 @@ fn spawn_input(tx: Sender<Msg>) {
         .expect("spawn the input thread");
 }
 
+/// Turns terminal mouse reporting on or off. Off again on a panic, so the
+/// shell is not left sending escape codes for every mouse move.
+fn mouse_capture(on: bool) {
+    use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+    let mut out = io::stdout();
+    if on {
+        let _ = crossterm::execute!(out, EnableMouseCapture);
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let _ = crossterm::execute!(io::stdout(), DisableMouseCapture);
+            previous(info);
+        }));
+    } else {
+        let _ = crossterm::execute!(out, DisableMouseCapture);
+    }
+}
+
 /// `nexus` with no subcommand: the TUI on the real terminal and socket.
 pub fn run(ascii: bool, nerd: bool) -> io::Result<()> {
     let Some(socket) = nexus_ipc::socket_path() else {
@@ -108,6 +129,7 @@ pub fn run(ascii: bool, nerd: bool) -> io::Result<()> {
     let mut app = App::new(Caps::from_env(ascii, nerd));
     let (tx, rx) = mpsc::channel();
     let mut terminal = ratatui::try_init()?;
+    mouse_capture(true);
     let size = terminal.size()?;
     app.update(Msg::Resize(size.width, size.height));
     app.attach(socket.clone(), tx.clone());
@@ -120,6 +142,7 @@ pub fn run(ascii: bool, nerd: bool) -> io::Result<()> {
             client.run_fix(id);
         }
     });
+    mouse_capture(false);
     ratatui::restore();
     result
 }

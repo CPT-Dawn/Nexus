@@ -29,4 +29,4 @@ expression: rig.text(STANDARD)
 │                            ││                              │ Tethered through Pixel 8.  u undo │ │
 │                            ││                              ╰───────────────────────────────────╯ │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  x drop tether  u undo  h/l tab  ? help  q quit
+ j/k move  x drop tether  u undo  h/l tab  : palette  ? help  q quit

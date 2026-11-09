@@ -29,10 +29,10 @@ expression: styled_of(&rig.buffer(STANDARD))
 |                            ||                                                                    |
 |                            ||                                                                    |
 +----------------------------++--------------------------------------------------------------------+
- j/k move  enter open  h/l tab  ? help  q quit
+ j/k move  enter open  h/l tab  : palette  ? help  q quit
 
- 2397 cells  fg=- bg=- mods=[]
+ 2396 cells  fg=- bg=- mods=[]
     6 cells  fg=- bg=- mods=[bold,reversed]
-  283 cells  fg=- bg=- mods=[bold]
+  284 cells  fg=- bg=- mods=[bold]
    58 cells  fg=- bg=- mods=[dim]
    56 cells  fg=- bg=- mods=[reversed]

@@ -21,4 +21,4 @@ expression: rig.text(NARROW)
 │                                                          │
 │                                                          │
 ╰──────────────────────────────────────────────────────────╯
- j/k move  enter up  i import  c create  h/l tab  ? help  q
+ j/k move  enter up  i import  c create  : palette  ? help

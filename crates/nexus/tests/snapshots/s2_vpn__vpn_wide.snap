@@ -33,4 +33,4 @@ expression: rig.text(WIDE)
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
- j/k move  enter up  i import  c create  p key  s share  h/l tab  ? help  q quit
+ j/k move  enter up  i import  c create  p key  s share  h/l tab  : palette  ? help  q quit

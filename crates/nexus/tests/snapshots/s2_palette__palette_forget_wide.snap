@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_palette.rs
+expression: rig.text()
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
+╭ Wi-Fi ──────────────────────────────╭ Command palette ─────────────────────────────────────────────╮─────────────────────────────────────╮
+│   ● Home-5G         ▂▄▆█ wpa2     5G│ : forget net▏                                                │                                     │
+│     Work-Secure     ▂▄▆█ wpa3     5G│ ──────────────────────────────────────────────────────────── │                                     │
+│     Cafe Guest      ▂▄▆█ open   2.4G│ ▸ Forget network                                           f │                                     │
+│     Neighbour-2G    ▂▄▆█ wpa2   2.4G│   Forget (asks first)                                        │                                     │
+│     A very long ne… ▂▄▆█ wpa2   2.4G╰──────────────────────────────────────────────────────────────╯                                     │
+│     Rooftop-6E      ▂▄▆█ wpa2     6G ││                                                                                                  │
+│   ── Saved, out of range             ││                                                                                                  │
+│ ▸   Parents House               auto ││                                                                                                  │
+│     Hotel Lobby               manual ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ enter run  esc close

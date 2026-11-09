@@ -103,6 +103,11 @@ done
 mkdir -p /run/udev
 "$udevd" >"$bus_dir/udevd.log" 2>&1 &
 for _ in $(seq 100); do [[ -S /run/udev/control ]] && break; sleep 0.05; done
+# A WireGuard device for the VPN test (named like the Profile it activates).
+# NetworkManager keeps a device it creates itself unmanaged here, so make it
+# first and let udev initialise it with the radios. No peer is configured:
+# WireGuard is connectionless, so NetworkManager calls the tunnel up anyway.
+ip link add rigwg type wireguard 2>/dev/null || echo "rig: no wireguard in this kernel; the VPN test will skip bringing it up" >&2
 udevadm trigger --action=add --subsystem-match=net --subsystem-match=ieee80211
 udevadm settle --timeout=20
 

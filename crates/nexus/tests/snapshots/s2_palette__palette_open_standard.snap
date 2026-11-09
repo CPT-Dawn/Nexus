@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_palette.rs
+expression: rig.text()
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Connections ────╭ Command palette ─────────────────────────────────────────────╮─────────────────╮
+│ ▸ ○ Wi-Fi       │ : ▏                                                          │░░░░░░           │
+│     Not connecte│ ──────────────────────────────────────────────────────────── │██████░░         │
+│   ○ Ethernet    │ ▸ Go to Overview                                           1 │██░░░░           │
+│     Not connecte│   Go to Wi-Fi                                              2 │████░░           │
+│   ○ VPN         │   Go to Ethernet                                           3 │██░░░░           │
+│     Not connecte│   Go to VPN                                                4 │██████░░         │
+│   ○ Hotspot     │   Go to Hotspot                                            5 │░░░░░░           │
+│     Not started │   Go to Settings                                           6 │                 │
+│                 │   Show all keys                                            ? │                 │
+│                 │   Quit Nexus                                               q │                 │
+│                 │   Rescan Wi-Fi                                             r │─────────────────╯
+│                 │   Open login page                                          o │─────────────────╮
+│                 │                                                              │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                 ╰──────────────────────────────────────────────────────────────╯⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                            ││ ↑ 0 B/s          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                            ││ up               ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                            │╰────────────────────────────────────────────────────────────────────╯
+│                            │╭ Recent activity ───────────────────────────────────────────────────╮
+│                            ││ Nothing yet. Joins, losses, VPNs and sign-in pages show up here.   │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ enter run  esc close

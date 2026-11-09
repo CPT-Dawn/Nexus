@@ -29,18 +29,18 @@ expression: styled_of(&rig.buffer(STANDARD))
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter open  h/l tab  ? help  q quit
+ j/k move  enter open  h/l tab  : palette  ? help  q quit
 
- 1441 cells  fg=- bg=- mods=[]
+ 1430 cells  fg=- bg=- mods=[]
     6 cells  fg=- bg=- mods=[bold,reversed]
    68 cells  fg=- bg=- mods=[bold]
    31 cells  fg=- bg=- mods=[reversed]
   426 cells  fg=cyan bg=- mods=[]
    58 cells  fg=darkgray bg=- mods=[]
-  147 cells  fg=gray bg=- mods=[]
+  157 cells  fg=gray bg=- mods=[]
    24 cells  fg=gray bg=- mods=[reversed]
   211 cells  fg=green bg=- mods=[]
   172 cells  fg=green bg=- mods=[dim]
     1 cells  fg=green bg=- mods=[reversed]
-  208 cells  fg=lightcyan bg=- mods=[]
+  209 cells  fg=lightcyan bg=- mods=[]
     7 cells  fg=lightcyan bg=- mods=[bold]
