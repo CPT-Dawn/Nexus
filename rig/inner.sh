@@ -7,7 +7,10 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="$1"; testbin="$2"; shift 2
 export PATH="$PATH:/usr/sbin:/sbin"
 
-die() { echo "rig(inner): $*" >&2; exit 1; }
+dump_logs() {
+    for f in /run/nexus-rig/*.log; do [ -e "$f" ] || continue; echo "::group::rig log $(basename "$f")"; tail -n 60 "$f"; echo "::endgroup::"; done
+}
+die() { echo "rig(inner): $*" >&2; dump_logs >&2; exit 1; }
 
 # Wait until the host has moved the radios in.
 read -r _ <"$work/go"
@@ -99,9 +102,6 @@ busctl --address="$DBUS_SYSTEM_BUS_ADDRESS" status org.freedesktop.NetworkManage
     || { tail -n 30 "$bus_dir/networkmanager.log" >&2; die "NetworkManager never claimed its name"; }
 
 # ---- run the tests -------------------------------------------------------
-dump_logs() {
-    for f in "$bus_dir"/*.log; do echo "::group::rig log $(basename "$f")"; tail -n 60 "$f"; echo "::endgroup::"; done
-}
 status=0
 NEXUS_RIG=1 NEXUS_RIG_BUS="$DBUS_SYSTEM_BUS_ADDRESS" "$testbin" --test-threads=1 "$@" || status=$?
 (( status == 0 )) || dump_logs
