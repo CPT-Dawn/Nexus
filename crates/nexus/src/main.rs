@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod daemon;
 mod doctor;
+mod ethernet_view;
 mod keyring;
 mod profile_cli;
 mod secrets;
@@ -51,10 +52,20 @@ enum Command {
         #[command(subcommand)]
         action: VpnAction,
     },
+    /// Ethernet ports: Link details, plug state, bring up and down.
+    Ethernet {
+        #[command(subcommand)]
+        action: EthernetAction,
+    },
     /// Get online through a paired phone over Bluetooth.
     Tether {
         #[command(subcommand)]
         action: TetherAction,
+    },
+    /// Share this machine's connection as a Wi-Fi Hotspot.
+    Hotspot {
+        #[command(subcommand)]
+        action: HotspotAction,
     },
     /// Show or change the settings of a saved Network's Profile.
     Profile {
@@ -253,6 +264,32 @@ enum VpnAction {
 }
 
 #[derive(Subcommand)]
+enum EthernetAction {
+    /// List the Ethernet ports: whether a cable is in, the speed, addresses, and what is wrong.
+    List {
+        /// Print the list as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Bring a port up with its Profile (a plain DHCP one is made if it has none).
+    Connect {
+        /// The port, e.g. enp3s0 (not needed when there is only one).
+        port: Option<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Drop a port's Link; its Profile stays.
+    Disconnect {
+        /// The port, e.g. enp3s0 (not needed when there is only one).
+        port: Option<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum TetherAction {
     /// List paired phones that offer network access, and whether Bluetooth is on.
     List {
@@ -271,6 +308,47 @@ enum TetherAction {
     /// Drop the tether; the phone stays paired and its Profile stays saved.
     Disconnect {
         /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum HotspotAction {
+    /// Whether this machine can host a Hotspot, and the one that runs.
+    Status {
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Start a Hotspot. Without a name and password, Nexus makes both up.
+    Start {
+        /// The Hotspot's name (default: Nexus-XXXX).
+        #[arg(long)]
+        ssid: Option<String>,
+        /// The password, 8 to 63 characters. Visible in the process list:
+        /// prefer --password-stdin.
+        #[arg(long, conflicts_with = "password_stdin")]
+        password: Option<String>,
+        /// Read the password from the first line of stdin.
+        #[arg(long)]
+        password_stdin: bool,
+        /// Also draw the join code as a QR code.
+        #[arg(long)]
+        qr: bool,
+        /// Print the result, password included, as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop the Hotspot.
+    Stop {
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Draw the running Hotspot's join code as a QR code.
+    Qr {
+        /// Print the join details, password included, as JSON.
         #[arg(long)]
         json: bool,
     },
@@ -538,6 +616,37 @@ fn main() -> ExitCode {
             VpnAction::Key { name, json } => vpn_cli::key(&name, json),
             VpnAction::Share { name, qr, json } => vpn_cli::share(&name, qr, json),
         },
+        Command::Ethernet { action } => match action {
+            EthernetAction::List { json } => cli::ethernet_list(json),
+            EthernetAction::Connect { port, json } => cli::ethernet_connect(port, json),
+            EthernetAction::Disconnect { port, json } => cli::ethernet_disconnect(port, json),
+        },
+        Command::Hotspot {
+            action: HotspotAction::Status { json },
+        } => cli::hotspot_status(json),
+        Command::Hotspot {
+            action:
+                HotspotAction::Start {
+                    ssid,
+                    password,
+                    password_stdin,
+                    qr,
+                    json,
+                },
+        } => {
+            let source = match (password, password_stdin) {
+                (Some(p), _) => cli::PasswordSource::Flag(p),
+                (None, true) => cli::PasswordSource::Stdin,
+                (None, false) => cli::PasswordSource::None,
+            };
+            cli::hotspot_start(ssid, source, qr, json)
+        }
+        Command::Hotspot {
+            action: HotspotAction::Stop { json },
+        } => cli::hotspot_stop(json),
+        Command::Hotspot {
+            action: HotspotAction::Qr { json },
+        } => cli::hotspot_qr(json),
         Command::Tether {
             action: TetherAction::List { json },
         } => cli::tether_list(json),

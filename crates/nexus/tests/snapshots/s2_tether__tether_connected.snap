@@ -3,18 +3,18 @@ source: crates/nexus/tests/s2_tether.rs
 expression: rig.text(STANDARD)
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
-╭ Tethering ─────────────────╮╭ Pixel 8 ───────────────────────────────────────────────────────────╮
-│ ● Bluetooth is on          ││ ● Connected                                                        │
+╭ Hotspot ───────────────────╮╭ Pixel 8 ───────────────────────────────────────────────────────────╮
+│ ○ Not available            ││ ● Connected                                                        │
+│ This machine has no Wi-Fi  ││                                                                    │
+│ card, so it cannot host a  ││ Address     AA:BB:CC:DD:EE:01                                      │
+│ Hotspot.                   ││ Bluetooth   on                                                     │
+╰────────────────────────────╯│ Profile     saved                                                  │
+╭ Tethering ─────────────────╮│                                                                    │
+│ ● Bluetooth is on          ││ Press x to drop the tether.                                        │
 │                            ││                                                                    │
-│     Galaxy S24…     paired ││ Address     AA:BB:CC:DD:EE:01                                      │
-│ ▸ ● Pixel 8      connected ││ Bluetooth   on                                                     │
-│     Sam's iPho…     paired ││ Profile     saved                                                  │
-│                            ││                                                                    │
-│                            ││ Press x to drop the tether.                                        │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
+│     Galaxy S24…     paired ││                                                                    │
+│ ▸ ● Pixel 8      connected ││                                                                    │
+│     Sam's iPho…     paired ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

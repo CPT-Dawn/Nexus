@@ -184,6 +184,90 @@ pub fn tether_world(bin: impl Into<std::path::PathBuf>, powered: bool) -> World 
     world
 }
 
+/// Two Ethernet ports. `enp3s0` has its cable in and a saved Profile
+/// ("Office wall socket"), but the port wants 802.1X, so the network gave it
+/// no address: it reads as plugged in and misconfigured. The login that gets
+/// past it is `alice@office.example` / `hunter2`, server name
+/// `radius.office.example`. `enp4s0` has no cable. Shared by the S2 tests and
+/// `demo ethernet`. Returns the two Devices.
+pub fn ethernet_busy(world: &World) -> (DeviceId, DeviceId) {
+    let nm = &world.nm;
+    let enp3s0 = nm.add_ethernet_device("enp3s0");
+    let enp4s0 = nm.add_ethernet_device("enp4s0");
+    nm.set_port_eap(enp3s0, "alice@office.example", "hunter2");
+    nm.set_lease(
+        enp3s0,
+        crate::Lease {
+            address: "10.20.30.41".into(),
+            prefix: 24,
+            gateway: "10.20.30.1".into(),
+            dns: vec!["10.20.30.2".into(), "10.20.30.3".into()],
+        },
+    );
+    nm.add_ethernet_profile(
+        "55555555-5555-4555-8555-555555555555",
+        "Office wall socket",
+        "enp3s0",
+    );
+    nm.set_carrier(enp4s0, false);
+    // The first try fails, as it would on the real thing: no sign-in, no address.
+    let tried = world
+        .wire()
+        .call(json!({"op": "ethernet_connect", "port": "enp3s0"}));
+    assert!(
+        tried.get("err").is_some(),
+        "joining without a sign-in: {tried}"
+    );
+    (enp3s0, enp4s0)
+}
+
+/// What the Hotspot tab starts from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotspotStart {
+    /// A card that can host one; nothing runs yet.
+    Capable,
+    /// A card that can host one, with `Garage Wi-Fi` already up and two
+    /// devices joined.
+    Running,
+    /// A card whose driver cannot be an access point.
+    NoCard,
+}
+
+/// Puts `n` stations on the stand-in `iw` of a world made by [`hotspot_world`].
+pub fn hotspot_stations(world: &World, n: usize) {
+    let text: String = (0..n)
+        .map(|i| format!("Station 02:00:00:00:00:{i:02x} (on wlan0)\n\tinactive time:\t120 ms\n"))
+        .collect();
+    std::fs::create_dir_all(world.home()).expect("home dir");
+    std::fs::write(world.home().join("stations"), text).expect("write stations");
+}
+
+/// The Hotspot tab's worlds: the Tethering phones (so the tab has both halves),
+/// a Wi-Fi card, and a stand-in `iw` that lists the stations
+/// [`hotspot_stations`] wrote. Shared by the S2 tests and `demo hotspot*`.
+pub fn hotspot_world(bin: impl Into<std::path::PathBuf>, start: HotspotStart) -> World {
+    let world = tether_world(bin, true);
+    let wlan0 = world.nm.add_wifi_device("wlan0");
+    world.install_tool(
+        "iw",
+        "[ -f \"$HOME/stations\" ] || exit 1\ncat \"$HOME/stations\"",
+    );
+    match start {
+        HotspotStart::Capable => {}
+        HotspotStart::NoCard => world.nm.set_ap_support(wlan0, false),
+        HotspotStart::Running => {
+            hotspot_stations(&world, 2);
+            let resp = world.wire().call(json!({
+                "op": "hotspot_start",
+                "ssid": "Garage Wi-Fi",
+                "password": "open sesame 42",
+            }));
+            assert!(resp.get("ok").is_some(), "starting the Hotspot: {resp}");
+        }
+    }
+    world
+}
+
 /// The awkward Wi-Fi cases, nothing joined: two cards (`wlan0`, `wlan1`), a
 /// mesh (`Mesh-Home`: 2.4, 5 and 6 GHz access points, heard by both cards),
 /// an OWE and a WPA2/WPA3 transition Network, a name that is not valid UTF-8

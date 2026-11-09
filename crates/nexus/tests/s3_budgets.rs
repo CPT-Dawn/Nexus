@@ -29,7 +29,16 @@ const TUI_FIRST_FRAME_BUDGET: Duration = Duration::from_millis(50);
 /// traffic graph once a second while the Overview shows it (ADR-0003), about
 /// 0.07%, so its ceiling is a little looser; a busy loop is orders above both.
 const DAEMON_IDLE_CPU_BUDGET_PERCENT: f64 = 0.1;
+/// Overview only: the traffic graph redraws at 1 Hz, which ADR-0003 allows as
+/// a deliberate processing cost for aesthetics. Any tab without that graph is
+/// held to `TUI_GRAPH_FREE_IDLE_CPU_BUDGET_PERCENT` instead.
 const TUI_IDLE_CPU_BUDGET_PERCENT: f64 = 0.2;
+/// A tab with no animated or polled surface must cost nothing. Scheduler
+/// accounting is in nanoseconds, so this is only a float-rounding allowance:
+/// 0.001% of the 5 s window is 50 us, which a single stray wakeup exceeds.
+/// Measured: 0.000%. (It once read 0.002%: the Daemon link thread woke every
+/// second even with the graphs hidden; it now sleeps in `poll`.)
+const TUI_GRAPH_FREE_IDLE_CPU_BUDGET_PERCENT: f64 = 0.001;
 const IDLE_WINDOW: Duration = Duration::from_secs(5);
 
 // ---- /proc measurements ----------------------------------------------------
@@ -245,6 +254,12 @@ impl Tui {
         }
     }
 
+    /// Types `keys` into the TUI.
+    fn press(&self, keys: &str) {
+        use std::io::Write;
+        (&self._master).write_all(keys.as_bytes()).expect("type");
+    }
+
     /// When `marker` first appeared, measured from the spawn.
     fn wait_for(&self, marker: &str) -> Duration {
         let give_up = Instant::now() + Duration::from_secs(20);
@@ -315,5 +330,26 @@ fn an_idle_tui_uses_no_cpu() {
     assert!(
         used < TUI_IDLE_CPU_BUDGET_PERCENT,
         "idle TUI used {used:.3}% CPU, budget is {TUI_IDLE_CPU_BUDGET_PERCENT}%"
+    );
+}
+
+#[test]
+#[ignore = "release-mode budget; run by the bench workflow"]
+fn an_idle_tui_on_a_graph_free_tab_uses_strictly_no_cpu() {
+    let (world, _) = busy_world();
+    let tui = Tui::start(&world, &[" Nexus ", "Network-00"]);
+    tui.wait_for("Network-00");
+    // Settings has no traffic graph, scan sweep or countdown.
+    tui.press("6");
+    // Let the tab glide (#29 effects) finish and the Daemon go quiet.
+    thread::sleep(Duration::from_secs(2));
+    let used = idle_cpu_percent(tui.child.id(), IDLE_WINDOW);
+    report(&format!(
+        "TUI idle CPU on Settings over {} s: {used:.3}% (budget < {TUI_GRAPH_FREE_IDLE_CPU_BUDGET_PERCENT}%)",
+        IDLE_WINDOW.as_secs()
+    ));
+    assert!(
+        used < TUI_GRAPH_FREE_IDLE_CPU_BUDGET_PERCENT,
+        "idle TUI on a graph-free tab used {used:.3}% CPU, budget is {TUI_GRAPH_FREE_IDLE_CPU_BUDGET_PERCENT}%"
     );
 }

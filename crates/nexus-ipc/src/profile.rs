@@ -100,9 +100,29 @@ pub struct ProfileSettings {
     pub keyring: bool,
 }
 
+/// Which saved Profile a profile op means: a Wi-Fi Network's (by
+/// `WifiNetwork.id`, one Profile per SSID) or one picked by its uuid, which is
+/// how a wired Profile (no SSID) is addressed (ADR-0004).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProfileKey {
+    Network(String),
+    Uuid(String),
+}
+
+impl ProfileKey {
+    /// The key the request fields name; a uuid wins over a Network.
+    pub fn of(network: String, profile: Option<String>) -> Self {
+        match profile.filter(|p| !p.is_empty()) {
+            Some(uuid) => ProfileKey::Uuid(uuid),
+            None => ProfileKey::Network(network),
+        }
+    }
+}
+
 /// The `profile_get` result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProfileView {
+    /// The Network's name; a wired Profile's own name.
     pub ssid: String,
     pub uuid: String,
     /// Pass it back in `profile_update`: the update fails with `conflict`

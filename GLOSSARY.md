@@ -25,6 +25,10 @@ _Avoid_: active connection, session
 **Enterprise Network**:
 A Network that makes each person sign in with their own identity and a password or certificate, such as eduroam or an office Wi-Fi or Ethernet port. Joined through a guided sign-in form.
 _Avoid_: WPA-Enterprise, 802.1X, EAP (in the UI; fine in code and the CLI flags)
+**Unplugged / Misconfigured**:
+The two ways an Ethernet Device can fail to carry a Network. Unplugged: no cable, or nothing alive at its other end; nothing can be joined. Misconfigured: a cable is in but joining did not work, because the network gave no address or the port wants a sign-in (802.1X) it did not get. Every Front end tells them apart, since the cures differ.
+_Avoid_: down, no link, broken
+
 **Pending change**:
 An edit to the Profile carrying the current Link that has been applied but not yet kept. It reverts by itself unless the person confirms within the countdown (ADR-0004).
 _Avoid_: draft, transaction, trial
@@ -42,7 +46,7 @@ A login or terms page a Network demands before it gives real internet access.
 _Avoid_: captive page, splash page, hotspot login
 
 **Hotspot**:
-A Network this machine creates so other devices can share its internet connection.
+A Network this machine creates so other devices can share its internet connection. Started with a generated strong password unless the person chooses one, shown as a QR code only after an explicit reveal, and forgotten when stopped: its Profile lives in memory, not on disk. Needs a Wi-Fi card whose driver offers access point mode; on a single-radio card the Wi-Fi Link usually drops while it runs. Devices that joined it are counted, not listed.
 _Avoid_: access point, AP mode, tethering (that is joining a phone's Network)
 
 **Tethering**:
@@ -106,3 +110,14 @@ _Avoid_: animation, transition, ambient motion
 **Reduced motion**:
 The mode (`NEXUS_REDUCE_MOTION=1` or `REDUCE_MOTION=1`) in which nothing moves: tabs change at once, toasts appear in place, no pulse, no shake. The colour changes that say what happened stay. Terminals with 16 colours or none play no Effects at all.
 _Avoid_: no-animation mode, calm mode
+
+**Hidden Network**:
+A Wi-Fi Network that does not broadcast its name, so it is never in the list. It is joined by typing its name and saying how it is protected (open, OWE, WPA2, WPA3 or WPA2/WPA3); the Profile is marked hidden so the Backend probes for it. Joining one nobody answers for fails as out of range and saves nothing.
+_Avoid_: unlisted network, stealth network
+
+**Access point details**:
+What `nexus wifi aps` and `i` on the Wi-Fi tab show for a Network: each access point behind it with its address (BSSID), channel, frequency, band (6 GHz where the Backend reports it), best link rate and signal. A Network is one row; its access points are the radios that broadcast it.
+
+**Card**:
+In Wi-Fi context, a Device. When a machine has several, the person can pin joins to one (`--device` on the CLI, `c` in the TUI); otherwise the card that hears the Network best joins. A card that cannot hear the Network refuses the join with a sentence naming it.
+_Avoid_: adapter (user-facing), interface

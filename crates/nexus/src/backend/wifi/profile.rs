@@ -12,7 +12,8 @@
 use std::collections::HashMap;
 
 use nexus_ipc::{
-    AddressEntry, Ipv4, Ipv4Method, Ipv6, Ipv6Method, MacMode, ProfileSettings, ProfileView,
+    AddressEntry, Ipv4, Ipv4Method, Ipv6, Ipv6Method, MacMode, ProfileKey, ProfileSettings,
+    ProfileView,
 };
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant, Variant};
@@ -112,6 +113,16 @@ fn entries(section: &Section) -> Vec<AddressEntry> {
         .collect()
 }
 
+/// The setting the Profile's MAC address option lives in: a wired Profile has
+/// `802-3-ethernet`, a Wi-Fi one `802-11-wireless`.
+fn mac_section(all: &Settings) -> &'static str {
+    if all.contains_key("802-3-ethernet") {
+        "802-3-ethernet"
+    } else {
+        "802-11-wireless"
+    }
+}
+
 /// What a Profile's settings say, in the terms of the wire.
 pub(super) fn read_settings(all: &Settings) -> ProfileSettings {
     let empty = Section::new();
@@ -119,7 +130,7 @@ pub(super) fn read_settings(all: &Settings) -> ProfileSettings {
     let (v4, v6) = (get("ipv4"), get("ipv6"));
     let mut dns = strings(v4, "dns-data");
     dns.extend(strings(v6, "dns-data"));
-    let wireless = get("802-11-wireless");
+    let wireless = get(mac_section(all));
     let mac = text(wireless, "assigned-mac-address")
         .or_else(|| text(wireless, "cloned-mac-address"))
         .as_deref()
@@ -236,11 +247,14 @@ pub(super) fn apply_settings(all: &mut Settings, new: &ProfileSettings) {
         }
     }
     if before.mac != new.mac && new.mac != MacMode::Unknown {
-        let s = all.entry("802-11-wireless".to_owned()).or_default();
+        let wired = mac_section(all) == "802-3-ethernet";
+        let s = all.entry(mac_section(all).to_owned()).or_default();
         s.remove("cloned-mac-address");
         let mode = match new.mac {
             MacMode::EveryTime => "random",
             MacMode::Permanent => "permanent",
+            // Ethernet has no SSID to be stable per.
+            _ if wired => "stable",
             _ => "stable-ssid",
         };
         s.insert("assigned-mac-address".into(), variant(mode));
@@ -334,57 +348,97 @@ fn named(network: &str) -> Result<(Vec<u8>, String), Failure> {
     Ok((ssid, name))
 }
 
-pub async fn get(conn: &Connection, network: &str) -> zbus::Result<Result<ProfileView, Failure>> {
-    let (ssid, name) = match named(network) {
-        Ok(n) => n,
+/// The saved Profile a key names, and what is needed to checkpoint it.
+struct Target {
+    path: OwnedObjectPath,
+    uuid: String,
+    /// What the Profile is called to the person: the SSID, or the wired
+    /// Profile's name.
+    name: String,
+    /// The Devices that carry it right now.
+    devices: Vec<OwnedObjectPath>,
+    /// The setting whose secrets must travel with an update.
+    secrets: &'static str,
+}
+
+async fn target(conn: &Connection, key: &ProfileKey) -> zbus::Result<Result<Target, Failure>> {
+    match key {
+        ProfileKey::Network(network) => {
+            let (ssid, name) = match named(network) {
+                Ok(n) => n,
+                Err(f) => return Ok(Err(f)),
+            };
+            let Some(profile) = profiles(conn).await?.into_iter().find(|p| p.ssid == ssid) else {
+                return Ok(Err(text::unknown_network(&name)));
+            };
+            Ok(Ok(Target {
+                devices: carrying(conn, &ssid).await?,
+                path: profile.path,
+                uuid: profile.uuid,
+                name,
+                secrets: "802-11-wireless-security",
+            }))
+        }
+        ProfileKey::Uuid(uuid) => {
+            let Some(wired) = super::super::ethernet::find_profile(conn, uuid).await? else {
+                return Ok(Err(text::unknown_profile()));
+            };
+            Ok(Ok(Target {
+                devices: super::super::ethernet::carrying(conn, uuid).await?,
+                path: wired.path,
+                uuid: wired.uuid,
+                name: wired.name,
+                secrets: "802-1x",
+            }))
+        }
+    }
+}
+
+pub async fn get(
+    conn: &Connection,
+    key: &ProfileKey,
+) -> zbus::Result<Result<ProfileView, Failure>> {
+    let t = match target(conn, key).await? {
+        Ok(t) => t,
         Err(f) => return Ok(Err(f)),
     };
-    let Some(profile) = profiles(conn).await?.into_iter().find(|p| p.ssid == ssid) else {
-        return Ok(Err(text::unknown_network(&name)));
-    };
     let proxy = SettingsConnectionProxy::builder(conn)
-        .path(profile.path.as_str())
+        .path(t.path.as_str())
         .cache_properties(CacheProperties::No)
         .build()
         .await?;
     let all = proxy.get_settings().await?;
-    let version = versioned(conn, profile.path.as_str())
-        .await?
-        .version_id()
-        .await?;
+    let version = versioned(conn, t.path.as_str()).await?.version_id().await?;
     Ok(Ok(ProfileView {
-        ssid: name,
-        uuid: profile.uuid,
+        ssid: t.name,
+        uuid: t.uuid,
         version,
-        active: !carrying(conn, &ssid).await?.is_empty(),
+        active: !t.devices.is_empty(),
         settings: read_settings(&all),
     }))
 }
 
-/// Applies `new` to the Profile of `network` if it is still at `version`.
+/// Applies `new` to the Profile `key` names if it is still at `version`.
 /// An active Profile is checkpointed first, for `rollback_secs`.
 pub async fn update(
     conn: &Connection,
-    network: &str,
+    key: &ProfileKey,
     version: u64,
     new: &ProfileSettings,
     rollback_secs: u32,
 ) -> zbus::Result<Result<Changed, Failure>> {
-    let (ssid, name) = match named(network) {
-        Ok(n) => n,
+    let t = match target(conn, key).await? {
+        Ok(t) => t,
         Err(f) => return Ok(Err(f)),
     };
-    let Some(profile) = profiles(conn).await?.into_iter().find(|p| p.ssid == ssid) else {
-        return Ok(Err(text::unknown_network(&name)));
-    };
-    let path = profile.path.as_str();
+    let (path, name, devices) = (t.path.as_str(), t.name.clone(), t.devices.clone());
     let proxy = SettingsConnectionProxy::builder(conn)
         .path(path)
         .cache_properties(CacheProperties::No)
         .build()
         .await?;
     let mut all = proxy.get_settings().await?;
-    if let Ok(secrets) = proxy.get_secrets("802-11-wireless-security").await {
+    if let Ok(secrets) = proxy.get_secrets(t.secrets).await {
         for (setting, values) in secrets {
             all.entry(setting).or_default().extend(values);
         }
@@ -393,15 +447,17 @@ pub async fn update(
     let mac_changes = was.mac != new.mac;
     let moved = if was.keyring == new.keyring {
         None
+    } else if matches!(key, ProfileKey::Uuid(_)) {
+        // The keyring keeps Wi-Fi passwords; a wired Profile has none to move.
+        return Ok(Err(text::keyring_not_for_wired()));
     } else {
-        match move_secret(&mut all, &profile.uuid, &name, new.keyring).await {
+        match move_secret(&mut all, &t.uuid, &name, new.keyring).await {
             Ok(moved) => Some(moved),
             Err(f) => return Ok(Err(f)),
         }
     };
     apply_settings(&mut all, new);
 
-    let devices = carrying(conn, &ssid).await?;
     let nm = manager(conn).await?;
     let checkpoint = if devices.is_empty() {
         None
@@ -419,7 +475,7 @@ pub async fn update(
             let _ = nm.checkpoint_destroy(cp).await; // nothing changed
         }
         if moved == Some(Moved::IntoKeyring) {
-            let _ = Keyring.remove(&profile.uuid).await; // nobody will ask for it
+            let _ = Keyring.remove(&t.uuid).await; // nobody will ask for it
         }
         return Ok(Err(match e {
             zbus::Error::MethodError(ref n, _, _) if n.as_str().ends_with("VersionIdMismatch") => {
@@ -437,14 +493,14 @@ pub async fn update(
                 .build()
                 .await?;
             let any = OwnedObjectPath::try_from("/")?;
-            nm.activate_connection(&profile.path, device, &any).await
+            nm.activate_connection(&t.path, device, &any).await
         };
         if let Err(e) = reactivate.await {
             tracing::debug!("cannot re-activate {name} after a MAC change: {e}");
         }
     }
     if moved == Some(Moved::OutOfKeyring)
-        && let Err(e) = Keyring.remove(&profile.uuid).await
+        && let Err(e) = Keyring.remove(&t.uuid).await
     {
         tracing::warn!("cannot clear the keyring entry of {name}: {e}");
     }

@@ -12,7 +12,8 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use nexus_ipc::{
-    ErrorCode, Event, Op, Portal, Request, Response, Status, Tethers, VpnList, WifiList,
+    ErrorCode, EthernetList, Event, Hotspot, Op, Portal, Request, Response, Status, Tethers,
+    VpnList, WifiList,
 };
 
 use crate::backend::BackendError;
@@ -132,6 +133,8 @@ struct Seen {
     wifi: Option<WifiList>,
     vpns: Option<VpnList>,
     tethers: Option<Tethers>,
+    ethernet: Option<EthernetList>,
+    hotspot: Option<Hotspot>,
     portal: Option<Portal>,
 }
 
@@ -156,6 +159,8 @@ async fn sync<B: Backend>(
     push: Push,
 ) {
     sync_tethers(backend, events, seen, push).await;
+    sync_ethernet(backend, events, seen, push).await;
+    sync_hotspot(backend, events, seen, push).await;
     match backend.status().await {
         Ok(status) => {
             // The log entry goes out first, so a Front end that shows the new
@@ -252,6 +257,78 @@ async fn sync_tethers<B: Backend>(
     seen.tethers = Some(tethers);
 }
 
+/// Pushes `ethernet_changed` when a port's cable, Link or trouble differs
+/// from what subscribers were last told. A Backend that is gone reads as no
+/// ports, like the Wi-Fi list.
+async fn sync_ethernet<B: Backend>(
+    backend: &B,
+    events: &broadcast::Sender<Event>,
+    seen: &mut Seen,
+    push: Push,
+) {
+    let list = match backend.ethernet_list().await {
+        Ok(l) => l,
+        Err(BackendError::Unavailable) => EthernetList::default(),
+        Err(e) => {
+            tracing::debug!("ethernet unavailable: {e}");
+            return;
+        }
+    };
+    if push == Push::All || (push == Push::Changes && seen.ethernet.as_ref() != Some(&list)) {
+        let _ = events.send(Event::EthernetChanged {
+            ethernet: list.clone(),
+        });
+    }
+    seen.ethernet = Some(list);
+}
+
+/// Whether two pictures say the same about the running Hotspot. Whether the
+/// machine *can* host one is left out on purpose: it changes when a Wi-Fi card
+/// is plugged in or the radio is switched, which no Front end needs pushed
+/// (the TUI asks again when its Hotspot tab opens).
+fn same_hotspot(a: &Hotspot, b: &Hotspot) -> bool {
+    (a.on, a.starting, &a.ssid, a.devices) == (b.on, b.starting, &b.ssid, b.devices)
+}
+
+/// Pushes `hotspot_changed` when the Hotspot or its device count differs from
+/// what subscribers were last told.
+async fn sync_hotspot<B: Backend>(
+    backend: &B,
+    events: &broadcast::Sender<Event>,
+    seen: &mut Seen,
+    push: Push,
+) {
+    let hotspot = match backend.hotspot().await {
+        Ok(h) => h,
+        Err(BackendError::Unavailable) => Hotspot::default(),
+        Err(e) => {
+            tracing::debug!("hotspot unavailable: {e}");
+            return;
+        }
+    };
+    let differs = seen
+        .hotspot
+        .as_ref()
+        .is_none_or(|before| !same_hotspot(before, &hotspot));
+    if push == Push::All || (push == Push::Changes && differs) {
+        let _ = events.send(Event::HotspotChanged {
+            hotspot: hotspot.clone(),
+        });
+    }
+    seen.hotspot = Some(hotspot);
+}
+
+/// Resolves after `every` while a Hotspot runs, never otherwise: the devices
+/// that join it raise no signal, so they are counted on a timer, but only
+/// while there is something to count.
+async fn hotspot_tick(on: bool, every: std::time::Duration) {
+    if on {
+        tokio::time::sleep(every).await;
+    } else {
+        std::future::pending::<()>().await;
+    }
+}
+
 /// How long startup waits for the Backend's first answers before listening.
 const BASELINE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -306,20 +383,32 @@ async fn watch_backend<B: Backend>(
     let portal = status
         .as_ref()
         .and_then(|s| portal::of_status(s, &live.settings));
+    // Read here rather than in the baseline: it is not worth a startup wait,
+    // and a Backend that is down simply has no first picture.
+    let hotspot = backend.hotspot().await.ok();
     let mut seen = Seen {
         status,
         wifi,
         tethers,
+        // What a Front end reads on connecting; only changes from it are pushed.
+        ethernet: backend.ethernet_list().await.ok(),
+        hotspot,
         portal,
         vpns,
     };
     loop {
-        let push = tokio::select! {
-            () = backend.changed() => Push::Changes,
+        let on = seen.hotspot.as_ref().is_some_and(|h| h.on);
+        let woke = tokio::select! {
+            () = backend.changed() => Some(Push::Changes),
             () = backend.resumed() => {
                 tracing::info!("woke from sleep: refreshing");
-                Push::All
+                Some(Push::All)
             }
+            () = hotspot_tick(on, live.settings.hotspot_poll()) => None,
+        };
+        let Some(push) = woke else {
+            sync_hotspot(&*backend, &events, &mut seen, Push::Changes).await;
+            continue;
         };
         sync(&*backend, &events, &live, &notifier, &mut seen, push).await;
         if push == Push::All
@@ -450,9 +539,23 @@ async fn answer<B: Backend>(
             }
             backend_reply(req.id, result)
         }
+        Op::EthernetList => backend_reply(req.id, backend.ethernet_list().await),
+        Op::EthernetConnect { port } => backend_reply(req.id, backend.ethernet_connect(port).await),
+        Op::EthernetJoinEap { port, eap } => {
+            backend_reply(req.id, backend.ethernet_join_eap(port, eap).await)
+        }
+        Op::EthernetDisconnect { port } => {
+            backend_reply(req.id, backend.ethernet_disconnect(port).await)
+        }
         Op::Tethers => backend_reply(req.id, backend.tethers().await),
         Op::TetherConnect { phone } => backend_reply(req.id, backend.tether_connect(phone).await),
         Op::TetherDisconnect => backend_reply(req.id, backend.tether_disconnect().await),
+        Op::Hotspot => backend_reply(req.id, backend.hotspot().await),
+        Op::HotspotStart { ssid, password } => {
+            backend_reply(req.id, backend.hotspot_start(ssid, password).await)
+        }
+        Op::HotspotStop => backend_reply(req.id, backend.hotspot_stop().await),
+        Op::HotspotReveal => backend_reply(req.id, backend.hotspot_reveal().await),
         Op::WifiPower { on } => backend_reply(req.id, backend.wifi_power(on).await),
         Op::Airplane { on } => backend_reply(req.id, backend.airplane(on).await),
         Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),

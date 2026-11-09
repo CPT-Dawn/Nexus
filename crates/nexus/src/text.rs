@@ -690,6 +690,212 @@ pub fn untethered(phone: &str) -> String {
     format!("Dropped the tether to {phone}.")
 }
 
+/// The keyring switch is for Wi-Fi passwords.
+pub fn keyring_not_for_wired() -> Failure {
+    fail(
+        ErrorCode::InvalidSettings,
+        "The keyring keeps Wi-Fi passwords; a wired Profile has no password of its own to move.",
+    )
+}
+
+// ---- Ethernet ---------------------------------------------------------------
+
+/// No saved wired Profile has the uuid a profile op named.
+pub fn unknown_profile() -> Failure {
+    fail(
+        ErrorCode::UnknownNetwork,
+        "No saved Ethernet Profile has that id.",
+    )
+}
+
+/// The cable is out: nothing can be joined until it is back.
+pub fn unplugged(port: &str) -> Failure {
+    fail(ErrorCode::Unplugged, unplugged_sentence(port))
+}
+
+/// The sentence for a port with no cable.
+pub fn unplugged_sentence(port: &str) -> String {
+    nexus_ipc::unplugged_message(port)
+}
+
+/// Which port the person meant, when they did not say or said wrong.
+pub fn unknown_port(asked: Option<&str>, ports: &[String]) -> Failure {
+    let message = match (asked, ports) {
+        (_, []) => "This computer has no Ethernet port that NetworkManager knows of.".to_owned(),
+        (Some(asked), _) => format!(
+            "No Ethernet port is called {asked} (ports: {}).",
+            ports.join(", ")
+        ),
+        (None, _) => format!(
+            "There are several Ethernet ports; name one ({}).",
+            ports.join(", ")
+        ),
+    };
+    fail(ErrorCode::UnknownPort, message)
+}
+
+pub fn ethernet_not_connected(port: &str) -> Failure {
+    fail(ErrorCode::NotConnected, format!("{port} is not connected."))
+}
+
+/// What is wrong with a port that has a cable in it, by NetworkManager's
+/// reason number. `enterprise` says the Profile already signs in with 802.1X.
+pub fn trouble(port: &str, reason: u32, enterprise: bool) -> nexus_ipc::EthernetTrouble {
+    use nexus_ipc::{EthernetProblem, EthernetTrouble};
+    match reason {
+        5 | 6 | 15 | 16 | 17 => EthernetTrouble {
+            kind: EthernetProblem::NoAddress,
+            message: format!(
+                "The cable is plugged in, but the network gave {port} no address (DHCP got \
+                 no answer). Check the router or switch, or set an address by hand in the \
+                 Profile settings. An office or campus port may also need a sign-in (802.1X)."
+            ),
+        },
+        NO_SECRETS | SUPPLICANT_DISCONNECT | 9 | SUPPLICANT_FAILED | SUPPLICANT_TIMEOUT => {
+            EthernetTrouble {
+                kind: EthernetProblem::SignIn,
+                message: if enterprise {
+                    format!(
+                        "{port} refused the 802.1X sign-in. Check your identity, password \
+                         and certificates, and that the server name is the right one."
+                    )
+                } else {
+                    format!(
+                        "{port} wants an 802.1X sign-in. Sign in with your identity and password."
+                    )
+                },
+            }
+        }
+        other => EthernetTrouble {
+            kind: EthernetProblem::Other,
+            message: format!(
+                "The cable is plugged in, but {port} would not come up. {}.",
+                device_reason(other)
+            ),
+        },
+    }
+}
+
+/// A join that died on the way up, as a [`Failure`].
+pub fn ethernet_failure(port: &str, reason: u32, enterprise: bool) -> Failure {
+    use nexus_ipc::EthernetProblem;
+    let t = trouble(port, reason, enterprise);
+    let code = match t.kind {
+        EthernetProblem::NoAddress => ErrorCode::NoAddress,
+        EthernetProblem::SignIn if enterprise => ErrorCode::WrongPassword,
+        _ => ErrorCode::JoinFailed,
+    };
+    fail(code, t.message)
+}
+
+pub fn ethernet_refused(port: &str, why: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("NetworkManager would not bring {port} up: {why}"),
+    )
+}
+
+pub fn ethernet_timed_out(port: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("Bringing {port} up took too long, so Nexus gave up."),
+    )
+}
+
+pub fn ethernet_interrupted(port: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("NetworkManager restarted while bringing {port} up. Try again."),
+    )
+}
+
+pub fn ethernet_joined(port: &str) -> String {
+    format!("{port} is up.")
+}
+
+pub fn ethernet_dropped(port: &str) -> String {
+    format!("Dropped {port}.")
+}
+
+// Hotspot.
+
+pub fn no_wifi_for_hotspot() -> Failure {
+    fail(
+        ErrorCode::HotspotUnsupported,
+        "This machine has no Wi-Fi card, so it cannot host a Hotspot.",
+    )
+}
+
+pub fn wifi_off_for_hotspot() -> Failure {
+    fail(
+        ErrorCode::HotspotUnsupported,
+        "Wi-Fi is switched off, so a Hotspot cannot start. Turn it on with `nexus wifi on`.",
+    )
+}
+
+pub fn card_cannot_host() -> Failure {
+    fail(
+        ErrorCode::HotspotUnsupported,
+        "This Wi-Fi card cannot host a Hotspot: its driver has no access point mode (a USB \
+         adapter that has one would do; see `iw list`).",
+    )
+}
+
+pub fn hotspot_running(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("The Hotspot {ssid} is already running. Stop it first."),
+    )
+}
+
+pub fn hotspot_failed(ssid: &str, why: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("The Hotspot {ssid} did not start: {why}."),
+    )
+}
+
+pub fn hotspot_timed_out(ssid: &str) -> Failure {
+    hotspot_failed(ssid, "it took too long")
+}
+
+pub fn invalid_hotspot(why: &str) -> Failure {
+    fail(ErrorCode::InvalidSettings, why)
+}
+
+pub fn hotspot_not_running() -> Failure {
+    fail(ErrorCode::NotConnected, "No Hotspot is running.")
+}
+
+pub fn hotspot_started(ssid: &str) -> String {
+    format!("Hotspot {ssid} is on.")
+}
+
+pub fn hotspot_stopped(ssid: &str) -> String {
+    format!("Hotspot {ssid} stopped.")
+}
+
+/// One line for `nexus hotspot status`.
+pub fn hotspot_line(h: &nexus_ipc::Hotspot) -> String {
+    match (&h.ssid, h.on) {
+        (Some(ssid), true) if h.starting => format!("Hotspot {ssid} is starting."),
+        (Some(ssid), true) => format!("Hotspot {ssid} is on, {}.", hotspot_devices(h.devices)),
+        _ if h.available => "No Hotspot is running. Start one with `nexus hotspot start`.".into(),
+        _ => h
+            .why
+            .clone()
+            .unwrap_or_else(|| "This machine cannot host a Hotspot.".into()),
+    }
+}
+
+pub fn hotspot_devices(n: Option<u32>) -> String {
+    match n {
+        Some(1) => "1 device joined".into(),
+        Some(n) => format!("{n} devices joined"),
+        None => "device count unknown (install `iw` to count them)".into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

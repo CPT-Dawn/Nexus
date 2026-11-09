@@ -15,13 +15,18 @@ use serde_json::Value;
 
 mod doctor;
 mod eap;
+mod ethernet;
 pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
 pub use eap::{Eap, EapError, EapField, EapMethod, Phase2};
+pub use ethernet::{
+    EthernetDropped, EthernetJoined, EthernetList, EthernetPort, EthernetProblem, EthernetProfile,
+    EthernetState, EthernetTrouble, speed_text, unplugged_message,
+};
 
 pub mod profile;
 pub use profile::{
     AddressEntry, Field, FieldError, Ipv4, Ipv4Method, Ipv6, Ipv6Method, MacMode, PendingChange,
-    ProfileApplied, ProfileSettings, ProfileView, Settled,
+    ProfileApplied, ProfileKey, ProfileSettings, ProfileView, Settled,
 };
 
 /// The protocol version this crate speaks.
@@ -121,6 +126,28 @@ pub enum Op {
     /// Drop the Tethering Link, keeping the phone paired. Result:
     /// [`Untethered`]; `not_connected` when nothing is tethered.
     TetherDisconnect,
+    /// Whether this machine can host a Hotspot, and the Hotspot that runs.
+    /// Result: [`Hotspot`].
+    Hotspot,
+    /// Start a Hotspot sharing the internet connection, waiting until it
+    /// is up or has failed. Without `ssid` and `password` Nexus makes both
+    /// up (a strong password). Result: [`HotspotStarted`]; `hotspot_unsupported`
+    /// (the card or the radio cannot host one), `join_failed`,
+    /// `invalid_settings` (the name or password is not usable).
+    HotspotStart {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ssid: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password: Option<Secret>,
+    },
+    /// Stop the Hotspot and forget its Profile. Result: [`HotspotStopped`];
+    /// `not_connected` when none runs.
+    HotspotStop,
+    /// The join details of the running Hotspot, for a QR code. Result:
+    /// [`WifiShare`]; `not_connected` when none runs, `reveal_denied` when
+    /// authorization was refused. Front ends call it only after the person
+    /// pressed a reveal key.
+    HotspotReveal,
     /// Answer an open Secret prompt (`prompt` is the id from its `secret_prompt_opened`
     /// event). The only request besides `wifi_join` that carries a secret.
     /// Result `{}`; `unknown_prompt` when it is closed already.
@@ -142,9 +169,17 @@ pub enum Op {
         #[serde(default)]
         confirm: bool,
     },
-    /// Read the settings of the saved Profile of a Network (`WifiNetwork.id`).
-    /// Result: [`ProfileView`]; `unknown_network` when nothing is saved for it.
-    ProfileGet { network: String },
+    /// Read the settings of a saved Profile: a Wi-Fi Network's (`network` is a
+    /// `WifiNetwork.id`) or, with `profile` (a Profile uuid, e.g.
+    /// `EthernetProfile.uuid`), any Ethernet Profile. `profile` wins when both
+    /// are given. Result: [`ProfileView`]; `unknown_network` when nothing is
+    /// saved for it.
+    ProfileGet {
+        #[serde(default)]
+        network: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<String>,
+    },
     /// Change the settings of a saved Profile. `version` is the one
     /// `profile_get` returned: a Profile that changed since fails with
     /// `conflict`. Invalid settings fail with `invalid_settings` before
@@ -153,7 +188,11 @@ pub enum Op {
     /// `profile_confirm` follows within `rollback_secs` (default 15) the
     /// Backend puts the old settings back. Result: [`ProfileApplied`].
     ProfileUpdate {
+        #[serde(default)]
         network: String,
+        /// A Profile uuid instead of a Wi-Fi `network` (see `profile_get`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<String>,
         version: u64,
         settings: ProfileSettings,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -165,6 +204,33 @@ pub enum Op {
     /// Revert a pending change now instead of waiting. Result `{}`;
     /// `nothing_pending` as for `profile_confirm`.
     ProfileRevert { pending: u64 },
+    /// The Ethernet ports, their Link details and why a plugged-in one does
+    /// not work. Result: [`EthernetList`].
+    EthernetList,
+    /// Bring an Ethernet port up with its saved Profile (a plain DHCP Profile
+    /// is made and saved when it has none), waiting until it is up or has
+    /// failed. `port` may be left out when the machine has one port. Result:
+    /// [`EthernetJoined`]; `unplugged`, `unknown_port`, `wrong_password` (the
+    /// port refused the 802.1X sign-in), `no_address`, `join_failed`.
+    EthernetConnect {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<String>,
+    },
+    /// Drop an Ethernet Link, keeping its Profile. Result: [`EthernetDropped`];
+    /// `not_connected`, `unknown_port`.
+    EthernetDisconnect {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<String>,
+    },
+    /// Sign in to an 802.1X (wired Enterprise Network) port with the settings
+    /// in `eap`: the port's Profile gets them (one is made when there is none)
+    /// and is brought up. Like `ethernet_connect` otherwise;
+    /// `invalid_settings` when `eap` fails its validation.
+    EthernetJoinEap {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<String>,
+        eap: Eap,
+    },
     /// Switch Wi-Fi on or off. Result: [`Radios`]. `hard_blocked` while a
     /// hardware switch holds the radio off.
     WifiPower { on: bool },
@@ -369,6 +435,10 @@ pub enum ErrorCode {
     InvalidConfig,
     /// The VPN did not come up; the message says why.
     VpnFailed,
+    /// No cable is plugged into the Ethernet port.
+    Unplugged,
+    /// No Ethernet port has that name (or several exist and none was named).
+    UnknownPort,
     /// A plugin VPN's NetworkManager plugin is not installed; the message
     /// names the package.
     MissingPlugin,
@@ -377,6 +447,8 @@ pub enum ErrorCode {
     KeyringUnavailable,
     /// No Wi-Fi Device has that name or id.
     UnknownDevice,
+    /// This machine's Wi-Fi cannot host a Hotspot; the message says why.
+    HotspotUnsupported,
     #[serde(other)]
     Unknown,
 }
@@ -458,10 +530,19 @@ pub enum Event {
     TethersChanged {
         tethers: Tethers,
     },
+    /// The Hotspot started, stopped or its device count changed.
+    HotspotChanged {
+        hotspot: Hotspot,
+    },
     /// The Network is now behind a Portal (`Some`), or no longer is (`None`:
     /// signed in, or the Link went away).
     PortalChanged {
         portal: Option<Portal>,
+    },
+    /// The Ethernet picture changed (a cable plugged or pulled, a port joined,
+    /// dropped or failed). Carries the whole new picture.
+    EthernetChanged {
+        ethernet: EthernetList,
     },
     /// A change to the Profile carrying the Link waits for confirmation:
     /// it rolls back in `rollback_secs` unless somebody confirms it.
@@ -1166,6 +1247,43 @@ pub struct Untethered {
     pub phone: String,
 }
 
+/// The `hotspot` result and `hotspot_changed` payload.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hotspot {
+    /// This machine can host a Hotspot.
+    pub available: bool,
+    /// Why not, in a sentence, when `available` is false.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
+    /// A Hotspot is up or coming up.
+    pub on: bool,
+    /// It is coming up and not carrying devices yet.
+    #[serde(default)]
+    pub starting: bool,
+    /// The running Hotspot's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssid: Option<String>,
+    /// How many devices are joined; `None` when it cannot be counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub devices: Option<u32>,
+}
+
+/// The `hotspot_start` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HotspotStarted {
+    pub ssid: String,
+    /// The password in use, generated or given.
+    pub password: Secret,
+    /// Nexus made the password up.
+    pub generated: bool,
+}
+
+/// The `hotspot_stop` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HotspotStopped {
+    pub ssid: String,
+}
+
 /// Encodes a value as one line, newline included.
 pub fn encode<T: Serialize>(value: &T) -> String {
     let mut line = serde_json::to_string(value).expect("wire types always serialize");
@@ -1224,6 +1342,13 @@ pub struct Connection {
     parked: std::collections::VecDeque<Event>,
 }
 
+impl std::os::fd::AsFd for Connection {
+    /// The socket, for waiting on it together with something else.
+    fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
+        std::os::fd::AsFd::as_fd(self.reader.get_ref())
+    }
+}
+
 impl Connection {
     /// Connects to the default socket path.
     pub fn connect() -> io::Result<Self> {
@@ -1272,6 +1397,13 @@ impl Connection {
                 Outcome::Err(f) => Err(f),
             });
         }
+    }
+
+    /// Whether `next_event` has something without touching the socket (an
+    /// event parked by `call`, or bytes already buffered). A caller that
+    /// waits on the socket with `poll` must check this first.
+    pub fn has_buffered(&self) -> bool {
+        !self.parked.is_empty() || !self.partial.is_empty() || !self.reader.buffer().is_empty()
     }
 
     /// Waits up to `wait` for the next event line, skipping responses.

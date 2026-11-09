@@ -116,6 +116,8 @@ pub enum Action {
 #[derive(Debug, Clone)]
 pub struct Editor {
     pub network: String,
+    /// The uuid of a wired Profile, which has no SSID to be keyed by.
+    pub profile: Option<String>,
     pub ssid: String,
     pub phase: Phase,
     /// The Profile as loaded; its version goes back with the update.
@@ -140,6 +142,7 @@ impl Editor {
     pub fn loading(network: String, ssid: String) -> Self {
         Self {
             network,
+            profile: None,
             ssid,
             phase: Phase::Loading,
             view: None,
@@ -156,6 +159,21 @@ impl Editor {
             priority: "0".into(),
             keyring: false,
             message: None,
+        }
+    }
+
+    /// An editor for a wired Profile (by uuid) called `name`.
+    pub fn loading_wired(profile: String, name: String) -> Self {
+        let mut editor = Self::loading(String::new(), name);
+        editor.profile = Some(profile);
+        editor
+    }
+
+    /// The `profile_get` that loads this editor.
+    pub fn get_op(&self) -> nexus_ipc::Op {
+        nexus_ipc::Op::ProfileGet {
+            network: self.network.clone(),
+            profile: self.profile.clone(),
         }
     }
 
@@ -376,6 +394,7 @@ impl Editor {
         match self.build() {
             Ok(settings) => Some(nexus_ipc::Op::ProfileUpdate {
                 network: self.network.clone(),
+                profile: self.profile.clone(),
                 version: view.version,
                 settings,
                 rollback_secs: None,

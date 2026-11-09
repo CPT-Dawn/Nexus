@@ -13,7 +13,7 @@ expression: frame
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █░  ░░░░░░░░       │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
 │                  │  Esc                  Back out; never quits                █n-in page is      │
-│                  │  o                    Open a Portal's login page           █                  │
+│                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │nager 1.58.1      │
 │                  │  ?                    Show or hide this help               │──────────────────╯
 │                  │  q                    Quit (Ctrl-C works anywhere)         │──────────────────╮
@@ -27,6 +27,6 @@ expression: frame
 │                  │  Wi-Fi: c             Pick the Wi-Fi card joins use        │──────────────────╮
 │                  │  Wi-Fi: e             Edit the Profile's settings          │                  │
 │                  │  Wi-Fi: s             Share as a QR code (asks first)      │                  │
-│                  │  VPN: Enter           Bring the VPN up or down             │                  │
+│                  │  Ethernet: Enter      Join the selected port               │                  │
 ╰──────────────────╰────────────────────────────────────────────────────────────╯──────────────────╯
  j/k scroll  esc close

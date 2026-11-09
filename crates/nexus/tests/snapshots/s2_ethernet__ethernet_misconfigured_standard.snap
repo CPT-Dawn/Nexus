@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_ethernet.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Ethernet ──────────────────╮╭ enp3s0 ────────────────────────────────────────────────────────────╮
+│ ▸ ! enp3s0         problem ││ ! Cable in, not working                                            │
+│   ○ enp4s0       unplugged ││                                                                    │
+│                            ││ The cable is plugged in, but the network gave enp3s0 no address    │
+│                            ││ (DHCP got no answer). Check the router or switch, or set an        │
+│                            ││ address by hand in the Profile settings. An office or campus port  │
+│                            ││ may also need a sign-in (802.1X).                                  │
+│                            ││                                                                    │
+│                            ││ Speed     1 Gbps                                                   │
+│                            ││ MAC       52:54:00:00:00:00                                        │
+│                            ││ Profile   Office wall socket                                       │
+│                            ││                                                                    │
+│                            ││ Enter tries again. s signs in (802.1X). e changes the Profile      │
+│                            ││ settings.                                                          │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter connect  s sign in  e settings  h/l tab  : palette  ? help  q quit

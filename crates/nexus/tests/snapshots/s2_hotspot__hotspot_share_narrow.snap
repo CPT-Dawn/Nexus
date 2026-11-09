@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_hotspot.rs
+expression: small
+---
+ Nexus  Hotspot ▾  5/6                            ● Offline
+╭ Hotspot ─────────────────────────────────────────────────╮
+│ ● Garage Wi-Fi                                           │
+│ 2 devices joined                                         │
+│ s QR code   S stop                                       │
+╭ Share Garage Wi-Fi ──────────────────────────────────────╮
+│ The QR code needs a window of at least 37 by 22 cells.   │
+│ Make the window bigger, or use `nexus hotspot qr`.       │
+│                                                          │
+│ Password  ••••••••••••••                                 │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ p show password  esc close
