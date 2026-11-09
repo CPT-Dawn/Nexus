@@ -1,16 +1,35 @@
+mod backend;
+mod cli;
+mod daemon;
+
 use std::process::ExitCode;
+
+use clap::{Parser, Subcommand};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[derive(Parser)]
+#[command(name = "nexus", version = VERSION, about = "A network manager for Wayland desktops.")]
+struct Args {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Show the overall network state and the primary Link.
+    Status {
+        /// Print the status object as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run the Daemon in the foreground (systemd socket activation also uses this).
+    Daemon,
+}
+
 fn main() -> ExitCode {
-    match std::env::args().nth(1).as_deref() {
-        Some("--version" | "-V") => {
-            println!("nexus {VERSION}");
-            ExitCode::SUCCESS
-        }
-        _ => {
-            eprintln!("nexus {VERSION}: v2 is in development");
-            ExitCode::FAILURE
-        }
+    match Args::parse().command {
+        Command::Status { json } => cli::status(json),
+        Command::Daemon => daemon::run(),
     }
 }

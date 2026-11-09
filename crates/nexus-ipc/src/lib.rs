@@ -259,7 +259,11 @@ pub fn parse_request(line: &str) -> Result<Request, Response> {
     if !obj.contains_key("op") {
         return Err(bad(id, "missing `op`"));
     }
-    let op = obj.get("op").and_then(Value::as_str).unwrap_or("?").to_owned();
+    let op = obj
+        .get("op")
+        .and_then(Value::as_str)
+        .unwrap_or("?")
+        .to_owned();
     serde_json::from_value::<Request>(value).map_err(|e| {
         let text = e.to_string();
         if text.contains("unknown variant `") {
@@ -280,9 +284,8 @@ pub struct Connection {
 impl Connection {
     /// Connects to the default socket path.
     pub fn connect() -> io::Result<Self> {
-        let path = socket_path().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotFound, "XDG_RUNTIME_DIR is not set")
-        })?;
+        let path = socket_path()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "XDG_RUNTIME_DIR is not set"))?;
         Self::connect_to(&path)
     }
 
