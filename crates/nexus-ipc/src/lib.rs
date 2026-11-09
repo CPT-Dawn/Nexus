@@ -44,9 +44,19 @@ pub enum Op {
     /// Ask the Backend to refresh the Wi-Fi list. Results arrive as
     /// `networks_changed` events; the response only says what was done.
     WifiScan,
-    /// Turn this connection into an event stream. Subscribe first, then call
-    /// `wifi_list`, so no change falls between the two.
+    /// Start receiving event lines on this connection. Answered with
+    /// `{"ok": {}}`; events follow, interleaved with later responses.
     Subscribe,
+    /// Read the effective config, or one value by dotted key (`theme`,
+    /// `connectivity.url`). The result is `{"value": ..., "warning"?: ...}`;
+    /// `warning` is present while the file on disk is being ignored.
+    ConfigGet {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+    },
+    /// Set one value by dotted key, editing `config.toml` in place so the
+    /// user's comments and ordering survive. The result is as for `config_get`.
+    ConfigSet { key: String, value: Value },
 }
 
 /// One response line: `ok` or `err`, never both.
@@ -127,6 +137,13 @@ pub enum Event {
     /// Backend changes yields one event per Daemon tick.
     NetworksChanged {
         wifi: WifiList,
+    },
+    /// `config.toml` changed (or was fixed, or broke). `config` is what is now
+    /// in force; `warning` says why the file is being ignored, if it is.
+    ConfigReloaded {
+        config: Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        warning: Option<String>,
     },
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]

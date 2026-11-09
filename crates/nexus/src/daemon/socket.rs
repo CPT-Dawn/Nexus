@@ -5,9 +5,10 @@ use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use nexus_ipc::{ErrorCode, Request, Response, encode, parse_request};
+use nexus_ipc::{ErrorCode, Event, EventLine, Op, Request, Response, encode, parse_request};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::{broadcast, mpsc};
 
 /// A request line longer than this is refused and the connection closed.
 const MAX_LINE: u64 = 1024 * 1024;
@@ -55,32 +56,85 @@ pub fn same_user(stream: &UnixStream) -> bool {
 }
 
 /// Reads request lines until the peer hangs up, answering each in order.
-pub async fn serve_connection<F, Fut>(stream: UnixStream, answer: F) -> io::Result<()>
+/// After a `subscribe` op, events from `events` are interleaved with responses.
+pub async fn serve_connection<F, Fut>(
+    stream: UnixStream,
+    events: broadcast::Sender<Event>,
+    answer: F,
+) -> io::Result<()>
 where
     F: Fn(Request) -> Fut,
     Fut: Future<Output = Response>,
 {
     let (read, mut write) = stream.into_split();
+    let (out, mut lines) = mpsc::unbounded_channel::<String>();
+    // One writer, so responses and events never interleave mid-line.
+    let writer = tokio::spawn(async move {
+        while let Some(line) = lines.recv().await {
+            write.write_all(line.as_bytes()).await?;
+        }
+        io::Result::Ok(())
+    });
+    let mut forwarder: Option<tokio::task::JoinHandle<()>> = None;
     let mut reader = BufReader::new(read);
-    loop {
+    let result = loop {
         let mut line = String::new();
-        let n = (&mut reader).take(MAX_LINE).read_line(&mut line).await?;
+        let n = match (&mut reader).take(MAX_LINE).read_line(&mut line).await {
+            Ok(n) => n,
+            Err(e) => break Err(e),
+        };
         if n == 0 {
-            return Ok(());
+            break Ok(());
         }
         if !line.ends_with('\n') && n as u64 >= MAX_LINE {
             let resp = Response::err(None, ErrorCode::BadRequest, "request line too long");
-            write.write_all(encode(&resp).as_bytes()).await?;
-            return Ok(());
+            let _ = out.send(encode(&resp));
+            break Ok(());
         }
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
         let resp = match parse_request(line) {
+            Ok(Request {
+                id,
+                op: Op::Subscribe,
+                ..
+            }) => {
+                if forwarder.is_none() {
+                    let mut rx = events.subscribe();
+                    let out = out.clone();
+                    forwarder = Some(tokio::spawn(async move {
+                        loop {
+                            match rx.recv().await {
+                                Ok(event) => {
+                                    let line = encode(&EventLine {
+                                        v: nexus_ipc::PROTOCOL,
+                                        event,
+                                    });
+                                    if out.send(line).is_err() {
+                                        return;
+                                    }
+                                }
+                                Err(broadcast::error::RecvError::Lagged(_)) => {}
+                                Err(broadcast::error::RecvError::Closed) => return,
+                            }
+                        }
+                    }));
+                }
+                Response::ok(id, serde_json::json!({}))
+            }
             Ok(req) => answer(req).await,
             Err(resp) => resp,
         };
-        write.write_all(encode(&resp).as_bytes()).await?;
+        if out.send(encode(&resp)).is_err() {
+            break Ok(());
+        }
+    };
+    if let Some(f) = forwarder {
+        f.abort();
     }
+    drop(out);
+    let _ = writer.await;
+    result
 }

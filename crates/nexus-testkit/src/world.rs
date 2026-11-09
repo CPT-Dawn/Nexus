@@ -96,6 +96,18 @@ impl World {
         self.runtime_dir().join("nexus").join("nexus.sock")
     }
 
+    /// Where the user's optional `config.toml` lives in this world.
+    pub fn config_path(&self) -> PathBuf {
+        self.tmp.path().join("home/.config/nexus/config.toml")
+    }
+
+    /// Writes the config file the way a plain editor would (in place).
+    pub fn write_config(&self, text: &str) {
+        let path = self.config_path();
+        std::fs::create_dir_all(path.parent().unwrap()).expect("mkdir config dir");
+        std::fs::write(path, text).expect("write config");
+    }
+
     pub fn daemon_log(&self) -> String {
         std::fs::read_to_string(self.tmp.path().join("daemon.log")).unwrap_or_default()
     }
@@ -233,6 +245,25 @@ impl Wire {
         let got = matches!(self.reader.read_line(&mut buf), Ok(n) if n > 0);
         self.reader.get_ref().set_read_timeout(Some(PATIENCE)).expect("timeout");
         got.then(|| serde_json::from_str(&buf).expect("daemon speaks JSON"))
+    }
+
+    /// Subscribes this connection to events; later [`Wire::next_event`] calls
+    /// see everything the Daemon pushes from now on.
+    pub fn subscribe(&mut self) {
+        let resp = self.call(json!({"op": "subscribe"}));
+        assert!(resp.get("ok").is_some(), "subscribe refused: {resp}");
+    }
+
+    /// Waits (up to [`PATIENCE`]) for the next event named `name`, skipping
+    /// other lines, and returns it whole. Panics if none arrives.
+    pub fn next_event(&mut self, name: &str) -> Value {
+        loop {
+            let line = self.read_line();
+            assert!(!line.is_null(), "no `{name}` event arrived in time");
+            if line["event"] == name {
+                return line;
+            }
+        }
     }
 
     /// Sends `{"v":1,"id":<n>,...op}` and returns the whole response.

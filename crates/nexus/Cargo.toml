@@ -11,12 +11,17 @@ publish = false
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+clap_mangen = "0.2"
 listenfd = "1"
 nexus-ipc.workspace = true
 futures-util = { version = "0.3", default-features = false }
-rustix = { version = "1", features = ["process", "time"] }
+rustix = { version = "1", features = ["event", "fs", "process", "time"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "net", "io-util", "signal", "sync", "macros", "time"] }
+toml = "0.9"
+toml_edit = "0.23"
 tracing = "0.1"
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 zbus = { version = "6", default-features = false, features = ["tokio", "proxy"] }

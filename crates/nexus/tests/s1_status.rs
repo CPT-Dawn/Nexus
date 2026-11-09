@@ -219,7 +219,7 @@ fn connections_from_another_uid_are_refused() {
         let mut child = cmd
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .expect("spawn socat");
         std::io::Write::write_all(
@@ -229,15 +229,22 @@ fn connections_from_another_uid_are_refused() {
         .unwrap();
         drop(child.stdin.take());
         let out = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        // socat may exit non-zero when the Daemon hangs up mid-write, so
+        // "reached the socket" means no connect(2) or sudo failure was logged.
+        let connected = !stderr.contains("connect(") && !stderr.contains("sudo:");
         (
-            out.status.success(),
+            connected,
             String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr,
         )
     };
-    // socat succeeds only if it reached the socket: the Daemon hung up on it.
-    let (connected, reply) = ask(Some(&intruder));
-    assert!(connected, "the intruder could not even reach the socket");
+    let (connected, reply, stderr) = ask(Some(&intruder));
+    assert!(
+        connected,
+        "the intruder could not even reach the socket: {stderr}"
+    );
     assert_eq!(reply, "", "another uid must get silence");
-    let (_, reply) = ask(None);
+    let (_, reply, _) = ask(None);
     assert!(reply.contains("\"ok\""), "our own uid must still work");
 }

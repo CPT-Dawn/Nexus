@@ -1,0 +1,24 @@
+# Maintainer: CPT Dawn <ping@cptdawn.dev>
+pkgname=nexus-nm-bin
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc='A network manager for Wayland desktops: a user daemon and a TUI over NetworkManager (prebuilt)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/CPT-Dawn/Nexus'
+license=('MIT')
+depends=('glibc' 'gcc-libs' 'networkmanager')
+optdepends=('polkit: authorise Wi-Fi and connection changes (see /usr/share/doc/nexus/POLKIT.md)')
+provides=('nexus' "nexus-nm=$pkgver")
+conflicts=('nexus' 'nexus-nm')
+source_x86_64=("nexus-$pkgver-x86_64.tar.gz::https://github.com/CPT-Dawn/Nexus/releases/download/v$pkgver/nexus-$pkgver-x86_64-linux.tar.gz")
+source_aarch64=("nexus-$pkgver-aarch64.tar.gz::https://github.com/CPT-Dawn/Nexus/releases/download/v$pkgver/nexus-$pkgver-aarch64-linux.tar.gz")
+sha256sums_x86_64=('@SHA256_X86_64@')
+sha256sums_aarch64=('@SHA256_AARCH64@')
+
+package() {
+  cd "nexus-$pkgver-$CARCH-linux"
+  cp -a usr "$pkgdir/usr"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/nexus/README.md"
+  install -Dm644 POLKIT.md "$pkgdir/usr/share/doc/nexus/POLKIT.md"
+}
