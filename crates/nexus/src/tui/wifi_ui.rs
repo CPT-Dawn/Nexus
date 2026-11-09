@@ -11,6 +11,7 @@ use ratatui::widgets::{Clear, HighlightSpacing, List, ListItem, ListState, Parag
 
 use super::app::App;
 use super::caps::Glyphs;
+use super::hits::Hit;
 use super::theme::Look;
 use super::view::Sym;
 use super::wifi::Entry;
@@ -165,6 +166,8 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
     let avail = (inner.width as usize).saturating_sub(2);
     let saved_start = wifi.saved_start();
     let mut items = Vec::new();
+    // The list item behind each row (the "Saved" rule is an item too).
+    let mut item_of_row = Vec::new();
     for (i, entry) in wifi.rows().iter().enumerate() {
         if saved_start == Some(i) {
             let rule = if sym.glyphs == Glyphs::Ascii {
@@ -178,6 +181,7 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
             )));
         }
         let busy = wifi.busy.as_deref() == Some(entry.name());
+        item_of_row.push(items.len());
         items.push(ListItem::new(row_line(entry, busy, avail, look, sym)));
     }
     let list = List::new(items)
@@ -187,6 +191,16 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
     let shown = wifi.cursor() + usize::from(saved_start.is_some_and(|s| s <= wifi.cursor()));
     let mut state = ListState::default().with_selected(Some(shown));
     f.render_stateful_widget(list, inner, &mut state);
+    for (row, item) in item_of_row.iter().enumerate() {
+        if *item < state.offset() {
+            continue;
+        }
+        let y = inner.y + (*item - state.offset()) as u16;
+        if y >= inner.bottom() {
+            break;
+        }
+        app.hit(Rect::new(inner.x, y, inner.width, 1), Hit::Row(row));
+    }
 }
 
 /// The scan sweep, set into the list's top border while scanning.

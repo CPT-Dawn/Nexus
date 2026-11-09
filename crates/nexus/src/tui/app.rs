@@ -7,17 +7,23 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
     ActivityEntry, ActivityKind, Connectivity, Event, Finding, Op, PromptClosed, PromptKind,
     Secret, Status, Traffic, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
+use super::hits::Hit;
 use super::profile::{Action, Editor, ProfileMsg};
 use super::share::{Share, Stage};
 use super::theme::{Look, Theme};
 use super::wifi::{Cmd, Confirm, Done, Entry, PasswordField, Runner, SWEEP_FRAME, Toast, WifiTab};
+
+mod mouse;
+mod palette;
+
+pub use self::palette::Palette;
 
 /// How long a toast stays when nobody answers it.
 const TOAST_FOR: Duration = Duration::from_secs(6);
@@ -26,6 +32,8 @@ const TOAST_FOR: Duration = Duration::from_secs(6);
 #[derive(Debug, Clone)]
 pub enum Msg {
     Key(KeyEvent),
+    /// A click or wheel notch (mouse capture is on in the real terminal).
+    Mouse(MouseEvent),
     Resize(u16, u16),
     /// A fresh status from the Daemon (first connect, event or poll).
     Status(Status),
@@ -188,6 +196,12 @@ pub struct App {
     share: Option<Share>,
     toast: Option<Toast>,
     runner: Option<Runner>,
+    /// The command palette, while open: it has the keys.
+    palette: Option<Palette>,
+    /// First help row shown (the overlay scrolls).
+    help_scroll: usize,
+    /// Clickable rectangles of the last frame (see `hits.rs`).
+    hits: std::cell::RefCell<Vec<(ratatui::layout::Rect, Hit)>>,
 }
 
 impl App {
@@ -214,6 +228,9 @@ impl App {
             share: None,
             toast: None,
             runner: None,
+            palette: None,
+            help_scroll: 0,
+            hits: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -265,6 +282,10 @@ impl App {
 
     pub(super) fn share(&self) -> Option<&Share> {
         self.share.as_ref()
+    }
+
+    pub fn help_scroll(&self) -> usize {
+        self.help_scroll
     }
 
     pub fn toast(&self) -> Option<&Toast> {
@@ -445,6 +466,7 @@ impl App {
                 true
             }
             Msg::Key(key) => self.key(key),
+            Msg::Mouse(ev) => self.mouse(ev),
             Msg::Resize(w, h) => {
                 self.size = (w, h);
                 if !self.narrow() && self.layer == Layer::Sheet {
@@ -525,6 +547,7 @@ impl App {
     fn prompt_event(&mut self, event: Event) -> bool {
         match event {
             Event::SecretPromptOpened { prompt } if prompt.kind == PromptKind::WifiPassword => {
+                self.palette = None;
                 self.field = Some(PasswordField::new(prompt));
                 true
             }
@@ -623,23 +646,18 @@ impl App {
         if self.share.is_some() {
             return self.share_key(key);
         }
+        if self.palette.is_some() {
+            return self.palette_key(key);
+        }
         match self.layer {
-            Layer::Help => {
-                if matches!(key.code, KeyCode::Esc | KeyCode::Char('?')) {
-                    self.layer = Layer::Root;
-                    return true;
-                }
-                false
-            }
+            Layer::Help => self.help_key(key),
             Layer::Sheet => match key.code {
                 KeyCode::Esc | KeyCode::Char('h') | KeyCode::Left => {
                     self.layer = Layer::Root;
                     true
                 }
-                KeyCode::Char('?') => {
-                    self.layer = Layer::Help;
-                    true
-                }
+                KeyCode::Char('?') => self.open_help(),
+                KeyCode::Char(':') => self.open_palette(),
                 _ => self.tab_key(key),
             },
             Layer::Confirm => match key.code {
@@ -662,6 +680,30 @@ impl App {
                 _ => false,
             },
             Layer::Root => self.root_key(key),
+        }
+    }
+
+    fn open_help(&mut self) -> bool {
+        self.layer = Layer::Help;
+        self.help_scroll = 0;
+        true
+    }
+
+    /// The help overlay: close it, or scroll it.
+    fn help_key(&mut self, key: KeyEvent) -> bool {
+        let page = super::overlays::help_page(self.size) as isize;
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('?') => {
+                self.layer = Layer::Root;
+                true
+            }
+            KeyCode::Down | KeyCode::Char('j') => self.scroll_help(1),
+            KeyCode::Up | KeyCode::Char('k') => self.scroll_help(-1),
+            KeyCode::PageDown | KeyCode::Char(' ') => self.scroll_help(page),
+            KeyCode::PageUp => self.scroll_help(-page),
+            KeyCode::Home | KeyCode::Char('g') => self.scroll_help(isize::MIN / 2),
+            KeyCode::End | KeyCode::Char('G') => self.scroll_help(isize::MAX / 2),
+            _ => false,
         }
     }
 
@@ -745,10 +787,8 @@ impl App {
                 self.quit = true;
                 true
             }
-            KeyCode::Char('?') => {
-                self.layer = Layer::Help;
-                true
-            }
+            KeyCode::Char('?') => self.open_help(),
+            KeyCode::Char(':') => self.open_palette(),
             KeyCode::Char('f')
                 if self.tab == Tab::Overview
                     && self.fix != FixState::Running
@@ -1008,6 +1048,9 @@ impl App {
 
     /// The keys that work right now, as `(key, what it does)`, for the footer.
     pub fn hints(&self, narrow: bool) -> Vec<(&'static str, &'static str)> {
+        if self.palette.is_some() {
+            return vec![("enter", "run"), ("esc", "close")];
+        }
         if self.field.is_some() {
             return vec![("enter", "join"), ("ctrl-r", "show"), ("esc", "cancel")];
         }
@@ -1022,7 +1065,7 @@ impl App {
             return share.hints();
         }
         match self.layer {
-            Layer::Help => vec![("esc", "close")],
+            Layer::Help => vec![("j/k", "scroll"), ("esc", "close")],
             Layer::Confirm => vec![("y", "run"), ("n", "cancel")],
             Layer::Sheet => {
                 let mut v = vec![("esc", "back")];
@@ -1054,6 +1097,7 @@ impl App {
                     v.push(("o", "login"));
                 }
                 v.push(("h/l", "tab"));
+                v.push((":", "palette"));
                 v.push(("?", "help"));
                 v.push(("q", "quit"));
                 v

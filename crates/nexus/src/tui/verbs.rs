@@ -1,0 +1,402 @@
+//! The one table of things a person can do, in plain English.
+//!
+//! The command palette (`:`) searches it and the `?` help overlay is
+//! generated from it, so a key listed here is findable and documented without
+//! further work.
+//!
+//! Adding an action (a later ticket): write a `static` slice of [`Verb`]s in
+//! your own module and add it to [`TABLES`]. `run` says what to do (press a key
+//! on a tab, jump to a tab, or call a function), `ready` says whether it can
+//! run now or, as `Err`, the sentence that explains why not. Leave `help` empty
+//! to keep a row out of the `?` overlay.
+
+use crossterm::event::KeyCode;
+
+use super::app::{App, Tab};
+use super::wifi::Entry;
+
+/// Where a Verb's key works; shown in the help overlay as `Wi-Fi: r`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    Any,
+    Tab(Tab),
+}
+
+/// What running a Verb does.
+#[derive(Debug, Clone, Copy)]
+pub enum Run {
+    /// Press a key as the root layer sees it (works on any tab).
+    Root(KeyCode),
+    /// Press a key as the Wi-Fi tab sees it (works while another tab shows).
+    Wifi(KeyCode),
+    /// Go to a tab.
+    Tab(Tab),
+    /// Anything else. Returns whether the screen changed.
+    Call(fn(&mut App) -> bool),
+}
+
+#[derive(Debug)]
+pub struct Verb {
+    /// Plain-English imperative, as listed: "Forget network".
+    pub verb: &'static str,
+    /// Extra words the search also matches ("remove delete saved").
+    pub words: &'static str,
+    /// The key as shown ("f", "Enter"); empty if there is none.
+    pub key: &'static str,
+    /// One line for the `?` overlay; empty keeps the Verb out of it.
+    pub help: &'static str,
+    pub scope: Scope,
+    pub run: Run,
+    /// `Ok` when it can run now, else the reason it cannot.
+    pub ready: fn(&App) -> Result<(), &'static str>,
+}
+
+/// Every table of Verbs, in the order the help overlay lists them.
+pub static TABLES: &[&[Verb]] = &[GLOBAL, WIFI];
+
+pub fn all() -> impl Iterator<Item = &'static Verb> {
+    TABLES.iter().flat_map(|t| t.iter())
+}
+
+fn always(_: &App) -> Result<(), &'static str> {
+    Ok(())
+}
+
+const fn go(verb: &'static str, key: &'static str, tab: Tab) -> Verb {
+    Verb {
+        verb,
+        words: "open tab show switch",
+        key,
+        help: "",
+        scope: Scope::Any,
+        run: Run::Tab(tab),
+        ready: always,
+    }
+}
+
+static GLOBAL: &[Verb] = &[
+    go("Go to Overview", "1", Tab::Overview),
+    go("Go to Wi-Fi", "2", Tab::WiFi),
+    go("Go to Ethernet", "3", Tab::Ethernet),
+    go("Go to VPN", "4", Tab::Vpn),
+    go("Go to Hotspot", "5", Tab::Hotspot),
+    go("Go to Settings", "6", Tab::Settings),
+    Verb {
+        verb: "Open login page",
+        words: "portal captive sign in browser",
+        key: "o",
+        help: "Open a Portal's login page",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('o')),
+        ready: |app| app.portal().map(|_| ()).ok_or("No login page is waiting."),
+    },
+    Verb {
+        verb: "Run the suggested fix",
+        words: "doctor repair diagnostics problem",
+        key: "f",
+        help: "Overview: run the fix (asks first)",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('f')),
+        ready: |app| {
+            if app.tab() != Tab::Overview {
+                Err("Fixes are offered on the Overview.")
+            } else if app.runnable_fix().is_none() {
+                Err("Nothing to fix right now.")
+            } else {
+                Ok(())
+            }
+        },
+    },
+    Verb {
+        verb: "Show all keys",
+        words: "help shortcuts keyboard",
+        key: "?",
+        help: "Show or hide this help",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('?')),
+        ready: always,
+    },
+    Verb {
+        verb: "Quit Nexus",
+        words: "exit close",
+        key: "q",
+        help: "Quit (Ctrl-C works anywhere)",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('q')),
+        ready: always,
+    },
+];
+
+// ---- Wi-Fi ----------------------------------------------------------------------
+
+fn picked(app: &App) -> Result<&Entry, &'static str> {
+    if app.tab() != Tab::WiFi {
+        return Err("Open the Wi-Fi tab and pick a Network first.");
+    }
+    app.wifi().selected().ok_or("No Network is selected.")
+}
+
+fn saved(app: &App) -> Result<(), &'static str> {
+    if picked(app)?.saved() {
+        Ok(())
+    } else {
+        Err("That Network isn't saved.")
+    }
+}
+
+const fn wifi(
+    verb: &'static str,
+    words: &'static str,
+    key: &'static str,
+    help: &'static str,
+    code: KeyCode,
+    ready: fn(&App) -> Result<(), &'static str>,
+) -> Verb {
+    Verb {
+        verb,
+        words,
+        key,
+        help,
+        scope: Scope::Tab(Tab::WiFi),
+        run: Run::Wifi(code),
+        ready,
+    }
+}
+
+static WIFI: &[Verb] = &[
+    wifi(
+        "Join network",
+        "connect wifi wi-fi",
+        "Enter",
+        "Join the selected Network",
+        KeyCode::Enter,
+        |app| {
+            let entry = picked(app)?;
+            if entry.joined() {
+                Err("Already connected to that Network.")
+            } else if app.wifi().busy.is_some() {
+                Err("A join is already running.")
+            } else {
+                Ok(())
+            }
+        },
+    ),
+    wifi(
+        "Rescan Wi-Fi",
+        "scan refresh search networks",
+        "r",
+        "Rescan",
+        KeyCode::Char('r'),
+        always,
+    ),
+    wifi(
+        "Disconnect",
+        "leave drop wifi wi-fi",
+        "x",
+        "Disconnect",
+        KeyCode::Char('x'),
+        |app| {
+            if picked(app)?.joined() {
+                Ok(())
+            } else {
+                Err("Not connected to that Network.")
+            }
+        },
+    ),
+    wifi(
+        "Forget network",
+        "remove delete saved profile",
+        "f",
+        "Forget (asks first)",
+        KeyCode::Char('f'),
+        saved,
+    ),
+    wifi(
+        "Toggle autoconnect",
+        "automatic auto join",
+        "a",
+        "Toggle autoconnect",
+        KeyCode::Char('a'),
+        |app| {
+            if picked(app)?.autoconnect().is_some() {
+                Ok(())
+            } else {
+                Err("That Network isn't saved.")
+            }
+        },
+    ),
+    wifi(
+        "Edit network settings",
+        "profile ip dns address mac metered priority",
+        "e",
+        "Edit the Profile's settings",
+        KeyCode::Char('e'),
+        saved,
+    ),
+    wifi(
+        "Share Wi-Fi",
+        "qr code password phone",
+        "s",
+        "Share as a QR code (asks first)",
+        KeyCode::Char('s'),
+        saved,
+    ),
+    wifi(
+        "Undo last change",
+        "revert",
+        "u",
+        "Undo the toast's action",
+        KeyCode::Char('u'),
+        |app| {
+            if app.toast().is_some_and(|t| t.undo.is_some()) {
+                Ok(())
+            } else {
+                Err("Nothing to undo.")
+            }
+        },
+    ),
+];
+
+// ---- searching ------------------------------------------------------------------
+
+/// One match of a palette search.
+#[derive(Debug, Clone, Copy)]
+pub struct Found {
+    pub verb: &'static Verb,
+    /// `Some(reason)` when it cannot run right now.
+    pub blocked: Option<&'static str>,
+}
+
+/// How well `token` matches `hay` (both lower case): a substring beats a
+/// scattered match, and an early or word-start one beats a late one.
+fn score(hay: &str, token: &str) -> Option<i32> {
+    if let Some(p) = hay.find(token) {
+        let word_start = p == 0 || hay.as_bytes()[p - 1] == b' ';
+        return Some(200 - p as i32 + if word_start { 50 } else { 0 });
+    }
+    let mut chars = hay.chars().enumerate();
+    let (mut last, mut gaps) = (None::<usize>, 0usize);
+    for want in token.chars() {
+        loop {
+            match chars.next() {
+                Some((i, c)) if c == want => {
+                    if let Some(l) = last {
+                        gaps += i - l - 1;
+                    }
+                    last = Some(i);
+                    break;
+                }
+                Some(_) => {}
+                None => return None,
+            }
+        }
+    }
+    Some(100 - gaps.min(90) as i32)
+}
+
+/// Verbs matching `query` (every word of it must match), best first. With
+/// no query, the ones that can run now come before the ones that cannot.
+pub fn search(app: &App, query: &str) -> Vec<Found> {
+    let query = query.to_lowercase();
+    let tokens: Vec<&str> = query.split_whitespace().collect();
+    let mut found: Vec<(Found, i32)> = all()
+        .filter_map(|verb| {
+            let hay = format!("{} {}", verb.verb, verb.words).to_lowercase();
+            let mut total = 0;
+            for t in &tokens {
+                total += score(&hay, t)?;
+            }
+            let blocked = (verb.ready)(app).err();
+            Some((Found { verb, blocked }, total))
+        })
+        .collect();
+    // Stable sort: ties keep table order.
+    // A blocked Verb ranks a little lower, but a clearly better match still
+    // wins so its reason can be read.
+    found.sort_by_key(|(f, s)| -(s - if f.blocked.is_some() { 30 } else { 0 }));
+    found.into_iter().map(|(f, _)| f).collect()
+}
+
+// ---- help -----------------------------------------------------------------------
+
+/// Keys that are not Verbs (movement and backing out), listed first.
+const NAV: &[(&str, &str)] = &[
+    (":", "Open the command palette"),
+    ("j / k, Down / Up", "Move in the list"),
+    ("g / G", "Jump to top / bottom"),
+    ("h / l, Left / Right", "Previous / next tab"),
+    ("Tab / Shift-Tab", "Next / previous tab"),
+    ("1 - 6", "Jump to a tab"),
+    ("Enter", "Open the selected card's tab"),
+    ("d", "Details sheet (small windows)"),
+    ("Esc", "Back out; never quits"),
+];
+
+/// The rows of the `?` overlay: `(keys, what it does)`.
+pub fn help_rows() -> Vec<(String, &'static str)> {
+    let mut rows: Vec<(String, &'static str)> =
+        NAV.iter().map(|(k, w)| ((*k).to_owned(), *w)).collect();
+    for v in all().filter(|v| !v.help.is_empty() && !v.key.is_empty()) {
+        let keys = match v.scope {
+            Scope::Any => v.key.to_owned(),
+            Scope::Tab(tab) => format!("{}: {}", tab.title(), v.key),
+        };
+        rows.push((keys, v.help));
+    }
+    rows
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::{App, Caps};
+
+    fn app() -> App {
+        App::new(Caps::from_env(true, false))
+    }
+
+    fn top(query: &str) -> Option<&'static str> {
+        search(&app(), query).first().map(|f| f.verb.verb)
+    }
+
+    #[test]
+    fn plain_english_finds_the_verb() {
+        assert_eq!(top("forget network"), Some("Forget network"));
+        assert_eq!(top("share wi-fi"), Some("Share Wi-Fi"));
+        assert_eq!(top("rescan"), Some("Rescan Wi-Fi"));
+        assert_eq!(top("scan"), Some("Rescan Wi-Fi"));
+    }
+
+    #[test]
+    fn scattered_letters_still_match() {
+        assert_eq!(top("frgt"), Some("Forget network"));
+        assert_eq!(top("zzzz"), None);
+    }
+
+    #[test]
+    fn synonyms_in_words_match() {
+        assert_eq!(top("qr"), Some("Share Wi-Fi"));
+        assert_eq!(top("captive"), Some("Open login page"));
+    }
+
+    #[test]
+    fn blocked_verbs_sort_after_ready_ones() {
+        let found = search(&app(), "");
+        let first_blocked = found.iter().position(|f| f.blocked.is_some()).unwrap();
+        assert!(found[first_blocked..].iter().all(|f| f.blocked.is_some()));
+        assert!(
+            first_blocked > 0,
+            "the tab jumps and rescan are always ready"
+        );
+    }
+
+    #[test]
+    fn help_lists_every_keyed_verb_once() {
+        let rows = help_rows();
+        assert!(
+            rows.iter()
+                .any(|(k, w)| k == "Wi-Fi: f" && w.contains("Forget"))
+        );
+        assert!(rows.iter().all(|(k, _)| !k.is_empty()));
+    }
+}

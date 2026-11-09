@@ -33,4 +33,4 @@ expression: frame
 │                                      ││                                                        ││                                        │
 │                                      ││                                                        ││                                        │
 ╰──────────────────────────────────────╯╰────────────────────────────────────────────────────────╯╰────────────────────────────────────────╯
- j/k move  enter open  h/l tab  ? help  q quit
+ j/k move  enter open  h/l tab  : palette  ? help  q quit

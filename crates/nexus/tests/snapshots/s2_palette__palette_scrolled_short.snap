@@ -1,0 +1,18 @@
+---
+source: crates/nexus/tests/s2_palette.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Connections ────╭ Command palette ─────────────────────────────────────────────╮─────────────────╮
+│ ▸ ○ Wi-Fi       │ : ▏                                                          │                 │
+│     Not connecte│ ──────────────────────────────────────────────────────────── │                 │
+│   ○ Ethernet    │   Open login page                                          o │                 │
+│     Not connecte│   Run the suggested fix                                    f │                 │
+│   ○ VPN         │   Join network                                         Enter │─────────────────╯
+│     Not connecte│   Disconnect                                               x │─────────────────╮
+│   ○ Hotspot     │   Forget network                                           f │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│     Not started │   Toggle autoconnect                                       a │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                 │ ▸ Edit network settings                                    e │─────────────────╯
+│                 │   Open the Wi-Fi tab and pick a Network first.               │
+╰─────────────────╰──────────────────────────────────────────────────────────────╯
+ enter run  esc close

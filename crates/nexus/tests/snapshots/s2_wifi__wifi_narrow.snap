@@ -21,4 +21,4 @@ expression: rig.text(NARROW)
 │                                                          │
 │                                                          │
 ╰──────────────────────────────────────────────────────────╯
- j/k move  r scan  h/l tab  ? help  q quit
+ j/k move  r scan  h/l tab  : palette  ? help  q quit

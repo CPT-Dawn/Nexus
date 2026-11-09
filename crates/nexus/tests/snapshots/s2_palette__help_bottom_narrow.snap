@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_palette.rs
+expression: bottom
+---
+ Nexus  Overview ▾  1/6                           ● Offline
+╭ All keys (j/k scroll) ───────────────────────────────────╮
+│  f                    Overview: run the fix (asks first) │
+│  ?                    Show or hide this help             │
+│  q                    Quit (Ctrl-C works anywhere)       │
+│  Wi-Fi: Enter         Join the selected Network          │
+│  Wi-Fi: r             Rescan                             █
+│  Wi-Fi: x             Disconnect                         █
+│  Wi-Fi: f             Forget (asks first)                █
+│  Wi-Fi: a             Toggle autoconnect                 █
+│  Wi-Fi: e             Edit the Profile's settings        █
+│  Wi-Fi: s             Share as a QR code (asks first)    █
+│  Wi-Fi: u             Undo the toast's action            │
+│                                                          │
+│  Login page won't show? A browser with secure DNS (DNS   │
+│  over HTTPS) hides the Portal by skipping the network's  │
+│  resolver. Turn it off until you have signed in, or      │
+│  press o: Nexus opens a plain http:// page.              │
+╰──────────────────────────────────────────────────────────╯
+ j/k scroll  esc close

@@ -45,6 +45,7 @@ rig.pump_until("the offline status", |a| ...);     // after changing the fake NM
 - New snapshot: write the test, run `INSTA_UPDATE=always cargo test -p nexus --test s2_tui`, read the `.snap` file in `crates/nexus/tests/snapshots/`, commit it. CI never updates snapshots.
 - The Wi-Fi tab (`tests/s2_wifi.rs`) acts on the Daemon, so its `Rig` calls `app.attach(world.socket(), tx)`; commands run on threads and come back as `Msg::Done`, so use `rig.pump_until(..)` after a key that sends one. Worlds come from `nexus_testkit::scenarios` (`wifi_busy`, `wifi_with_open_prompt`), the same ones `demo wifi` / `demo wifi-prompt` show. Feed `Msg::Tick` by hand to move the scan sweep.
 - Portal frames (`tests/s2_portal.rs`) use the same pattern with `app.attach`; `o` sends `portal_open` to the Daemon, which runs the stand-in `xdg-open`.
+- Palette, help and mouse (`tests/s2_palette.rs`): `rig.palette("forget")` types `:` and a query; `rig.click_on("text")` renders (which records the clickable areas), finds the text on screen and sends a left click there, `click_footer` does the same on the bottom row, `rig.mouse(kind, x, y)` sends any mouse event. Mouse events are `Msg::Mouse`; only a left click and the wheel redraw.
 - Eyeball it for real: `cargo build -p nexus && cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal] [--ascii|--nerd-font]` runs the TUI on your terminal against a private fake NetworkManager and Daemon.
 
 Run: `cargo test --workspace`.

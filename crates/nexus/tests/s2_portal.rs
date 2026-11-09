@@ -172,7 +172,11 @@ fn help_explains_why_a_browser_may_not_show_the_page() {
     let mut rig = Rig::portal();
     rig.key('?');
     let frame = rig.text(STANDARD);
-    assert!(frame.contains("secure DNS"), "{frame}");
     assert!(frame.contains("Open a Portal's login page"), "{frame}");
     insta::assert_snapshot!("portal_help_standard", frame);
+    // The help scrolls (#14): the note sits at the end.
+    rig.key('G');
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("secure DNS"), "{frame}");
+    insta::assert_snapshot!("portal_help_standard_end", frame);
 }

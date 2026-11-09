@@ -29,13 +29,13 @@ expression: frame
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter join  r scan  h/l tab  ? help  q quit
+ j/k move  enter join  r scan  h/l tab  : palette  ? help  q quit
 
   174 cells  fg=#2c4a4c bg=- mods=[]
   104 cells  fg=#5d7377 bg=- mods=[]
-  115 cells  fg=#8de3dc bg=- mods=[]
+  116 cells  fg=#8de3dc bg=- mods=[]
     7 cells  fg=#8de3dc bg=- mods=[bold]
-  220 cells  fg=#9db4b5 bg=- mods=[]
+  230 cells  fg=#9db4b5 bg=- mods=[]
     9 cells  fg=#9db4b5 bg=- mods=[bold]
    11 cells  fg=#9ece6a bg=- mods=[]
     2 cells  fg=#e0af68 bg=- mods=[]
@@ -43,4 +43,4 @@ expression: frame
    39 cells  fg=#e4f2f0 bg=- mods=[]
    21 cells  fg=#e4f2f0 bg=- mods=[bold]
     3 cells  fg=#f7768e bg=- mods=[bold]
- 2062 cells  fg=- bg=- mods=[]
+ 2051 cells  fg=- bg=- mods=[]

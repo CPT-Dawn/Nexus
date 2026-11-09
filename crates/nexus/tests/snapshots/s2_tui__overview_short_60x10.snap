@@ -11,4 +11,4 @@ expression: frame
 ╭ Connections ─────────────────────────────────────────────╮
 │ ▸ ● Wi-Fi    Home-5G                                     │
 ╰──────────────────────────────────────────────────────────╯
- j/k move  enter open  h/l tab  ? help  q quit
+ j/k move  enter open  h/l tab  : palette  ? help  q quit

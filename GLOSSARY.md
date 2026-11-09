@@ -71,3 +71,7 @@ _Avoid_: unlock, decrypt, export
 **Doctor**:
 The set of checks that explains, in plain language, why the machine is or is not online and what to do about it.
 _Avoid_: diagnostics, troubleshooter, health check
+
+**Verb**:
+One thing the TUI can do, named in plain English ("Forget network") with its key. The single table of Verbs drives the command palette and the `?` help, so a key is documented and findable by being listed once.
+_Avoid_: command, action, menu item

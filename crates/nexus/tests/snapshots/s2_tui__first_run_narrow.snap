@@ -21,4 +21,4 @@ expression: frame
 │ ask for your password first.                             │
 │                                                          │
 ╰──────────────────────────────────────────────────────────╯
- f fix  h/l tab  ? help  q quit
+ f fix  h/l tab  : palette  ? help  q quit

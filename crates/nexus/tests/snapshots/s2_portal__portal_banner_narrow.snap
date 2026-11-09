@@ -21,4 +21,4 @@ expression: frame
 │                                                          │
 │                                                          │
 ╰──────────────────────────────────────────────────────────╯
- o login  h/l tab  ? help  q quit
+ o login  h/l tab  : palette  ? help  q quit

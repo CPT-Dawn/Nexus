@@ -29,12 +29,12 @@ expression: styled_of(&rig.buffer(STANDARD))
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter open  h/l tab  ? help  q quit
+ j/k move  enter open  h/l tab  : palette  ? help  q quit
 
- 1341 cells  fg=- bg=- mods=[]
-  208 cells  fg=idx116 bg=- mods=[]
+ 1330 cells  fg=- bg=- mods=[]
+  209 cells  fg=idx116 bg=- mods=[]
     7 cells  fg=idx116 bg=- mods=[bold]
-  147 cells  fg=idx145 bg=- mods=[]
+  157 cells  fg=idx145 bg=- mods=[]
   211 cells  fg=idx149 bg=- mods=[]
   172 cells  fg=idx149 bg=- mods=[dim]
   426 cells  fg=idx237 bg=- mods=[]
