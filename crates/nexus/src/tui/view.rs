@@ -11,6 +11,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wr
 
 use super::app::{App, Conn, Layer, Tab};
 use super::caps::Glyphs;
+use super::doctor_view;
 use super::layout::{self, Areas, Mode};
 use super::overview;
 use super::theme::Look;
@@ -123,6 +124,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     if app.layer() == Layer::Help {
         help(f, area, &look, &sym);
     }
+    if app.layer() == Layer::Confirm {
+        doctor_view::confirm(f, app, area, &look, &sym);
+    }
 }
 
 fn too_small(f: &mut Frame, area: Rect, look: &Look) {
@@ -216,6 +220,11 @@ fn footer(f: &mut Frame, app: &App, a: &Areas, look: &Look) {
 }
 
 fn body(f: &mut Frame, app: &App, a: &Areas, look: &Look, sym: &Sym) {
+    if app.tab() == Tab::Overview && app.needs_setup() {
+        let whole = a.detail.map_or(a.master, |d| a.master.union(d));
+        doctor_view::setup(f, app, whole, look, sym);
+        return;
+    }
     if let (Tab::Overview, Conn::Up, Some(status)) = (app.tab(), app.conn(), app.status()) {
         overview::draw(f, app, status, a, look, sym);
         return;

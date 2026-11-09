@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nexus_ipc::Traffic;
-use nexus_testkit::{ActiveConnection, NmConnectivity, NmState, PATIENCE, World};
+use nexus_testkit::{ActiveConnection, NmConnectivity, NmState, PATIENCE, Unit, World};
 use nexus_tui::tui::{self, App, Caps, Client, ColorTier, Glyphs, Msg};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -98,6 +98,9 @@ impl Rig {
     /// graphs are on screen.
     fn sync_watch(&self) {
         self.client.watch_traffic(self.app.traffic_visible());
+        if let Some(id) = self.app.take_fix_request() {
+            self.client.run_fix(id);
+        }
     }
 
     fn key(&mut self, code: KeyCode) {
@@ -355,6 +358,131 @@ fn a_missing_network_manager_is_a_status_not_a_crash() {
     assert!(frame.contains("NetworkManager is not running"), "{frame}");
 }
 
+// ---- the Doctor: first run, diagnostics, fixes --------------------------------
+
+/// A machine whose NetworkManager is installed but stopped, with networkd
+/// in charge: the textbook first run. The connectivity check is off so no
+/// lookup depends on the host running the tests.
+fn first_run_rig() -> Rig {
+    let world = World::builder(NEXUS).nm_running(false).start();
+    world.write_config("[connectivity]\nenabled = false\n");
+    world
+        .systemd
+        .set_unit("NetworkManager.service", Unit::Inactive);
+    world
+        .systemd
+        .set_unit("systemd-networkd.service", Unit::Active);
+    let mut rig = Rig::start(world, truecolor());
+    rig.pump_until("the setup findings", |a| {
+        a.findings().iter().any(|f| f.id == "networkmanager")
+    });
+    rig
+}
+
+#[test]
+fn first_run_without_networkmanager_shows_the_exact_commands() {
+    let mut rig = first_run_rig();
+    for (name, size) in [("narrow", NARROW), ("standard", STANDARD), ("wide", WIDE)] {
+        let frame = rig.text(size);
+        // The narrow box wraps long commands, so look for their start there.
+        let (first, last) = if size == NARROW {
+            (
+                "$ sudo systemctl disable --now",
+                "$ sudo systemctl enable --now",
+            )
+        } else {
+            (
+                "sudo systemctl disable --now systemd-networkd.service",
+                "sudo systemctl enable --now NetworkManager.service",
+            )
+        };
+        assert!(frame.contains(first) && frame.contains(last), "{frame}");
+        insta::assert_snapshot!(format!("first_run_{name}"), frame);
+    }
+    rig.size(STANDARD);
+    assert!(
+        rig.text(STANDARD).contains("f fix"),
+        "the footer offers the fix"
+    );
+}
+
+#[test]
+fn nothing_privileged_runs_without_a_yes() {
+    let mut rig = first_run_rig();
+    let log = rig.world.dir().join("pkexec.log");
+    rig.world
+        .install_tool("pkexec", &format!("echo \"$@\" >> {}", log.display()));
+    rig.key(KeyCode::Char('f'));
+    let ask = rig.text(STANDARD);
+    assert!(
+        ask.contains("Run the fix?") && ask.contains("ask for your password"),
+        "{ask}"
+    );
+    insta::assert_snapshot!("first_run_confirm", ask);
+    assert_eq!(last_line(&rig, STANDARD).trim(), "y run  n cancel");
+
+    rig.key(KeyCode::Char('n'));
+    assert!(!rig.text(STANDARD).contains("Run the fix?"));
+    assert_eq!(*rig.app.fix_state(), tui::FixState::Idle);
+    assert!(!log.exists(), "a no must run nothing");
+}
+
+#[test]
+fn a_yes_runs_the_fix_through_pkexec_and_the_screen_says_so() {
+    let mut rig = first_run_rig();
+    let log = rig.world.dir().join("pkexec.log");
+    rig.world
+        .install_tool("pkexec", &format!("echo \"$@\" >> {}", log.display()));
+    rig.key(KeyCode::Char('f'));
+    rig.key(KeyCode::Char('y'));
+    rig.pump_until("the fix to finish", |a| {
+        *a.fix_state() == tui::FixState::Done
+    });
+    let ran = std::fs::read_to_string(&log).expect("pkexec ran");
+    assert_eq!(
+        ran.lines().collect::<Vec<_>>(),
+        [
+            "/bin/sh -c systemctl disable --now systemd-networkd.service",
+            "/bin/sh -c systemctl enable --now NetworkManager.service",
+        ]
+    );
+    assert!(rig.text(STANDARD).contains("Done."));
+}
+
+#[test]
+fn a_refused_password_is_shown_not_swallowed() {
+    let mut rig = first_run_rig();
+    rig.world.install_tool("pkexec", "exit 127");
+    rig.key(KeyCode::Char('f'));
+    rig.key(KeyCode::Char('y'));
+    rig.pump_until("the failure", |a| {
+        matches!(a.fix_state(), tui::FixState::Failed(_))
+    });
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("not authorized"), "{frame}");
+}
+
+#[test]
+fn trouble_on_the_overview_gets_a_diagnostics_panel() {
+    let mut rig = portal_rig();
+    rig.pump_until("the portal finding", |a| {
+        a.findings().iter().any(|f| f.id == "portal")
+    });
+    for (name, size) in [("narrow", NARROW), ("standard", STANDARD), ("wide", WIDE)] {
+        let frame = rig.text(size);
+        assert!(frame.contains("Diagnostics"), "{name}:\n{frame}");
+        insta::assert_snapshot!(format!("diagnostics_{name}"), frame);
+    }
+    // Nothing to run for a sign-in page: no `f`.
+    assert!(!last_line(&rig, STANDARD).contains("fix"));
+}
+
+#[test]
+fn a_healthy_overview_has_no_diagnostics_panel() {
+    let rig = Rig::online();
+    assert!(!rig.text(STANDARD).contains("Diagnostics"));
+}
+
 // ---- colour tiers, glyphs, transparency ----------------------------------------
 
 #[test]
@@ -572,10 +700,11 @@ fn portal_rig() -> Rig {
     world.nm.set_connectivity(NmConnectivity::Portal);
     world.nm.set_state(NmState::ConnectedGlobal);
     let mut rig = Rig::start(world, truecolor());
-    rig.pump_until("the portal status", |a| {
+    rig.pump_until("the portal status and its finding", |a| {
         a.status()
             .is_some_and(|s| s.connectivity == nexus_ipc::Connectivity::Portal)
             && !a.activity().is_empty()
+            && a.findings().iter().any(|f| f.id == "portal")
     });
     rig
 }

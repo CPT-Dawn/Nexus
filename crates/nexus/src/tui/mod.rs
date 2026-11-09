@@ -8,6 +8,7 @@ mod app;
 mod bigtype;
 mod caps;
 mod client;
+mod doctor_view;
 mod graph;
 mod layout;
 mod overview;
@@ -24,7 +25,7 @@ use ratatui::Terminal;
 use ratatui::backend::{Backend, TestBackend};
 use ratatui::buffer::Buffer;
 
-pub use app::{App, Conn, Layer, Msg, Tab};
+pub use app::{App, Conn, FixState, Layer, Msg, Tab};
 pub use caps::{Caps, ColorTier, Glyphs};
 pub use client::Client;
 
@@ -103,6 +104,9 @@ pub fn run(ascii: bool, nerd: bool) -> io::Result<()> {
     // Poll traffic exactly while the graphs are on screen (ADR-0003).
     let result = event_loop(&mut terminal, &mut app, &rx, |app| {
         client.watch_traffic(app.traffic_visible());
+        if let Some(id) = app.take_fix_request() {
+            client.run_fix(id);
+        }
     });
     ratatui::restore();
     result

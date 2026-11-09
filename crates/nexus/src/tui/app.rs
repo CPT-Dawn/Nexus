@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use nexus_ipc::{ActivityEntry, Status, Traffic};
+use nexus_ipc::{ActivityEntry, Finding, Status, Traffic};
 
 use super::caps::Caps;
 use super::theme::{Look, Theme};
@@ -23,6 +23,10 @@ pub enum Msg {
     Activity(Vec<ActivityEntry>),
     /// One new activity entry.
     Happened(ActivityEntry),
+    /// The Doctor's findings (or none: all clear, or nothing to check).
+    Findings(Vec<Finding>),
+    /// A fix the person confirmed ended: `Err` carries the words to show.
+    FixDone(Result<(), String>),
     /// The Daemon cannot be reached (never connected, or the link dropped).
     Down,
     /// A running effect asked for a frame.
@@ -119,6 +123,19 @@ pub enum Layer {
     /// The slide-in detail sheet (narrow layout).
     Sheet,
     Help,
+    /// "Run the fix?": waits for a yes or a no.
+    Confirm,
+}
+
+/// Where a Doctor fix is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FixState {
+    Idle,
+    /// The yes/no is on screen.
+    Asking,
+    Running,
+    Done,
+    Failed(String),
 }
 
 #[derive(Debug)]
@@ -132,6 +149,10 @@ pub struct App {
     rates: Rates,
     samples: usize,
     activity: Vec<ActivityEntry>,
+    findings: Vec<Finding>,
+    fix: FixState,
+    /// A confirmed fix the event loop has yet to hand to the Daemon link.
+    fix_request: std::cell::RefCell<Option<String>>,
     size: (u16, u16),
     quit: bool,
 }
@@ -148,6 +169,9 @@ impl App {
             rates: Rates::default(),
             samples: 0,
             activity: Vec::new(),
+            findings: Vec::new(),
+            fix: FixState::Idle,
+            fix_request: std::cell::RefCell::new(None),
             size: (80, 24),
             quit: false,
         }
@@ -202,6 +226,38 @@ impl App {
     /// Recent activity, newest first.
     pub fn activity(&self) -> &[ActivityEntry] {
         &self.activity
+    }
+
+    /// The Doctor's latest findings (empty while the machine looks fine).
+    pub fn findings(&self) -> &[Finding] {
+        &self.findings
+    }
+
+    /// The first finding in trouble that has a fix the Daemon can run.
+    pub fn runnable_fix(&self) -> Option<&Finding> {
+        self.findings
+            .iter()
+            .find(|f| f.is_trouble() && f.fix.as_ref().is_some_and(|x| x.runnable))
+    }
+
+    pub fn fix_state(&self) -> &FixState {
+        &self.fix
+    }
+
+    /// The id of a finding whose fix the person just confirmed. The event
+    /// loop sends it to the Daemon once, after the frame.
+    pub fn take_fix_request(&self) -> Option<String> {
+        self.fix_request.borrow_mut().take()
+    }
+
+    /// Whether the first-run setup screen replaces the Overview: Nexus has
+    /// no NetworkManager to talk to.
+    pub fn needs_setup(&self) -> bool {
+        self.conn == Conn::Up
+            && self
+                .status
+                .as_ref()
+                .is_some_and(|s| s.state == nexus_ipc::State::Unavailable)
     }
 
     /// Whether the traffic graphs are on screen. The Daemon link polls
@@ -264,6 +320,18 @@ impl App {
                 self.activity.truncate(ACTIVITY);
                 self.tab == Tab::Overview
             }
+            Msg::Findings(list) => {
+                let changed = self.findings != list;
+                self.findings = list;
+                changed
+            }
+            Msg::FixDone(result) => {
+                self.fix = match result {
+                    Ok(()) => FixState::Done,
+                    Err(why) => FixState::Failed(why),
+                };
+                true
+            }
             Msg::Key(key) => self.key(key),
             Msg::Resize(w, h) => {
                 self.size = (w, h);
@@ -314,6 +382,25 @@ impl App {
                 }
                 _ => false,
             },
+            Layer::Confirm => match key.code {
+                KeyCode::Char('y' | 'Y') => {
+                    self.layer = Layer::Root;
+                    match self.runnable_fix().map(|f| f.id.clone()) {
+                        Some(id) => {
+                            self.fix = FixState::Running;
+                            *self.fix_request.borrow_mut() = Some(id);
+                        }
+                        None => self.fix = FixState::Idle, // it healed meanwhile
+                    }
+                    true
+                }
+                KeyCode::Char('n' | 'N') | KeyCode::Esc => {
+                    self.layer = Layer::Root;
+                    self.fix = FixState::Idle;
+                    true
+                }
+                _ => false,
+            },
             Layer::Root => self.root_key(key),
         }
     }
@@ -327,6 +414,15 @@ impl App {
             }
             KeyCode::Char('?') => {
                 self.layer = Layer::Help;
+                true
+            }
+            KeyCode::Char('f')
+                if self.tab == Tab::Overview
+                    && self.fix != FixState::Running
+                    && self.runnable_fix().is_some() =>
+            {
+                self.layer = Layer::Confirm;
+                self.fix = FixState::Asking;
                 true
             }
             KeyCode::Tab | KeyCode::Right | KeyCode::Char('l' | ']') => self.step_tab(1),
@@ -374,14 +470,23 @@ impl App {
     pub fn hints(&self, narrow: bool) -> Vec<(&'static str, &'static str)> {
         match self.layer {
             Layer::Help => vec![("esc", "close")],
+            Layer::Confirm => vec![("y", "run"), ("n", "cancel")],
             Layer::Sheet => vec![("esc", "back"), ("?", "help")],
             Layer::Root => {
                 let mut v = Vec::new();
-                if self.tab.rows() > 0 {
+                if self.tab.rows() > 0 && !self.needs_setup() {
                     v.push(("j/k", "move"));
                 }
-                if self.tab == Tab::Overview || (narrow && self.tab.rows() > 0) {
+                if !self.needs_setup()
+                    && (self.tab == Tab::Overview || (narrow && self.tab.rows() > 0))
+                {
                     v.push(("enter", "open"));
+                }
+                if self.tab == Tab::Overview
+                    && self.fix != FixState::Running
+                    && self.runnable_fix().is_some()
+                {
+                    v.push(("f", "fix"));
                 }
                 v.push(("h/l", "tab"));
                 v.push(("?", "help"));

@@ -15,6 +15,7 @@ use ratatui::widgets::{HighlightSpacing, List, ListItem, ListState, Paragraph, W
 use super::app::App;
 use super::bigtype::{self, Px};
 use super::caps::{ColorTier, Glyphs};
+use super::doctor_view;
 use super::graph;
 use super::layout::{Areas, Mode};
 use super::theme::Look;
@@ -117,7 +118,21 @@ pub fn draw(f: &mut Frame, app: &App, status: &Status, a: &Areas, look: &Look, s
     cards_panel(f, app, p.cards, look, sym, p.roomy);
     hero(f, status, p.hero, look, sym);
     traffic(f, app, p.traffic, look, sym);
-    activity(f, app, p.activity, look, sym);
+    // Trouble the Doctor found takes the top of the activity strip's room.
+    let want = doctor_view::panel_height(app);
+    let (diagnostics, activity_area) = if want == 0 || p.activity.height < MIN_BLOCK {
+        (Rect::default(), p.activity)
+    } else if p.activity.height >= want + MIN_BLOCK {
+        let [d, rest] =
+            Layout::vertical([Constraint::Length(want), Constraint::Fill(1)]).areas(p.activity);
+        (d, rest)
+    } else {
+        (p.activity, Rect::default())
+    };
+    if diagnostics.height > 0 {
+        doctor_view::panel(f, app, diagnostics, look, sym);
+    }
+    activity(f, app, activity_area, look, sym);
 }
 
 // ---- hero -----------------------------------------------------------------------
