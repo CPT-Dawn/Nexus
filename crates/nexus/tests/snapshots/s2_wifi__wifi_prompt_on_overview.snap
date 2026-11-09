@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_wifi.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Overview ──────────────────╮╭ Wi-Fi ─────────────────────────────────────────────────────────────╮
+│ ▸ Wi-Fi     Idle           ││                                                                    │
+│   Ethernet  Idle           ││ ● Offline                                                          │
+│   VPN       Idle           ││                                                                    │
+│   Hotspot   Off            ││ You're offline. No network is connected.                           │
+│                            ││                                                                    │
+│                            ││ Wi-Fi         Idle                                                 │
+│                            ││ Primary link  none                                                 │
+│                            ││ Internet      none                                                 │
+│                  ╭ Join Work-Secure ──────────────────────────────────────────╮                  │
+│                  │ Password for Work-Secure                                   │                  │
+│                  │                                                            │                  │
+│                  │ Password  _                                                │                  │
+│                  │                                                            │                  │
+│                  │ enter join   ctrl-r show   esc cancel                      │                  │
+│                  ╰────────────────────────────────────────────────────────────╯                  │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ enter join  ctrl-r show  esc cancel

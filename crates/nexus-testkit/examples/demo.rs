@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! cargo build -p nexus
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|wifi|wifi-prompt]
 //! ```
 //!
 //! Extra arguments after the scenario go to `nexus` (e.g. `--ascii`).
@@ -19,8 +19,22 @@ fn main() {
     let rest: Vec<String> = args.collect();
 
     let world = World::start(&bin);
+    let mut _prompt = None;
     match scenario.as_str() {
         "offline" => {}
+        // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
+        // two saved ones out of range; r rescans, f forgets, a toggles
+        // autoconnect, x disconnects, u undoes.
+        "wifi" | "wifi-prompt" => {
+            if scenario == "wifi" {
+                nexus_testkit::scenarios::wifi_busy(&world);
+            } else {
+                // Same, plus a password prompt for Work-Secure, already open.
+                _prompt = Some(nexus_testkit::scenarios::wifi_with_open_prompt(&world));
+            }
+            world.nm.set_connectivity(NmConnectivity::Full);
+            world.nm.set_state(NmState::ConnectedGlobal);
+        }
         "portal" => {
             world
                 .nm
@@ -46,5 +60,6 @@ fn main() {
     }
     let status = cmd.args(&rest).status().expect("run nexus");
     drop(world);
+    drop(_prompt);
     std::process::exit(status.code().unwrap_or(1));
 }

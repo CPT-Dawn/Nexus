@@ -84,10 +84,22 @@ fn session(mut conn: Connection, tx: &Sender<Msg>, stop: &AtomicBool) -> io::Res
         tx.send(Msg::Status(status))
             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))
     };
+    let send = |msg| {
+        tx.send(msg)
+            .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))
+    };
     push(conn.status()?.map_err(|f| refused("status", f))?)?;
+    // Without a Backend there is no list yet; `networks_changed` brings it.
+    if let Ok(list) = conn.wifi_list()? {
+        send(Msg::Wifi(list))?;
+    }
     while !stop.load(Ordering::SeqCst) {
         match conn.next_event(POLL)? {
             Some(Event::StatusChanged { status }) => push(status)?,
+            Some(Event::NetworksChanged { wifi }) => send(Msg::Wifi(wifi))?,
+            Some(event @ (Event::SecretPromptOpened { .. } | Event::SecretPromptClosed { .. })) => {
+                send(Msg::Prompt(event))?
+            }
             Some(_) => {}
             None => push(conn.status()?.map_err(|f| refused("status", f))?)?,
         }

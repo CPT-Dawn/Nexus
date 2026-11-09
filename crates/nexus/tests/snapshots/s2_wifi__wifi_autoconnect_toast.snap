@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_wifi.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Wi-Fi ─────────────────────╮╭ Parents House ─────────────────────────────────────────────────────╮
+│   ● Home-5G    ▂▄▆█ wpa2   ││ Saved, out of range                                                │
+│     Work-Secu… ▂▄▆█ wpa3   ││                                                                    │
+│     Cafe Guest ▂▄▆█ open   ││ Autoconnect   on                                                   │
+│     Neighbour… ▂▄▆█ wpa2   ││                                                                    │
+│     A very lo… ▂▄▆█ wpa2   ││ Nexus joins it again when it is back in range.                     │
+│     Rooftop-6E ▂▄▆█ wpa2   ││                                                                    │
+│   ── Saved, out of range   ││                                                                    │
+│ ▸   Parents House     auto ││                                                                    │
+│     Hotel Lobby     manual ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││             ╭ Done ──────────────────────────────────────────────╮ │
+│                            ││             │ Parents House will not join automatically.  u undo │ │
+│                            ││             ╰────────────────────────────────────────────────────╯ │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter join  r scan  f forget  a auto  u undo  h/l tab  ? help  q quit

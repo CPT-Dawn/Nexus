@@ -1122,6 +1122,22 @@ impl FakeNm {
         });
     }
 
+    /// [`set_strength`](Self::set_strength) for the first access point
+    /// broadcasting `ssid`.
+    pub fn set_strength_of(&self, ssid: &str, strength: u8) {
+        let ap = {
+            let m = self.model.lock().unwrap();
+            let id = m
+                .aps
+                .iter()
+                .find(|(_, ap)| ap.ssid == ssid.as_bytes())
+                .map(|(id, _)| *id)
+                .unwrap_or_else(|| panic!("no access point for {ssid}"));
+            ApId(id)
+        };
+        self.set_strength(ap, strength);
+    }
+
     /// Pretends `device` last scanned `ms_ago` milliseconds ago.
     pub fn set_last_scan_ago(&self, device: DeviceId, ms_ago: i64) {
         self.model.lock().unwrap().devices[device.0].last_scan = boottime_ms() - ms_ago;

@@ -10,8 +10,8 @@
 use std::collections::{HashMap, HashSet};
 
 use nexus_ipc::{
-    AutoconnectSet, Band, Disconnected, Forgotten, Joined, SavedWifi, ScanOutcome, Secret, Security, WifiDevice,
-    WifiList, WifiNetwork,
+    AutoconnectSet, Band, Disconnected, Forgotten, Joined, SavedWifi, ScanOutcome, Secret,
+    Security, WifiDevice, WifiList, WifiNetwork,
 };
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
@@ -329,7 +329,9 @@ fn assemble(
     // One Profile per SSID is enough to mark a row; the first one wins.
     let mut profile_of: HashMap<&[u8], (&str, bool)> = HashMap::new();
     for p in &profiles {
-        profile_of.entry(&p.ssid).or_insert((&p.uuid, p.autoconnect));
+        profile_of
+            .entry(&p.ssid)
+            .or_insert((&p.uuid, p.autoconnect));
     }
     let mut networks: Vec<WifiNetwork> = by_ssid
         .into_iter()
@@ -342,7 +344,9 @@ fn assemble(
             access_points,
             joined: joined.contains(&ssid),
             device: best.device,
-            profile: profile_of.get(ssid.as_slice()).map(|(u, _)| (*u).to_owned()),
+            profile: profile_of
+                .get(ssid.as_slice())
+                .map(|(u, _)| (*u).to_owned()),
             autoconnect: profile_of.get(ssid.as_slice()).map(|(_, a)| *a),
         })
         .collect();

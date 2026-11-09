@@ -218,7 +218,11 @@ fn autoconnect_toggles_on_a_saved_network_in_range_or_out() {
     let resp = world
         .wire()
         .call(json!({"op": "wifi_autoconnect", "network": id("Home"), "enabled": false}));
-    assert_eq!(resp["ok"], json!({"ssid": "Home", "enabled": false}), "{resp}");
+    assert_eq!(
+        resp["ok"],
+        json!({"ssid": "Home", "enabled": false}),
+        "{resp}"
+    );
     assert_eq!(world.nm.profile_autoconnect("uuid-home"), Some(false));
     assert_eq!(row(&list(&world), "Home")["autoconnect"], false);
 

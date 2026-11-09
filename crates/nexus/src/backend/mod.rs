@@ -7,7 +7,9 @@ mod wifi;
 
 use std::future::Future;
 
-use nexus_ipc::{AutoconnectSet, Disconnected, Forgotten, Joined, ScanOutcome, Secret, Status, WifiList};
+use nexus_ipc::{
+    AutoconnectSet, Disconnected, Forgotten, Joined, ScanOutcome, Secret, Status, WifiList,
+};
 
 use crate::text::Failure;
 
