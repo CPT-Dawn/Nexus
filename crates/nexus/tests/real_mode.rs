@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use nexus_testkit::RealWorld;
+use nexus_testkit::{RealWorld, Wire};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
@@ -122,25 +122,44 @@ fn joining_open_wpa2_and_sae_works_and_forget_removes_the_profile() {
     }
 }
 
+/// A subscribed Front end, and a join (with or without a password) running on
+/// its own connection, the way a TUI and the CLI would.
+fn front_end(world: &RealWorld) -> Wire {
+    let mut wire = world.wire();
+    wire.subscribe();
+    wire
+}
+
+fn join_in_background(
+    world: &RealWorld,
+    ssid: &str,
+    password: Option<&str>,
+) -> std::thread::JoinHandle<Value> {
+    let mut wire = world.wire();
+    let mut op = json!({"op": "wifi_join", "network": id(ssid)});
+    if let Some(p) = password {
+        op["password"] = json!(p);
+    }
+    std::thread::spawn(move || wire.call(op))
+}
+
 #[test]
-fn a_wrong_password_fails_by_name_and_leaves_no_profile() {
+fn a_wrong_password_asks_again_and_cancelling_leaves_no_profile() {
     let Some(world) = world() else { return };
     for ssid in [WPA2, SAE] {
-        let resp = join(&world, ssid, Some("not-the-password"));
-        // Known gap found by the rig: for WPA3-SAE, real NetworkManager reports
-        // reason 53 (SSID not found) after wpa_supplicant temp-disables the
-        // SSID, so the Daemon says "not in range" instead of "wrong password".
-        // Pin the WPA2 sentence; for SAE only require a clean named failure.
-        if ssid == WPA2 {
-            assert_eq!(resp["err"]["code"], "wrong_password", "{ssid}: {resp}");
-            assert_eq!(
-                resp["err"]["message"],
-                format!("Wrong password for {ssid}.")
-            );
-        } else {
-            assert!(resp["err"]["code"].is_string(), "{ssid}: {resp}");
-            assert!(resp["err"]["message"].as_str().unwrap().contains(ssid));
-        }
+        let mut fe = front_end(&world);
+        let join = join_in_background(&world, ssid, Some("not-the-password"));
+        // The Secret agent is asked again after the failed handshake. (For
+        // WPA3-SAE real NetworkManager may report reason 53 first, a gap the
+        // rig found, so only the prompt itself is pinned.)
+        let opened = fe.next_event("secret_prompt_opened");
+        assert_eq!(opened["prompt"]["network"], ssid, "{opened}");
+        let cancel = fe.call(json!({"op": "secret_cancel", "prompt": opened["prompt"]["id"]}));
+        assert!(cancel.get("ok").is_some(), "{cancel}");
+
+        let resp = join.join().unwrap();
+        assert!(resp["err"]["code"].is_string(), "{ssid}: {resp}");
+        assert!(resp["err"]["message"].as_str().unwrap().contains(ssid));
         let r = row(&list(&world), ssid).expect("still listed");
         assert!(
             r.get("profile").is_none(),
@@ -151,8 +170,27 @@ fn a_wrong_password_fails_by_name_and_leaves_no_profile() {
 }
 
 #[test]
-fn a_secured_network_without_a_password_is_refused() {
+fn a_join_without_a_password_prompts_and_the_answer_joins() {
     let Some(world) = world() else { return };
-    let resp = join(&world, WPA2, None);
+    let mut fe = front_end(&world);
+    let join = join_in_background(&world, WPA2, None);
+    let opened = fe.next_event("secret_prompt_opened");
+    assert_eq!(opened["prompt"]["retry"], false, "{opened}");
+    let ok = fe
+        .call(json!({"op": "secret_answer", "prompt": opened["prompt"]["id"], "secret": WPA2_PSK}));
+    assert!(ok.get("ok").is_some(), "{ok}");
+    let resp = join.join().unwrap();
+    assert_eq!(resp["ok"]["ssid"], WPA2, "{resp}");
+}
+
+#[test]
+fn cancelling_the_first_prompt_reads_as_needing_a_password() {
+    let Some(world) = world() else { return };
+    let mut fe = front_end(&world);
+    let join = join_in_background(&world, WPA2, None);
+    let opened = fe.next_event("secret_prompt_opened");
+    let cancel = fe.call(json!({"op": "secret_cancel", "prompt": opened["prompt"]["id"]}));
+    assert!(cancel.get("ok").is_some(), "{cancel}");
+    let resp = join.join().unwrap();
     assert_eq!(resp["err"]["code"], "password_required", "{resp}");
 }
