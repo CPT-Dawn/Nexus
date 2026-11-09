@@ -26,6 +26,22 @@ _Avoid_: active connection, session
 Deleting a Profile, so Nexus no longer joins its Network automatically.
 _Avoid_: delete connection, remove
 
+**Trust**:
+The user's judgement of a Network, either Trusted or Untrusted, which decides policies such as bringing up a VPN on join. Unknown open Networks start Untrusted.
+_Avoid_: security level, zone, public/private
+
+**Portal**:
+A login or terms page a Network demands before it gives real internet access.
+_Avoid_: captive page, splash page, hotspot login
+
+**Hotspot**:
+A Network this machine creates so other devices can share its internet connection.
+_Avoid_: access point, AP mode, tethering (that is joining a phone's Network)
+
+**Tethering**:
+Joining the internet through a phone, over Bluetooth or USB.
+_Avoid_: hotspot, PAN
+
 ### System
 
 **Backend**:
@@ -39,3 +55,11 @@ _Avoid_: server, service (alone), agent
 **Front end**:
 Any program that shows or changes Nexus state only through the Daemon: the TUI, the CLI, a status-bar module.
 _Avoid_: client, UI
+
+**Secret prompt**:
+A request from the Backend for something only the user knows, such as a Wi-Fi password or a VPN one-time code, answered through a Front end.
+_Avoid_: password dialog, auth request
+
+**Doctor**:
+The set of checks that explains, in plain language, why the machine is or is not online and what to do about it.
+_Avoid_: diagnostics, troubleshooter, health check
