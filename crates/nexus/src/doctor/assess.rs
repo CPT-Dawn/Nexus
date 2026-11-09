@@ -159,6 +159,20 @@ pub fn assess(i: &Inputs) -> Vec<Finding> {
     out
 }
 
+/// The oldest NetworkManager Nexus is built and tested against.
+const MIN_NM_MAJOR: u32 = 1;
+const MIN_NM_MINOR: u32 = 46;
+
+/// Whether a NetworkManager version string (`1.44.2`, `1.47.90-dev`) is older
+/// than the supported one. A string that does not parse is not called old.
+fn is_too_old(version: &str) -> bool {
+    let mut parts = version.split(['.', '-']).map(|p| p.parse::<u32>().ok());
+    let (Some(Some(major)), Some(Some(minor))) = (parts.next(), parts.next()) else {
+        return false;
+    };
+    (major, minor) < (MIN_NM_MAJOR, MIN_NM_MINOR)
+}
+
 fn network_manager(i: &Inputs, out: &mut Vec<Finding>) {
     if let Some(nm) = &i.nm {
         let version = nm
@@ -175,6 +189,20 @@ fn network_manager(i: &Inputs, out: &mut Vec<Finding>) {
             title,
             "NetworkManager manages your connections, which is what Nexus drives.",
         ));
+        if let Some(v) = nm.version.as_deref().filter(|v| is_too_old(v)) {
+            out.push(advice(
+                finding(
+                    "networkmanager-version",
+                    Severity::Problem,
+                    format!("NetworkManager {v} is older than Nexus supports"),
+                    format!(
+                        "Nexus needs NetworkManager {MIN_NM_MAJOR}.{MIN_NM_MINOR} or newer for \
+                         Hotspots, WireGuard and safe Profile changes; some of them will not work."
+                    ),
+                ),
+                "Update NetworkManager with your distribution's package manager.",
+            ));
+        }
         return;
     }
     let cause_base =
@@ -466,6 +494,16 @@ mod tests {
             gateway: None,
             distro: Vec::new(),
         }
+    }
+
+    #[test]
+    fn old_networkmanagers_are_told_apart_from_supported_ones() {
+        assert!(is_too_old("1.44.2"));
+        assert!(is_too_old("0.9.10"));
+        assert!(!is_too_old("1.46.0"));
+        assert!(!is_too_old("1.47.90-dev"));
+        assert!(!is_too_old("2.0.0"));
+        assert!(!is_too_old("garbage"));
     }
 
     #[test]

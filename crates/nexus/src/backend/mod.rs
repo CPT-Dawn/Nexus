@@ -21,16 +21,6 @@ use nexus_ipc::{
 
 use crate::text::Failure;
 
-/// What a Backend can do, so Front ends can hide what is not there.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[allow(dead_code)] // read by Front-end-facing ops in later tickets
-pub struct Capabilities {
-    /// Reports whether the internet is actually reachable.
-    pub connectivity_check: bool,
-    /// Can tell a Portal from a plain outage.
-    pub portal_detection: bool,
-}
-
 /// Where and how a join happens, beyond the Network itself.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct JoinTarget {
@@ -97,9 +87,6 @@ pub fn boottime_ms() -> i64 {
 }
 
 pub trait Backend: Send + Sync + 'static {
-    #[allow(dead_code)]
-    fn capabilities(&self) -> Capabilities;
-
     /// Overall state and the primary Link. A Backend that is not running
     /// yields `State::Unavailable`, not an error.
     fn status(&self) -> impl Future<Output = Result<Status, BackendError>> + Send;

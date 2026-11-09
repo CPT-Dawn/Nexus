@@ -26,7 +26,7 @@ use zbus::fdo::DBusProxy;
 use zbus::names::BusName;
 use zbus::proxy::CacheProperties;
 
-use super::{Backend, BackendError, Capabilities, Counters, JoinTarget, NetFacts};
+use super::{Backend, BackendError, Counters, JoinTarget, NetFacts};
 use crate::secrets::Broker;
 use crate::text::{self, Failure};
 
@@ -378,13 +378,6 @@ impl NetworkManager {
 }
 
 impl Backend for NetworkManager {
-    fn capabilities(&self) -> Capabilities {
-        Capabilities {
-            connectivity_check: true,
-            portal_detection: true,
-        }
-    }
-
     async fn wifi_list(&self) -> Result<WifiList, BackendError> {
         self.with_bus(|c| async move { super::wifi::list(&c).await })
             .await
