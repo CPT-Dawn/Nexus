@@ -63,7 +63,7 @@ fn exit_status() -> String {
         "Every command exits 0 on success. A refusal from the Daemon exits with a code \\
          of its own, so scripts can tell a mistyped password from a Network out of range.\n",
     );
-    for (code, meaning) in EXIT_CODES {
+    for (code, _, meaning) in EXIT_CODES {
         text.push_str(&format!(".TP\n\\fB{code}\\fR\n{}\n", roff(meaning)));
     }
     text

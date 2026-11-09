@@ -8,114 +8,188 @@ use serde_json::Value;
 
 /// Exit code when the Daemon cannot be reached.
 pub const EXIT_UNREACHABLE: u8 = 3;
-/// Exit code when the Daemon answered with an error.
+/// Exit code when the Daemon answered with an error that has no code of its own.
 pub const EXIT_DAEMON_ERROR: u8 = 4;
 /// Exit code of `nexus doctor` when it found a problem (a warning alone is 0).
 pub const EXIT_PROBLEM: u8 = 13;
+/// `nexus menu`: no launcher on the PATH, and none named in the config.
+pub const EXIT_NO_LAUNCHER: u8 = 29;
+/// `nexus menu`: the launcher was found but would not run.
+pub const EXIT_LAUNCHER_FAILED: u8 = 30;
+/// `nexus menu`: `[menu] launcher` names something Nexus cannot drive.
+pub const EXIT_UNKNOWN_LAUNCHER: u8 = 31;
 
-/// Every exit code `nexus` returns, sorted, with what it means. The man page
-/// and `docs/ipc.md` publish this table, and a test keeps them equal to
-/// [`exit_code`] and `menu.rs`.
-pub const EXIT_CODES: &[(u8, &str)] = &[
-    (0, "Success."),
-    (1, "Another failure (the message says which)."),
-    (2, "Usage error: a flag or argument was not understood."),
-    (3, "The Daemon cannot be reached."),
+/// Every exit code `nexus` returns, sorted: the code, the Daemon error code it
+/// stands for (none for codes the Front end makes up), and what it means.
+/// This is the one list: [`exit_code`] reads it, the man page and
+/// `docs/ipc.md` publish it, and a test keeps them equal.
+pub const EXIT_CODES: &[(u8, Option<ErrorCode>, &str)] = &[
+    (0, None, "Success."),
+    (1, None, "Another failure (the message says which)."),
     (
-        4,
+        2,
+        None,
+        "Usage error: a flag or argument was not understood.",
+    ),
+    (EXIT_UNREACHABLE, None, "The Daemon cannot be reached."),
+    (
+        EXIT_DAEMON_ERROR,
+        None,
         "The Daemon refused for a reason with no code of its own (backend_unavailable, bad_request, internal, ...).",
     ),
-    (5, "wrong_password: the password was rejected."),
-    (6, "out_of_range: the Network is not in range."),
-    (7, "no_address: joined, but no address was handed out."),
-    (8, "join_failed: the join failed; the message says why."),
+    (
+        5,
+        Some(ErrorCode::WrongPassword),
+        "wrong_password: the password was rejected.",
+    ),
+    (
+        6,
+        Some(ErrorCode::OutOfRange),
+        "out_of_range: the Network is not in range.",
+    ),
+    (
+        7,
+        Some(ErrorCode::NoAddress),
+        "no_address: joined, but no address was handed out.",
+    ),
+    (
+        8,
+        Some(ErrorCode::JoinFailed),
+        "join_failed: the join failed; the message says why.",
+    ),
     (
         9,
+        Some(ErrorCode::UnknownNetwork),
         "unknown_network: nothing is saved or nearby by that name.",
     ),
     (
         10,
+        Some(ErrorCode::PasswordRequired),
         "password_required: the Network needs a password and none was given.",
     ),
-    (11, "not_connected: there is nothing to disconnect or stop."),
-    (12, "hard_blocked: a hardware switch holds the radio off."),
-    (13, "`nexus doctor` found a problem."),
+    (
+        11,
+        Some(ErrorCode::NotConnected),
+        "not_connected: there is nothing to disconnect or stop.",
+    ),
+    (
+        12,
+        Some(ErrorCode::HardBlocked),
+        "hard_blocked: a hardware switch holds the radio off.",
+    ),
+    (EXIT_PROBLEM, None, "`nexus doctor` found a problem."),
     (
         14,
+        Some(ErrorCode::RevealDenied),
         "reveal_denied: authorization to read a stored secret was refused.",
     ),
-    (15, "invalid_settings: the settings are not valid."),
-    (16, "conflict: the Profile changed since it was read."),
+    (
+        15,
+        Some(ErrorCode::InvalidSettings),
+        "invalid_settings: the settings are not valid.",
+    ),
+    (
+        16,
+        Some(ErrorCode::Conflict),
+        "conflict: the Profile changed since it was read.",
+    ),
     (
         17,
+        Some(ErrorCode::NothingPending),
         "nothing_pending: no change is waiting for confirmation.",
     ),
-    (18, "bluetooth_off: Bluetooth is off or missing."),
-    (19, "no_phone: no paired phone offers network access."),
-    (20, "unknown_phone: no paired phone matches, or several do."),
-    (21, "unknown_vpn: no VPN has that name."),
-    (22, "invalid_config: a VPN config could not be read."),
-    (23, "vpn_failed: the VPN did not come up."),
+    (
+        18,
+        Some(ErrorCode::BluetoothOff),
+        "bluetooth_off: Bluetooth is off or missing.",
+    ),
+    (
+        19,
+        Some(ErrorCode::NoPhone),
+        "no_phone: no paired phone offers network access.",
+    ),
+    (
+        20,
+        Some(ErrorCode::UnknownPhone),
+        "unknown_phone: no paired phone matches, or several do.",
+    ),
+    (
+        21,
+        Some(ErrorCode::UnknownVpn),
+        "unknown_vpn: no VPN has that name.",
+    ),
+    (
+        22,
+        Some(ErrorCode::InvalidConfig),
+        "invalid_config: a VPN config could not be read.",
+    ),
+    (
+        23,
+        Some(ErrorCode::VpnFailed),
+        "vpn_failed: the VPN did not come up.",
+    ),
     (
         24,
+        Some(ErrorCode::MissingPlugin),
         "missing_plugin: the VPN's NetworkManager plugin is not installed.",
     ),
     (
         25,
+        Some(ErrorCode::KeyringUnavailable),
         "keyring_unavailable: no Secret Service answers, or it is locked.",
     ),
     (
         26,
+        Some(ErrorCode::HotspotUnsupported),
         "hotspot_unsupported: this Wi-Fi card cannot host a Hotspot.",
     ),
-    (27, "unplugged: no cable in the Ethernet port."),
-    (28, "unknown_port: no Ethernet port by that name."),
-    (29, "`nexus menu`: no launcher found."),
-    (30, "`nexus menu`: the launcher would not run."),
     (
-        31,
+        27,
+        Some(ErrorCode::Unplugged),
+        "unplugged: no cable in the Ethernet port.",
+    ),
+    (
+        28,
+        Some(ErrorCode::UnknownPort),
+        "unknown_port: no Ethernet port by that name.",
+    ),
+    (EXIT_NO_LAUNCHER, None, "`nexus menu`: no launcher found."),
+    (
+        EXIT_LAUNCHER_FAILED,
+        None,
+        "`nexus menu`: the launcher would not run.",
+    ),
+    (
+        EXIT_UNKNOWN_LAUNCHER,
+        None,
         "`nexus menu`: the launcher named in the config is not one Nexus knows.",
     ),
-    (32, "unknown_device: no Wi-Fi device by that name."),
-    (33, "no_portal: no Network is asking for a login."),
-    (34, "open_failed: the browser could not be started."),
+    (
+        32,
+        Some(ErrorCode::UnknownDevice),
+        "unknown_device: no Wi-Fi device by that name.",
+    ),
+    (
+        33,
+        Some(ErrorCode::NoPortal),
+        "no_portal: no Network is asking for a login.",
+    ),
+    (
+        34,
+        Some(ErrorCode::OpenFailed),
+        "open_failed: the browser could not be started.",
+    ),
 ];
 
 /// The exit code for a refusal, one per failure class, so scripts can tell
-/// a typo'd password (5) from a Network out of range (6) and so on.
-/// 3 and 4 are taken by "cannot reach the Daemon" and "other Daemon error".
+/// a typo'd password (5) from a Network out of range (6) and so on. A code
+/// with no row of its own (and any from a newer daemon) exits
+/// [`EXIT_DAEMON_ERROR`].
 pub fn exit_code(code: ErrorCode) -> u8 {
-    match code {
-        ErrorCode::WrongPassword => 5,
-        ErrorCode::OutOfRange => 6,
-        ErrorCode::NoAddress => 7,
-        ErrorCode::JoinFailed => 8,
-        ErrorCode::UnknownNetwork => 9,
-        ErrorCode::PasswordRequired => 10,
-        ErrorCode::NotConnected => 11,
-        ErrorCode::HardBlocked => 12,
-        // 13 is `nexus doctor` finding a problem.
-        ErrorCode::RevealDenied => 14,
-        ErrorCode::InvalidSettings => 15,
-        ErrorCode::Conflict => 16,
-        ErrorCode::NothingPending => 17,
-        ErrorCode::BluetoothOff => 18,
-        ErrorCode::NoPhone => 19,
-        ErrorCode::UnknownPhone => 20,
-        ErrorCode::UnknownVpn => 21,
-        ErrorCode::InvalidConfig => 22,
-        ErrorCode::VpnFailed => 23,
-        ErrorCode::MissingPlugin => 24,
-        ErrorCode::KeyringUnavailable => 25,
-        ErrorCode::HotspotUnsupported => 26,
-        ErrorCode::Unplugged => 27,
-        ErrorCode::UnknownPort => 28,
-        // 29-31 are `nexus menu`'s launcher failures (`menu.rs`).
-        ErrorCode::UnknownDevice => 32,
-        ErrorCode::NoPortal => 33,
-        ErrorCode::OpenFailed => 34,
-        _ => EXIT_DAEMON_ERROR,
-    }
+    EXIT_CODES
+        .iter()
+        .find(|(_, own, _)| *own == Some(code))
+        .map_or(EXIT_DAEMON_ERROR, |(exit, _, _)| *exit)
 }
 
 pub fn status(json: bool) -> ExitCode {
@@ -851,16 +925,40 @@ pub(crate) fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
     report(conn.call(op), show)
 }
 
+/// Prints a refusal and returns the exit code for its class.
+pub(crate) fn refused(failure: &nexus_ipc::Failure) -> ExitCode {
+    eprintln!("nexus: {}", failure.message);
+    ExitCode::from(exit_code(failure.code))
+}
+
+/// One call, with every failure already reported: `Err` is the exit code.
+pub(crate) fn call_value(conn: &mut Connection, op: Op) -> Result<Value, ExitCode> {
+    match conn.call(op) {
+        Err(e) => Err(unreachable(&e)),
+        Ok(Err(f)) => Err(refused(&f)),
+        Ok(Ok(v)) => Ok(v),
+    }
+}
+
+/// One call decoded into `T`. An answer that will not decode is reported,
+/// never read as empty.
+pub(crate) fn decode_call<T: serde::de::DeserializeOwned>(
+    conn: &mut Connection,
+    op: Op,
+) -> Result<T, ExitCode> {
+    serde_json::from_value(call_value(conn, op)?).map_err(|e| {
+        eprintln!("nexus: undecodable answer: {e}");
+        ExitCode::from(EXIT_DAEMON_ERROR)
+    })
+}
+
 pub(crate) fn report(
     result: std::io::Result<Result<Value, nexus_ipc::Failure>>,
     show: impl FnOnce(Value),
 ) -> ExitCode {
     match result {
         Err(e) => unreachable(&e),
-        Ok(Err(failure)) => {
-            eprintln!("nexus: {}", failure.message);
-            ExitCode::from(exit_code(failure.code))
-        }
+        Ok(Err(failure)) => refused(&failure),
         Ok(Ok(value)) => {
             show(value);
             ExitCode::SUCCESS
@@ -928,50 +1026,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_failure_class_has_its_own_exit_code() {
-        let classes = [
-            ErrorCode::WrongPassword,
-            ErrorCode::OutOfRange,
-            ErrorCode::NoAddress,
-            ErrorCode::JoinFailed,
-            ErrorCode::UnknownNetwork,
-            ErrorCode::PasswordRequired,
-            ErrorCode::NotConnected,
-            ErrorCode::HardBlocked,
-            ErrorCode::UnknownVpn,
-            ErrorCode::InvalidConfig,
-            ErrorCode::VpnFailed,
-            ErrorCode::Unplugged,
-            ErrorCode::UnknownPort,
-            ErrorCode::MissingPlugin,
-            ErrorCode::HotspotUnsupported,
-            ErrorCode::BluetoothOff,
-            ErrorCode::NoPhone,
-            ErrorCode::UnknownPhone,
-            ErrorCode::InvalidSettings,
-            ErrorCode::Conflict,
-            ErrorCode::NothingPending,
-            ErrorCode::KeyringUnavailable,
-            ErrorCode::RevealDenied,
-            ErrorCode::UnknownDevice,
-        ];
-        let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
-        codes.push(EXIT_UNREACHABLE);
-        codes.push(EXIT_DAEMON_ERROR);
-        codes.extend([
-            crate::menu::EXIT_NO_LAUNCHER,
-            crate::menu::EXIT_LAUNCHER_FAILED,
-            crate::menu::EXIT_UNKNOWN_LAUNCHER,
-        ]);
-        let n = codes.len();
-        codes.sort_unstable();
-        codes.dedup();
-        assert_eq!(codes.len(), n, "exit codes must not collide");
+    fn exit_codes_do_not_collide() {
+        for (i, (_, own, _)) in EXIT_CODES.iter().enumerate() {
+            if let Some(own) = own {
+                assert!(
+                    !EXIT_CODES[..i].iter().any(|r| r.1 == Some(*own)),
+                    "{} has two rows",
+                    own.name()
+                );
+            }
+        }
     }
 
     #[test]
     fn the_table_is_sorted_and_without_gaps() {
-        for (i, (code, _)) in EXIT_CODES.iter().enumerate() {
+        for (i, (code, _, _)) in EXIT_CODES.iter().enumerate() {
             assert_eq!(usize::from(*code), i, "codes run 0, 1, 2, ... in order");
         }
     }
@@ -980,25 +1049,25 @@ mod tests {
     fn every_error_code_exits_with_a_code_the_table_explains() {
         for code in ErrorCode::ALL {
             let exit = exit_code(*code);
-            let row = EXIT_CODES
-                .iter()
-                .find(|(c, _)| *c == exit)
-                .unwrap_or_else(|| panic!("{} exits {exit}, not in the table", code.name()));
+            let row = &EXIT_CODES[usize::from(exit)];
+            assert_eq!(row.0, exit);
             let own = exit != EXIT_DAEMON_ERROR;
+            assert_eq!(row.1 == Some(*code), own, "{} exits {exit}", code.name());
             assert_eq!(
-                row.1.starts_with(&format!("{}:", code.name())),
+                row.2.starts_with(&format!("{}:", code.name())),
                 own,
                 "{} exits {exit}: {}",
                 code.name(),
-                row.1
+                row.2
             );
         }
+        assert_eq!(exit_code(ErrorCode::Unknown), EXIT_DAEMON_ERROR);
     }
 
     #[test]
     fn docs_publish_the_same_exit_codes() {
         const DOC: &str = include_str!("../../../docs/ipc.md");
-        for (code, meaning) in EXIT_CODES {
+        for (code, _, meaning) in EXIT_CODES {
             let row = format!("| {code} | {meaning} |");
             assert!(DOC.contains(&row), "docs/ipc.md lacks `{row}`");
         }
@@ -1010,12 +1079,12 @@ mod tests {
 
     #[test]
     fn the_other_constants_are_in_the_table() {
-        let says = |code: u8| EXIT_CODES[usize::from(code)].1;
+        let says = |code: u8| EXIT_CODES[usize::from(code)].2;
         assert!(says(EXIT_UNREACHABLE).contains("cannot be reached"));
         assert!(says(EXIT_DAEMON_ERROR).contains("no code of its own"));
         assert!(says(EXIT_PROBLEM).contains("doctor"));
-        assert!(says(crate::menu::EXIT_NO_LAUNCHER).contains("no launcher"));
-        assert!(says(crate::menu::EXIT_LAUNCHER_FAILED).contains("would not run"));
-        assert!(says(crate::menu::EXIT_UNKNOWN_LAUNCHER).contains("not one Nexus knows"));
+        assert!(says(EXIT_NO_LAUNCHER).contains("no launcher"));
+        assert!(says(EXIT_LAUNCHER_FAILED).contains("would not run"));
+        assert!(says(EXIT_UNKNOWN_LAUNCHER).contains("not one Nexus knows"));
     }
 }

@@ -449,6 +449,12 @@ enum HotspotAction {
 
 #[derive(Subcommand)]
 enum ProfileAction {
+    /// List every saved Profile, Wi-Fi and Ethernet.
+    List {
+        /// Print the list as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Show a Profile's IP, DNS, MAC, metered and priority settings.
     Show {
         /// The Network's name (SSID).
@@ -525,9 +531,28 @@ struct EapArgs {
     /// Private key file (TLS).
     #[arg(long, requires = "eap")]
     private_key: Option<String>,
-    /// Private key password. Visible in the process list.
-    #[arg(long, requires = "eap")]
+    /// Private key password. Visible in the process list: prefer
+    /// --private-key-password-stdin.
+    #[arg(
+        long,
+        requires = "eap",
+        conflicts_with_all = ["private_key_password_stdin", "password_stdin"]
+    )]
     private_key_password: Option<String>,
+    /// Read the private key password from the first line of stdin (TLS has no
+    /// other password, so this cannot clash with --password-stdin).
+    #[arg(long, requires = "eap", conflicts_with = "password_stdin")]
+    private_key_password_stdin: bool,
+}
+
+/// The first line of stdin, without its newline. Exits 1 when stdin fails.
+fn stdin_secret() -> nexus_ipc::Secret {
+    let mut line = zeroize::Zeroizing::new(String::new());
+    if let Err(e) = std::io::stdin().read_line(&mut line) {
+        eprintln!("nexus: cannot read the private key password from stdin: {e}");
+        std::process::exit(1);
+    }
+    nexus_ipc::Secret::new(line.trim_end_matches(['\n', '\r']).to_owned())
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -599,10 +624,13 @@ impl EapArgs {
         eap.no_ca_validation = self.no_ca_validation;
         eap.client_cert.clone_from(&self.client_cert);
         eap.private_key.clone_from(&self.private_key);
-        eap.private_key_password = self
-            .private_key_password
-            .clone()
-            .map(nexus_ipc::Secret::new);
+        eap.private_key_password = if self.private_key_password_stdin {
+            Some(stdin_secret())
+        } else {
+            self.private_key_password
+                .clone()
+                .map(nexus_ipc::Secret::new)
+        };
         Some(eap)
     }
 }
@@ -689,6 +717,9 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Aps { ssid, hex, json },
         } => cli::wifi_aps(&ssid, hex, json),
+        Command::Profile {
+            action: ProfileAction::List { json },
+        } => profile_cli::list(json),
         Command::Profile {
             action: ProfileAction::Show { ssid, json },
         } => profile_cli::show(&ssid, json),

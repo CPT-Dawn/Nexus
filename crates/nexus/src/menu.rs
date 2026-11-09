@@ -6,21 +6,15 @@ use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
-use nexus_ipc::{
-    Connection, Failure, Op, Secret, Security, Vpn, VpnList, VpnState, WifiList, WifiNetwork,
-};
+use nexus_ipc::{Connection, Op, Secret, Security, Vpn, VpnList, VpnState, WifiList, WifiNetwork};
 use serde_json::Value;
 use zeroize::Zeroizing;
 
-use crate::cli::{EXIT_DAEMON_ERROR, exit_code, unreachable};
+use crate::cli::{
+    EXIT_LAUNCHER_FAILED, EXIT_NO_LAUNCHER, EXIT_UNKNOWN_LAUNCHER, call_value, decode_call,
+    refused, unreachable,
+};
 use crate::text;
-
-/// No launcher on the PATH, and none named in the config.
-pub const EXIT_NO_LAUNCHER: u8 = 29;
-/// The launcher was found but would not run.
-pub const EXIT_LAUNCHER_FAILED: u8 = 30;
-/// `[menu] launcher` names something Nexus does not know how to drive.
-pub const EXIT_UNKNOWN_LAUNCHER: u8 = 31;
 
 /// The launchers Nexus can drive, in the order it looks for them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,6 +131,7 @@ pub fn entries(wifi: &WifiList, vpns: &VpnList) -> Vec<(String, Pick)> {
             VpnState::Up => ("up", Pick::VpnDown(v.clone())),
             VpnState::Activating => ("connecting", Pick::VpnDown(v.clone())),
             VpnState::Down => ("down", Pick::VpnUp(v.clone())),
+            _ => ("changing", Pick::VpnDown(v.clone())),
         };
         out.push((format!("VPN  {name}  {state}"), pick));
     }
@@ -191,22 +186,6 @@ fn ask(
     Ok(Some(Zeroizing::new(picked.to_string())))
 }
 
-fn refused(failure: &Failure) -> ExitCode {
-    eprintln!("nexus: {}", failure.message);
-    ExitCode::from(exit_code(failure.code))
-}
-
-fn decode<T: serde::de::DeserializeOwned>(conn: &mut Connection, op: Op) -> Result<T, ExitCode> {
-    match conn.call(op) {
-        Err(e) => Err(unreachable(&e)),
-        Ok(Err(f)) => Err(refused(&f)),
-        Ok(Ok(v)) => serde_json::from_value(v).map_err(|e| {
-            eprintln!("nexus: undecodable answer: {e}");
-            ExitCode::from(EXIT_DAEMON_ERROR)
-        }),
-    }
-}
-
 /// `nexus menu`.
 pub fn run() -> ExitCode {
     match menu() {
@@ -217,7 +196,7 @@ pub fn run() -> ExitCode {
 
 fn menu() -> Result<(), ExitCode> {
     let mut conn = Connection::connect().map_err(|e| unreachable(&e))?;
-    let configured: Value = decode(
+    let configured: Value = decode_call(
         &mut conn,
         Op::ConfigGet {
             key: Some("menu.launcher".into()),
@@ -242,8 +221,8 @@ fn menu() -> Result<(), ExitCode> {
         }
     };
 
-    let wifi: WifiList = decode(&mut conn, Op::WifiList)?;
-    let vpns: VpnList = decode(&mut conn, Op::VpnList)?;
+    let wifi: WifiList = decode_call(&mut conn, Op::WifiList)?;
+    let vpns: VpnList = decode_call(&mut conn, Op::VpnList)?;
     let entries = entries(&wifi, &vpns);
     if entries.is_empty() {
         eprintln!("nexus: no Networks or VPNs to show.");
@@ -255,7 +234,7 @@ fn menu() -> Result<(), ExitCode> {
     };
     let Some((_, pick)) = entries.into_iter().find(|(l, _)| l == chosen.as_str()) else {
         eprintln!("nexus: \"{}\" is not in the list.", chosen.as_str());
-        return Err(ExitCode::from(EXIT_DAEMON_ERROR));
+        return Err(ExitCode::FAILURE);
     };
     act(&mut conn, launcher, pick)
 }
@@ -263,28 +242,20 @@ fn menu() -> Result<(), ExitCode> {
 fn act(conn: &mut Connection, launcher: Launcher, pick: Pick) -> Result<(), ExitCode> {
     match pick {
         Pick::Leave(n) => {
-            call(conn, Op::WifiDisconnect)?;
+            call_value(conn, Op::WifiDisconnect)?;
             println!("{}", text::disconnected(&n.ssid));
         }
         Pick::VpnUp(v) => {
-            call(conn, Op::VpnUp { vpn: v.id })?;
+            call_value(conn, Op::VpnUp { vpn: v.id })?;
             println!("{} is up.", v.name);
         }
         Pick::VpnDown(v) => {
-            call(conn, Op::VpnDown { vpn: v.id })?;
+            call_value(conn, Op::VpnDown { vpn: v.id })?;
             println!("{} is down.", v.name);
         }
         Pick::Join(n) => join(conn, launcher, &n)?,
     }
     Ok(())
-}
-
-fn call(conn: &mut Connection, op: Op) -> Result<Value, ExitCode> {
-    match conn.call(op) {
-        Err(e) => Err(unreachable(&e)),
-        Ok(Err(f)) => Err(refused(&f)),
-        Ok(Ok(v)) => Ok(v),
-    }
 }
 
 /// Joins `n`, asking for its password first when it has no Profile, and
