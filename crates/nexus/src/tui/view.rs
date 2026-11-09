@@ -115,11 +115,31 @@ pub fn draw(f: &mut Frame, app: &App) {
         glyphs: look.caps.glyphs,
     };
     let area = f.area();
-    let a = layout::areas(area);
-    if a.mode == Mode::TooSmall {
+    if layout::Mode::of(area) == Mode::TooSmall {
         too_small(f, area, &look);
         return;
     }
+    // A Portal's banner takes the top row whenever there is room to spare.
+    // The Overview's hero already says it (and keeps its big type).
+    let (banner, below) = match app.portal() {
+        Some(network) if area.height > layout::MIN_HEIGHT && app.tab() != Tab::Overview => {
+            let (top, rest) = (
+                Rect { height: 1, ..area },
+                Rect {
+                    y: area.y + 1,
+                    height: area.height - 1,
+                    ..area
+                },
+            );
+            (Some((top, network)), rest)
+        }
+        _ => (None, area),
+    };
+    if let Some((top, network)) = banner {
+        let text = format!(" Login required for {network}. Press o to open it.");
+        f.render_widget(Paragraph::new(Span::styled(text, look.warn().bold())), top);
+    }
+    let a = layout::areas(below);
     header(f, app, &a, &look, &sym);
     body(f, app, &a, &look, &sym);
     footer(f, app, &a, &look);
@@ -319,7 +339,7 @@ fn daemon_lines(app: &App, look: &Look) -> Vec<Line<'static>> {
 }
 
 fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
-    const KEYS: [(&str, &str); 16] = [
+    const KEYS: &[(&str, &str)] = &[
         ("j / k, Down / Up", "Move in the list"),
         ("g / G", "Jump to top / bottom"),
         ("h / l, Left / Right", "Previous / next tab"),
@@ -332,12 +352,21 @@ fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
         ("Wi-Fi: x", "Disconnect"),
         ("Wi-Fi: f", "Forget (asks first)"),
         ("Wi-Fi: a", "Toggle autoconnect"),
+        ("Wi-Fi: s", "Share as a QR code (asks first)"),
         ("Wi-Fi: u", "Undo the toast's action"),
+        ("o", "Open a Portal's login page"),
         ("Esc", "Back out; never quits"),
         ("?", "Show or hide this help"),
         ("q, Ctrl-C", "Quit"),
     ];
-    let height = KEYS.len() as u16 + 2;
+    // Why a Portal's page may not show, when the window has room to say so.
+    let note = if area.height >= KEYS.len() as u16 + 8 {
+        PORTAL_NOTE
+    } else {
+        ""
+    };
+    let note_lines = if note.is_empty() { 0 } else { 5 };
+    let height = KEYS.len() as u16 + 2 + note_lines;
     let width = 58.min(area.width);
     let rect = Rect {
         x: area.x + (area.width - width) / 2,
@@ -358,5 +387,24 @@ fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
             ])
         })
         .collect();
-    f.render_widget(Paragraph::new(lines), inner);
+    let keys = Rect {
+        height: KEYS.len() as u16,
+        ..inner
+    };
+    f.render_widget(Paragraph::new(lines), keys);
+    if !note.is_empty() {
+        let below = Rect {
+            y: keys.bottom() + 1,
+            height: inner.height.saturating_sub(keys.height + 1),
+            ..inner
+        };
+        f.render_widget(
+            Paragraph::new(Span::styled(note, look.muted())).wrap(Wrap { trim: true }),
+            below,
+        );
+    }
 }
+
+/// Browsers with secure DNS (DNS over HTTPS) skip the network's own resolver,
+/// which is how a Portal steers you to its page.
+const PORTAL_NOTE: &str = "Login page won't show? A browser with secure DNS (DNS over HTTPS) hides the Portal by skipping the network's resolver. Turn it off until you have signed in, or press o: Nexus opens a plain http:// page.";

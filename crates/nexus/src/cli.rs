@@ -27,6 +27,7 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::NotConnected => 11,
         ErrorCode::HardBlocked => 12,
         ErrorCode::InvalidSettings => 13,
+        ErrorCode::RevealDenied => 14,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -360,6 +361,50 @@ pub fn wifi_forget(ssid: &str, json: bool) -> ExitCode {
             }
         },
     )
+}
+
+/// `nexus wifi share <ssid> [--qr] [--json]`: asking is the explicit reveal.
+/// Prints the password, or its QR code with `--qr` (and then not the password).
+pub fn wifi_share(ssid: &str, qr: bool, json: bool) -> ExitCode {
+    wifi_call(
+        Op::WifiReveal {
+            network: nexus_ipc::network_id(ssid.as_bytes()),
+        },
+        |value| {
+            if json {
+                println!("{value}");
+                return;
+            }
+            let Ok(share) = serde_json::from_value::<nexus_ipc::WifiShare>(value) else {
+                eprintln!("nexus: undecodable share result");
+                return;
+            };
+            if qr {
+                match nexus_tui::qr::draw(&share.payload()) {
+                    Some(d) => print_qr(&d, &share.ssid),
+                    None => eprintln!("nexus: the join details are too long for a QR code."),
+                }
+            } else if let Some(p) = &share.password {
+                println!("{}", crate::text::share_password(&share.ssid, p.expose()));
+            } else {
+                println!("{}", crate::text::share_open(&share.ssid));
+            }
+        },
+    )
+}
+
+/// Prints a QR drawing black on white when stdout is a terminal, so the code
+/// scans whatever the theme; plain glyphs when piped.
+fn print_qr(d: &nexus_tui::qr::Drawing, ssid: &str) {
+    let tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
+    for line in &d.lines {
+        if tty {
+            println!("\x1b[30;47m{line}\x1b[0m");
+        } else {
+            println!("{line}");
+        }
+    }
+    println!("{}", crate::text::share_scan_hint(ssid));
 }
 
 fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {

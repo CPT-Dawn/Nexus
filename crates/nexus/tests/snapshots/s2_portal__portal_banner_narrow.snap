@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_portal.rs
+expression: frame
+---
+ Login required for CafeGuest. Press o to open it.
+ Nexus  VPN ▾  4/6                                 ● Portal
+╭ VPN ─────────────────────────────────────────────────────╮
+│ Nothing to list yet.                                     │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ o login  h/l tab  ? help  q quit

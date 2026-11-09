@@ -9,11 +9,13 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use nexus_ipc::{
-    ActivityEntry, Event, Finding, PromptClosed, PromptKind, Secret, Status, Traffic, WifiList,
+    ActivityEntry, ActivityKind, Connectivity, Event, Finding, PromptClosed, PromptKind, Secret,
+    Status, Traffic, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
 use super::eap_form::{EapForm, Typed};
+use super::share::{Share, Stage};
 use super::theme::{Look, Theme};
 use super::wifi::{Cmd, Confirm, Done, Entry, PasswordField, Runner, SWEEP_FRAME, Toast, WifiTab};
 
@@ -33,6 +35,8 @@ pub enum Msg {
     Prompt(Event),
     /// A command the person gave has finished.
     Done(Done),
+    /// The Daemon answered a reveal for the share view.
+    Shared(Result<WifiShare, String>),
     /// A traffic sample, asked for only while the graphs are visible.
     Traffic(Traffic),
     /// The Daemon's whole activity log (on connect), newest first.
@@ -178,6 +182,8 @@ pub struct App {
     confirm: Option<Confirm>,
     /// The 802.1X sign-in form: while open it has the keys.
     eap: Option<EapForm>,
+    /// The share view (QR code) of a saved Network.
+    share: Option<Share>,
     toast: Option<Toast>,
     runner: Option<Runner>,
 }
@@ -203,6 +209,7 @@ impl App {
             field: None,
             confirm: None,
             eap: None,
+            share: None,
             toast: None,
             runner: None,
         }
@@ -254,6 +261,10 @@ impl App {
         self.confirm.as_ref()
     }
 
+    pub(super) fn share(&self) -> Option<&Share> {
+        self.share.as_ref()
+    }
+
     pub fn toast(&self) -> Option<&Toast> {
         self.toast.as_ref()
     }
@@ -272,6 +283,15 @@ impl App {
 
     pub fn status(&self) -> Option<&Status> {
         self.status.as_ref()
+    }
+
+    /// The Network whose Portal wants a login, while the Link is behind one.
+    pub fn portal(&self) -> Option<&str> {
+        let status = self.status.as_ref().filter(|_| self.conn == Conn::Up)?;
+        match (status.connectivity, &status.link) {
+            (Connectivity::Portal, Some(link)) => Some(&link.name),
+            _ => None,
+        }
     }
 
     /// Recent traffic, for the graphs.
@@ -393,9 +413,13 @@ impl App {
                 changed && self.tab == Tab::Overview
             }
             Msg::Happened(entry) => {
+                let online = entry.kind == ActivityKind::Online;
+                if online {
+                    self.say("You're online.", false, None);
+                }
                 self.activity.insert(0, entry);
                 self.activity.truncate(ACTIVITY);
-                self.tab == Tab::Overview
+                online || self.tab == Tab::Overview
             }
             Msg::Findings(list) => {
                 let changed = self.findings != list;
@@ -426,9 +450,18 @@ impl App {
             Msg::Wifi(list) => self.wifi.refresh(list),
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
+            Msg::Shared(result) => match self.share.as_mut() {
+                Some(share) if matches!(share.stage, Stage::Reading) => {
+                    share.arrived(result);
+                    true
+                }
+                _ => false, // closed meanwhile: the details drop here, wiped
+            },
             Msg::Down => {
                 // A prompt dies with the link; the Daemon replays it if it lives.
-                let changed = self.conn != Conn::Down || self.field.take().is_some();
+                let changed = self.conn != Conn::Down
+                    || self.field.take().is_some()
+                    || self.share.take().is_some();
                 self.conn = Conn::Down;
                 changed
             }
@@ -553,6 +586,9 @@ impl App {
                 };
                 self.say(text, false, Some(undo));
             }
+            (Cmd::OpenPortal, Ok(_)) => {
+                self.say("Opened the login page in your browser.", false, None);
+            }
             (_, Err(message)) => self.say(message, true, None),
             _ => return false,
         }
@@ -585,6 +621,9 @@ impl App {
         }
         if self.confirm.is_some() {
             return self.confirm_key(key);
+        }
+        if self.share.is_some() {
+            return self.share_key(key);
         }
         match self.layer {
             Layer::Help => {
@@ -658,6 +697,32 @@ impl App {
         true
     }
 
+    /// The share view: Enter reveals, Esc drops everything.
+    fn share_key(&mut self, key: KeyEvent) -> bool {
+        let Some(share) = self.share.as_mut() else {
+            return false;
+        };
+        match (&mut share.stage, key.code) {
+            (_, KeyCode::Esc) => self.share = None,
+            (Stage::Ask | Stage::Failed(_), KeyCode::Enter) => {
+                share.stage = Stage::Reading;
+                if let Some(runner) = &self.runner {
+                    runner.reveal(share.network.clone());
+                }
+            }
+            (
+                Stage::Shown {
+                    letters, share: s, ..
+                },
+                KeyCode::Char('p'),
+            ) if s.password.is_some() => {
+                *letters = !*letters;
+            }
+            _ => return false,
+        }
+        true
+    }
+
     /// Forget waits for a yes.
     fn confirm_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
@@ -694,6 +759,10 @@ impl App {
                 self.layer = Layer::Confirm;
                 self.fix = FixState::Asking;
                 true
+            }
+            KeyCode::Char('o') if self.portal().is_some() => {
+                self.send(Cmd::OpenPortal);
+                false
             }
             KeyCode::Tab | KeyCode::Right | KeyCode::Char('l' | ']') => self.step_tab(1),
             KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h' | '[') => self.step_tab(-1),
@@ -764,6 +833,11 @@ impl App {
                         self.run_wifi(Cmd::Disconnect { network, ssid });
                         true
                     }
+                    KeyCode::Char('s') if entry.saved() => {
+                        self.toast = None;
+                        self.share = Some(Share::ask(network, ssid));
+                        true
+                    }
                     KeyCode::Char('f') if entry.saved() => {
                         self.confirm = Some(Confirm { network, ssid });
                         true
@@ -825,6 +899,9 @@ impl App {
         if self.confirm.is_some() {
             return vec![("y", "forget"), ("esc", "keep")];
         }
+        if let Some(share) = &self.share {
+            return share.hints();
+        }
         match self.layer {
             Layer::Help => vec![("esc", "close")],
             Layer::Confirm => vec![("y", "run"), ("n", "cancel")],
@@ -854,6 +931,9 @@ impl App {
                 {
                     v.push(("f", "fix"));
                 }
+                if self.portal().is_some() {
+                    v.push(("o", "login"));
+                }
                 v.push(("h/l", "tab"));
                 v.push(("?", "help"));
                 v.push(("q", "quit"));
@@ -876,6 +956,9 @@ impl App {
             }
             if e.saved() {
                 v.push(("f", "forget"));
+            }
+            if e.saved() {
+                v.push(("s", "share"));
             }
             if e.autoconnect().is_some() {
                 v.push(("a", "auto"));

@@ -9,10 +9,16 @@
 //! Scenarios:
 //! - `online`: joined to Home-5G, no traffic.
 //! - `offline`: nothing connected.
-//! - `portal`: joined to CafeGuest behind a sign-in page.
+//! - `portal`: joined to CafeGuest behind a sign-in page. The Overview hero says
+//!   so; press `o` to "open the login page" (a stand-in `xdg-open` only logs
+//!   the URL, no browser starts) and two seconds later the fake network lets you
+//!   in: the hero turns Online and a toast says "You're online.". Press `4` to
+//!   see the banner other tabs get while the Portal is up.
 //! - `wifi`: six Wi-Fi Networks in range (Home-5G joined), two saved ones out
 //!   of range. Press `2` for the Wi-Fi tab; `r` rescans, `enter` joins, `x`
-//!   disconnects, `f` forgets, `a` toggles autoconnect, `u` undoes.
+//!   disconnects, `f` forgets, `a` toggles autoconnect, `u` undoes. `s` on a saved
+//!   row (Home-5G, Parents House, Hotel Lobby) opens the share view; `enter`
+//!   reveals the QR code, `p` shows the password, `esc` closes.
 //! - `wifi-enterprise`: `wifi` plus eduroam (WPA-Enterprise). Press `2`, move
 //!   to eduroam (`j`), `enter` opens the sign-in form: type an identity,
 //!   `tab` to move, `←`/`→` change the method, `space` toggles the server
@@ -39,6 +45,7 @@ fn main() {
 
     let world = World::start(&bin);
     let mut _prompt = None;
+    let opened = world.dir().join("opened.log");
     let mut wlan0 = None;
     match scenario.as_str() {
         "offline" => {}
@@ -58,6 +65,11 @@ fn main() {
             world.nm.set_state(NmState::ConnectedGlobal);
         }
         "portal" => {
+            // No browser: the stand-in records the URL, which also plays "signed in".
+            world.install_tool(
+                "xdg-open",
+                &format!("echo \"$1\" >> '{}'", opened.display()),
+            );
             world
                 .nm
                 .set_primary(Some(ActiveConnection::wifi("CafeGuest")));
@@ -104,6 +116,16 @@ fn main() {
                     }
                     std::thread::sleep(Duration::from_secs(1));
                 }
+            });
+        }
+        if scenario == "portal" {
+            let (done, nm, opened) = (&done, &world.nm, &opened);
+            scope.spawn(move || {
+                while !done.load(Ordering::SeqCst) && !opened.exists() {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                std::thread::sleep(Duration::from_secs(2));
+                nm.set_connectivity(NmConnectivity::Full);
             });
         }
         let status = cmd.args(&rest).status().expect("run nexus");

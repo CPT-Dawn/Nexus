@@ -36,6 +36,9 @@ pub struct Notifications {
     /// A Secret prompt opened while no Front end is running, with an action
     /// that opens the TUI on it.
     pub secret_prompt: bool,
+    /// "Login required for <network>" (with an action that opens the login
+    /// page) and "You're online" once the login is done.
+    pub portal: bool,
 }
 
 impl Default for Notifications {
@@ -45,6 +48,7 @@ impl Default for Notifications {
             lost: true,
             wrong_password: true,
             secret_prompt: true,
+            portal: true,
         }
     }
 }
@@ -198,6 +202,16 @@ impl Settings {
     pub fn prompt_timeout(&self) -> std::time::Duration {
         let state = self.state.lock().expect("settings lock");
         std::time::Duration::from_secs(state.config.prompts.timeout_secs)
+    }
+
+    /// The connectivity check as configured right now.
+    pub fn connectivity(&self) -> ConnectivityCheck {
+        self.state
+            .lock()
+            .expect("settings lock")
+            .config
+            .connectivity
+            .clone()
     }
 
     /// Which notifications are on right now.

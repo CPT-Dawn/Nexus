@@ -206,3 +206,38 @@ fn prompt_events_carry_no_secret_field() {
         "{keys:?}"
     );
 }
+
+#[test]
+fn the_wifi_qr_payload_escapes_the_characters_the_format_reserves() {
+    use nexus_ipc::{Secret, ShareAuth, WifiShare};
+    let share = WifiShare {
+        ssid: "Caf\u{e9}; Bar:2".into(),
+        auth: ShareAuth::Wpa,
+        password: Some(Secret::new(r#"a\b;c,d:e"f"#)),
+    };
+    assert_eq!(
+        share.payload().as_str(),
+        "WIFI:T:WPA;S:Caf\u{e9}\\; Bar\\:2;P:a\\\\b\\;c\\,d\\:e\\\"f;;"
+    );
+    let open = WifiShare {
+        ssid: "Cafe".into(),
+        auth: ShareAuth::Open,
+        password: None,
+    };
+    assert_eq!(open.payload().as_str(), "WIFI:T:nopass;S:Cafe;;");
+    // Digit-only passwords stay bare, as Android writes them.
+    let digits = WifiShare {
+        ssid: "N".into(),
+        auth: ShareAuth::Sae,
+        password: Some(Secret::new("12345678")),
+    };
+    assert_eq!(digits.payload().as_str(), "WIFI:T:SAE;S:N;P:12345678;;");
+}
+
+#[test]
+fn wifi_reveal_is_an_op_and_reveal_denied_an_error_code() {
+    let req = parse(r#"{"v":1,"id":1,"op":"wifi_reveal","network":"486f6d65"}"#).unwrap();
+    assert!(matches!(req.op, Op::WifiReveal { .. }));
+    let line = encode(&Response::err(Some(1), ErrorCode::RevealDenied, "no"));
+    assert!(line.contains(r#""code":"reveal_denied""#), "{line}");
+}
