@@ -57,12 +57,13 @@ pub fn same_user(stream: &UnixStream) -> bool {
 
 /// Reads request lines until the peer hangs up, answering each in order.
 /// After a `subscribe` op, events from `events` are interleaved with responses.
-pub async fn serve_connection<F, Fut>(
+pub async fn serve_connection<F, Fut, S>(
     stream: UnixStream,
-    events: broadcast::Sender<Event>,
+    subscribe: S,
     answer: F,
 ) -> io::Result<()>
 where
+    S: Fn() -> (broadcast::Receiver<Event>, Vec<Event>),
     F: Fn(Request) -> Fut,
     Fut: Future<Output = Response>,
 {
@@ -78,7 +79,8 @@ where
     let mut forwarder: Option<tokio::task::JoinHandle<()>> = None;
     let mut reader = BufReader::new(read);
     let result = loop {
-        let mut line = String::new();
+        // A request line may carry a secret: wipe it when the line is done.
+        let mut line = zeroize::Zeroizing::new(String::new());
         let n = match (&mut reader).take(MAX_LINE).read_line(&mut line).await {
             Ok(n) => n,
             Err(e) => break Err(e),
@@ -102,8 +104,22 @@ where
                 ..
             }) => {
                 if forwarder.is_none() {
-                    let mut rx = events.subscribe();
+                    let (mut rx, backlog) = subscribe();
                     let out = out.clone();
+                    // Prompts that opened before this Front end came.
+                    let ok = encode(&Response::ok(id, serde_json::json!({})));
+                    if out.send(ok).is_err() {
+                        break Ok(());
+                    }
+                    for event in backlog {
+                        let line = encode(&EventLine {
+                            v: nexus_ipc::PROTOCOL,
+                            event,
+                        });
+                        if out.send(line).is_err() {
+                            break;
+                        }
+                    }
                     forwarder = Some(tokio::spawn(async move {
                         loop {
                             match rx.recv().await {
@@ -121,6 +137,7 @@ where
                             }
                         }
                     }));
+                    continue;
                 }
                 Response::ok(id, serde_json::json!({}))
             }

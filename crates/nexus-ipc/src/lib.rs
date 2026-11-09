@@ -61,6 +61,13 @@ pub enum Op {
     /// Forget (delete the Profile of) a Wi-Fi Network by `WifiNetwork.id`.
     /// Result: [`Forgotten`]; `unknown_network` when nothing is saved for it.
     WifiForget { network: String },
+    /// Answer an open Secret prompt (`prompt` is the id from its `secret_prompt_opened`
+    /// event). The only request besides `wifi_join` that carries a secret.
+    /// Result `{}`; `unknown_prompt` when it is closed already.
+    SecretAnswer { prompt: u64, secret: Secret },
+    /// Decline an open Secret prompt. The join waiting on it fails with
+    /// `password_required`. Result `{}`; `unknown_prompt` when closed already.
+    SecretCancel { prompt: u64 },
     /// Start receiving event lines on this connection. Answered with
     /// `{"ok": {}}`; events follow, interleaved with later responses.
     Subscribe,
@@ -77,20 +84,28 @@ pub enum Op {
 }
 
 /// A password or other secret. It serializes as the plain string (the wire
-/// needs it) but never shows in `Debug` output, so logs cannot leak it.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// needs it), never shows in `Debug` output, and wipes its memory on drop.
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Secret(String);
+pub struct Secret(zeroize::Zeroizing<String>);
 
 impl Secret {
     pub fn new(text: impl Into<String>) -> Self {
-        Self(text.into())
+        Self(zeroize::Zeroizing::new(text.into()))
     }
 
     pub fn expose(&self) -> &str {
         &self.0
     }
 }
+
+impl PartialEq for Secret {
+    fn eq(&self, other: &Self) -> bool {
+        self.expose() == other.expose()
+    }
+}
+
+impl Eq for Secret {}
 
 impl std::fmt::Debug for Secret {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -166,6 +181,8 @@ pub enum ErrorCode {
     UnknownNetwork,
     /// There is no Wi-Fi Link to disconnect.
     NotConnected,
+    /// No Secret prompt with that id is open (it was answered, cancelled or expired).
+    UnknownPrompt,
     #[serde(other)]
     Unknown,
 }
@@ -218,7 +235,61 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         warning: Option<String>,
     },
+    /// The Backend needs a secret from the user. Prompts still open when a
+    /// Front end subscribes are replayed to it, so one that was not running
+    /// when the prompt opened still sees it.
+    SecretPromptOpened {
+        prompt: Prompt,
+    },
+    /// A Secret prompt is gone: answer it no more.
+    SecretPromptClosed {
+        id: u64,
+        reason: PromptClosed,
+    },
     /// An event from a newer daemon; its payload is discarded.
+    #[serde(other)]
+    Unknown,
+}
+
+/// What a Secret prompt asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum PromptKind {
+    /// The password of a Wi-Fi Network.
+    WifiPassword,
+    #[serde(other)]
+    Unknown,
+}
+
+/// An open Secret prompt. Never holds a secret.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Prompt {
+    pub id: u64,
+    pub kind: PromptKind,
+    /// The Network's name.
+    pub network: String,
+    /// `WifiNetwork.id` of the Network.
+    pub network_id: String,
+    /// The password was tried and rejected: this asks again.
+    pub retry: bool,
+    /// A sentence for the person, e.g. "Wrong password for Home. Try again."
+    pub message: String,
+    /// Seconds until the prompt expires.
+    pub expires_in: u64,
+}
+
+/// Why a Secret prompt closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum PromptClosed {
+    Answered,
+    Cancelled,
+    /// Nobody answered in time.
+    Expired,
+    /// The Backend no longer needs it (the join was abandoned).
+    Withdrawn,
     #[serde(other)]
     Unknown,
 }

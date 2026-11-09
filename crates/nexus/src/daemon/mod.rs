@@ -14,6 +14,7 @@ use tracing_subscriber::EnvFilter;
 use crate::backend::Backend;
 use crate::backend::nm::NetworkManager;
 use crate::config::{self, Settings};
+use crate::secrets::Broker;
 
 /// `nexus daemon`.
 pub fn run() -> ExitCode {
@@ -31,7 +32,7 @@ pub fn run() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match rt.block_on(serve(NetworkManager::new())) {
+    match rt.block_on(serve()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             tracing::error!("{e}");
@@ -40,12 +41,17 @@ pub fn run() -> ExitCode {
     }
 }
 
-async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
-    let backend = Arc::new(backend);
+async fn serve() -> std::io::Result<()> {
     let (events, _) = broadcast::channel::<Event>(64);
     let settings = Arc::new(Settings::load(config::default_path(), events.clone()));
+    let broker = Arc::new(Broker::new(events.clone(), settings.clone()));
+    let backend = Arc::new(NetworkManager::new(broker.clone()));
     tokio::spawn(config::watch(settings.clone()));
     tokio::spawn(watch_wifi(backend.clone(), events.clone()));
+    tokio::spawn({
+        let backend = backend.clone();
+        async move { backend.secrets().await }
+    });
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -59,9 +65,10 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
                 }
                 let backend = backend.clone();
                 let settings = settings.clone();
-                let events = events.clone();
+                let broker = broker.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = socket::serve_connection(stream, events, |req| answer(&*backend, &settings, req)).await {
+                    let subscribe = || broker.subscribe();
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -93,7 +100,12 @@ async fn watch_wifi<B: Backend>(backend: Arc<B>, events: broadcast::Sender<Event
 }
 
 /// One request in, one response out.
-async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> Response {
+async fn answer<B: Backend>(
+    backend: &B,
+    settings: &Settings,
+    broker: &Broker,
+    req: Request,
+) -> Response {
     match req.op {
         Op::Status => match backend.status().await {
             Ok(status) => Response::ok(
@@ -109,6 +121,11 @@ async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> R
         }
         Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),
         Op::WifiForget { network } => backend_reply(req.id, backend.wifi_forget(network).await),
+        Op::SecretAnswer { prompt, secret } => reply(
+            req.id,
+            broker.answer(prompt, secret).map(|()| serde_json::json!({})),
+        ),
+        Op::SecretCancel { prompt } => reply(req.id, broker.cancel(prompt).map(|()| serde_json::json!({}))),
         Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
         Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
         // `Subscribe` is handled by the connection itself.

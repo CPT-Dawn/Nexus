@@ -2,6 +2,7 @@ mod backend;
 mod cli;
 mod config;
 mod daemon;
+mod secrets;
 mod text;
 mod wifi_view;
 

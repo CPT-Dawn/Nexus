@@ -1,6 +1,7 @@
 //! The domain-level Backend interface (ADR-0001). The Daemon depends on this
 //! trait, never on NetworkManager types, so another Backend can be added later.
 
+mod agent;
 pub mod nm;
 mod wifi;
 
@@ -79,6 +80,11 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
     ) -> impl Future<Output = Result<Forgotten, BackendError>> + Send;
+
+    /// Answers the Backend's requests for secrets through Secret prompts, for
+    /// as long as the Daemon runs: registers with the Backend, and again
+    /// whenever it comes back. Never returns.
+    fn secrets(&self) -> impl Future<Output = ()> + Send;
 
     /// Resolves after the Backend changed, once per burst: a storm of
     /// property changes is coalesced into a single tick. Cancel-safe.

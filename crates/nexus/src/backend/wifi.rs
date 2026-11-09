@@ -16,6 +16,7 @@ use nexus_ipc::{
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
+use crate::secrets::{Broker, Ended};
 use crate::text::{self, Failure};
 
 /// NetworkManager refuses `RequestScan` when the last scan finished less than
@@ -485,7 +486,40 @@ fn new_profile(
 
 /// Joins a Network and waits for the outcome. The inner error is something to
 /// tell the person; the outer one is a bus problem.
+///
+/// Without a password for an unsaved secured Network, NetworkManager asks our
+/// secret agent, which opens a Secret prompt; this call waits on it. A
+/// password rejected after the person typed it (reasons 7, 8, 11) reopens the
+/// prompt, saying so, and the join starts over.
 pub async fn join(
+    conn: &Connection,
+    broker: &Broker,
+    network: &str,
+    password: Option<&Secret>,
+) -> zbus::Result<Result<Joined, Failure>> {
+    broker.forget_ended(network);
+    loop {
+        let result = join_once(conn, network, password).await?;
+        let Err(failure) = &result else {
+            return Ok(result);
+        };
+        if failure.code != nexus_ipc::ErrorCode::WrongPassword || password.is_some() {
+            return Ok(result);
+        }
+        let name = nexus_ipc::parse_network_id(network)
+            .map(|s| String::from_utf8_lossy(&s).into_owned())
+            .unwrap_or_default();
+        match broker.take_ended(network) {
+            Some(Ended::Cancelled) => return Ok(Err(text::prompt_cancelled(&name))),
+            Some(Ended::Expired) => return Ok(Err(text::prompt_expired(&name))),
+            Some(Ended::Withdrawn) => return Ok(Err(text::join_withdrawn(&name))),
+            Some(Ended::Answered) => broker.mark_rejected(network),
+            None => return Ok(result),
+        }
+    }
+}
+
+async fn join_once(
     conn: &Connection,
     network: &str,
     password: Option<&Secret>,
@@ -534,9 +568,6 @@ pub async fn join(
                 _ => {}
             }
             let password = password.map(Secret::expose).filter(|_| secured);
-            if secured && password.is_none() {
-                return Ok(Err(text::password_required(&name)));
-            }
             if let Some(pw) = password
                 && net.security != Security::Wpa3
                 && !(8..=63).contains(&pw.chars().count())

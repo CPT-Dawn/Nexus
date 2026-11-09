@@ -187,11 +187,42 @@ pub fn out_of_range(ssid: &str) -> Failure {
     fail(ErrorCode::OutOfRange, out_of_range_sentence(ssid))
 }
 
-pub fn password_required(ssid: &str) -> Failure {
+/// Nobody answered the password prompt in time. The Network stays unsaved and
+/// reads as "password needed".
+pub fn prompt_expired(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::PasswordRequired,
+        format!("{ssid} needs a password, and nobody gave one in time. Join it again to be asked again."),
+    )
+}
+
+/// The password prompt was declined (or no Front end could answer it).
+pub fn prompt_cancelled(ssid: &str) -> Failure {
     fail(
         ErrorCode::PasswordRequired,
         format!("{ssid} needs a password. Pass --password, or --password-stdin to type it in."),
     )
+}
+
+/// The Backend dropped the join while its prompt was open.
+pub fn join_withdrawn(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("Joining {ssid} was cancelled."),
+    )
+}
+
+/// The sentence on a password prompt.
+pub fn password_prompt(ssid: &str, retry: bool) -> String {
+    if retry {
+        format!("Wrong password for {ssid}. Try again.")
+    } else {
+        format!("Password for {ssid}")
+    }
+}
+
+pub fn unknown_prompt() -> String {
+    "That prompt is closed already (answered, cancelled or expired).".into()
 }
 
 pub fn bad_passphrase_length(ssid: &str) -> Failure {
