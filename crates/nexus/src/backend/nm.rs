@@ -13,7 +13,8 @@ use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
     AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind,
-    Radio, Radios, ScanOutcome, Secret, State, Status, WifiList, WifiShare,
+    NewTunnel, Radio, Radios, ScanOutcome, Secret, State, Status, VpnAdded, VpnKey, VpnList,
+    VpnShare, VpnToggled, WifiList, WifiShare,
 };
 use std::pin::Pin;
 
@@ -56,6 +57,9 @@ pub(super) trait NetworkManager {
     fn set_wwan_enabled(&self, on: bool) -> zbus::Result<()>;
     #[zbus(property)]
     fn connectivity_check_enabled(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn active_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
+    fn deactivate_connection(&self, active: &OwnedObjectPath) -> zbus::Result<()>;
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
     fn activate_connection(
         &self,
@@ -83,7 +87,11 @@ pub(super) trait NetworkManager {
     interface = "org.freedesktop.NetworkManager.Connection.Active",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait ActiveConnection {
+pub(super) trait ActiveConnection {
+    #[zbus(property)]
+    fn uuid(&self) -> zbus::Result<String>;
+    #[zbus(property)]
+    fn state(&self) -> zbus::Result<u32>;
     #[zbus(property)]
     fn id(&self) -> zbus::Result<String>;
     #[zbus(property, name = "Type")]
@@ -392,6 +400,51 @@ impl Backend for NetworkManager {
 
     async fn wifi_reveal(&self, network: String) -> Result<WifiShare, BackendError> {
         self.with_bus(|c| async move { super::wifi::reveal(&c, &network).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn vpn_list(&self) -> Result<VpnList, BackendError> {
+        self.with_bus(|c| async move { super::vpn::list(&c).await })
+            .await
+    }
+
+    async fn vpn_up(&self, vpn: String) -> Result<VpnToggled, BackendError> {
+        self.with_bus(|c| async move { super::vpn::up(&c, &vpn).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn vpn_down(&self, vpn: String) -> Result<VpnToggled, BackendError> {
+        self.with_bus(|c| async move { super::vpn::down(&c, &vpn).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn vpn_import(
+        &self,
+        name: Option<String>,
+        config: Secret,
+    ) -> Result<VpnAdded, BackendError> {
+        self.with_bus(|c| async move { super::vpn::import(&c, name.as_deref(), &config).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn vpn_create(&self, tunnel: NewTunnel) -> Result<VpnAdded, BackendError> {
+        self.with_bus(|c| async move { super::vpn::create(&c, &tunnel).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn vpn_key(&self, vpn: String) -> Result<VpnKey, BackendError> {
+        self.with_bus(|c| async move { super::vpn::key(&c, &vpn).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn vpn_reveal(&self, vpn: String) -> Result<VpnShare, BackendError> {
+        self.with_bus(|c| async move { super::vpn::reveal(&c, &vpn).await })
             .await?
             .map_err(BackendError::Refused)
     }

@@ -5,6 +5,7 @@ mod daemon;
 mod doctor;
 mod secrets;
 mod text;
+mod vpn_cli;
 mod wifi_view;
 mod wireguard;
 
@@ -41,6 +42,11 @@ enum Command {
     Wifi {
         #[command(subcommand)]
         action: WifiAction,
+    },
+    /// VPNs: list, bring up and down, import and create WireGuard tunnels.
+    Vpn {
+        #[command(subcommand)]
+        action: VpnAction,
     },
     /// Explain why the machine is or is not online, and how to fix it.
     Doctor {
@@ -132,6 +138,87 @@ enum WifiAction {
     },
 }
 
+#[derive(Subcommand)]
+enum VpnAction {
+    /// List the VPN Profiles and whether each is up.
+    List {
+        /// Print the list as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Bring a VPN up, waiting until it works.
+    Up {
+        /// The VPN's name.
+        name: String,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Bring a VPN down.
+    Down {
+        /// The VPN's name.
+        name: String,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Save a WireGuard `.conf` file as a VPN.
+    Import {
+        /// The file to read.
+        file: String,
+        /// What to call the VPN (default: the file name without `.conf`).
+        #[arg(long)]
+        name: Option<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Create a WireGuard VPN with a freshly generated key pair, and print
+    /// the public key to give to the other side.
+    Create {
+        /// What to call the VPN.
+        name: String,
+        /// This end's address, e.g. 10.0.0.2/32 (repeat for IPv6).
+        #[arg(long = "address", required = true)]
+        addresses: Vec<String>,
+        /// A DNS server to use while the VPN is up (repeatable).
+        #[arg(long)]
+        dns: Vec<String>,
+        /// The peer's public key. Without it the tunnel cannot carry traffic yet.
+        #[arg(long)]
+        peer_key: Option<String>,
+        /// The peer's address, host:port.
+        #[arg(long, requires = "peer_key")]
+        endpoint: Option<String>,
+        /// What to send through the tunnel (default: everything).
+        #[arg(long = "allowed-ips")]
+        allowed_ips: Vec<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print a WireGuard VPN's public key.
+    Key {
+        /// The VPN's name.
+        name: String,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reveal a WireGuard VPN's whole config (private key included), or show
+    /// it as a QR code for a phone. NetworkManager may ask you to authorize it.
+    Share {
+        /// The VPN's name.
+        name: String,
+        /// Draw the config as a QR code instead of printing it.
+        #[arg(long)]
+        qr: bool,
+        /// Print the result, private key included, as JSON.
+        #[arg(long, conflicts_with = "qr")]
+        json: bool,
+    },
+}
+
 #[derive(Clone, Copy, clap::ValueEnum)]
 enum Switch {
     On,
@@ -211,6 +298,31 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Share { ssid, qr, json },
         } => cli::wifi_share(&ssid, qr, json),
+        Command::Vpn { action } => match action {
+            VpnAction::List { json } => vpn_cli::list(json),
+            VpnAction::Up { name, json } => vpn_cli::toggle(&name, true, json),
+            VpnAction::Down { name, json } => vpn_cli::toggle(&name, false, json),
+            VpnAction::Import { file, name, json } => vpn_cli::import(&file, name, json),
+            VpnAction::Create {
+                name,
+                addresses,
+                dns,
+                peer_key,
+                endpoint,
+                allowed_ips,
+                json,
+            } => vpn_cli::create(vpn_cli::Create {
+                name,
+                addresses,
+                dns,
+                peer_key,
+                endpoint,
+                allowed_ips,
+                json,
+            }),
+            VpnAction::Key { name, json } => vpn_cli::key(&name, json),
+            VpnAction::Share { name, qr, json } => vpn_cli::share(&name, qr, json),
+        },
         Command::Doctor { json, fix } => cli::doctor(json, fix),
         Command::Config {
             action: ConfigAction::Get { key },

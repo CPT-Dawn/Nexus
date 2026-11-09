@@ -3,13 +3,14 @@
 
 mod agent;
 pub mod nm;
+mod vpn;
 mod wifi;
 
 use std::future::Future;
 
 use nexus_ipc::{
-    AutoconnectSet, Disconnected, Forgotten, Joined, Radios, ScanOutcome, Secret, Status, WifiList,
-    WifiShare,
+    AutoconnectSet, Disconnected, Forgotten, Joined, NewTunnel, Radios, ScanOutcome, Secret,
+    Status, VpnAdded, VpnKey, VpnList, VpnShare, VpnToggled, WifiList, WifiShare,
 };
 
 use crate::text::Failure;
@@ -128,6 +129,41 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
     ) -> impl Future<Output = Result<WifiShare, BackendError>> + Send;
+
+    /// Every VPN Profile and whether it is up.
+    fn vpn_list(&self) -> impl Future<Output = Result<VpnList, BackendError>> + Send;
+
+    /// Brings a VPN (`Vpn.id`) up and waits until it is up or has failed.
+    fn vpn_up(&self, vpn: String) -> impl Future<Output = Result<VpnToggled, BackendError>> + Send;
+
+    /// Takes a VPN down.
+    fn vpn_down(
+        &self,
+        vpn: String,
+    ) -> impl Future<Output = Result<VpnToggled, BackendError>> + Send;
+
+    /// Saves a WireGuard `.conf` as a VPN Profile.
+    fn vpn_import(
+        &self,
+        name: Option<String>,
+        config: Secret,
+    ) -> impl Future<Output = Result<VpnAdded, BackendError>> + Send;
+
+    /// Saves a new WireGuard VPN Profile with a freshly generated key pair.
+    fn vpn_create(
+        &self,
+        tunnel: NewTunnel,
+    ) -> impl Future<Output = Result<VpnAdded, BackendError>> + Send;
+
+    /// The public key of a WireGuard Profile.
+    fn vpn_key(&self, vpn: String) -> impl Future<Output = Result<VpnKey, BackendError>> + Send;
+
+    /// A WireGuard Profile's whole config, private key included. Needs the
+    /// Backend's authorization; a refusal is `reveal_denied`.
+    fn vpn_reveal(
+        &self,
+        vpn: String,
+    ) -> impl Future<Output = Result<VpnShare, BackendError>> + Send;
 
     /// Switches Wi-Fi on or off. Refused with `hard_blocked` while a hardware
     /// switch holds it off.

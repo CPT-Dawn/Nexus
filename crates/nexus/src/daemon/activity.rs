@@ -31,12 +31,27 @@ impl Log {
             .into_iter()
             .map(|(kind, text)| ActivityEntry { at, kind, text })
             .collect();
+        self.push(&new);
+        new
+    }
+
+    /// Records a line that does not come from a status change (a VPN going
+    /// up or down) and returns the entry.
+    pub fn record(&self, kind: ActivityKind, text: String) -> ActivityEntry {
+        let at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let entry = ActivityEntry { at, kind, text };
+        self.push(std::slice::from_ref(&entry));
+        entry
+    }
+
+    fn push(&self, new: &[ActivityEntry]) {
         let mut log = self.entries.lock().expect("log");
-        for entry in &new {
+        for entry in new {
             log.push_front(entry.clone());
         }
         log.truncate(KEEP);
-        new
     }
 }
 
@@ -76,7 +91,11 @@ fn lost(link: &Link) -> (ActivityKind, String) {
 
 fn diff(before: &Status, after: &Status) -> Vec<(ActivityKind, String)> {
     let mut out = Vec::new();
+    // VPNs are logged from the VPN list (they can be up without being the
+    // primary Link), so a VPN taking over or giving back the primary slot
+    // is not a Network joined or lost.
     match (&before.link, &after.link) {
+        (Some(l), _) | (_, Some(l)) if is_vpn(l) => {}
         (None, Some(l)) => out.push(joined(l)),
         (Some(l), None) => out.push(lost(l)),
         (Some(a), Some(b)) if a != b => out.push(joined(b)),

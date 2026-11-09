@@ -90,7 +90,8 @@ trait AccessPoint {
     default_service = "org.freedesktop.NetworkManager",
     default_path = "/org/freedesktop/NetworkManager/Settings"
 )]
-trait Settings {
+pub(super) trait Settings {
+    fn add_connection(&self, connection: Settings) -> zbus::Result<OwnedObjectPath>;
     fn list_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 }
 
@@ -98,7 +99,7 @@ trait Settings {
     interface = "org.freedesktop.NetworkManager.Settings.Connection",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait SettingsConnection {
+pub(super) trait SettingsConnection {
     fn get_settings(&self) -> zbus::Result<HashMap<String, HashMap<String, OwnedVariant>>>;
     fn get_secrets(&self, setting: &str) -> zbus::Result<Settings>;
     fn update(&self, settings: Settings) -> zbus::Result<()>;
@@ -428,14 +429,14 @@ const STATE_FAILED: u32 = 120;
 /// `NM_DEVICE_STATE_REASON_NEW_ACTIVATION`: the old Link is making way.
 const REASON_NEW_ACTIVATION: u32 = 60;
 
-type Settings = HashMap<String, HashMap<String, OwnedVariant>>;
+pub(super) type Settings = HashMap<String, HashMap<String, OwnedVariant>>;
 
-fn variant<'a>(v: impl Into<zbus::Variant<'a>>) -> OwnedVariant {
+pub(super) fn variant<'a>(v: impl Into<zbus::Variant<'a>>) -> OwnedVariant {
     OwnedVariant::try_from(v.into()).expect("plain values have no file descriptors")
 }
 
 /// A random (version 4) UUID for a new Profile.
-fn new_uuid() -> String {
+pub(super) fn new_uuid() -> String {
     let mut b = [0u8; 16];
     // Blocking on the entropy pool only happens before it is seeded at boot.
     let _ = rustix::rand::getrandom(&mut b, rustix::rand::GetRandomFlags::empty());
@@ -750,7 +751,7 @@ pub async fn set_autoconnect(
 }
 
 /// Whether NetworkManager (or the bus) refused for lack of authorization.
-fn is_denial(e: &zbus::Error) -> bool {
+pub(super) fn is_denial(e: &zbus::Error) -> bool {
     match e {
         zbus::Error::FDO(inner) => matches!(**inner, zbus::fdo::Error::AccessDenied(_)),
         zbus::Error::MethodError(name, ..) => name.as_str().ends_with(".PermissionDenied"),

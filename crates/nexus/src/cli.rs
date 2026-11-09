@@ -27,6 +27,9 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::NotConnected => 11,
         ErrorCode::HardBlocked => 12,
         ErrorCode::RevealDenied => 14,
+        ErrorCode::UnknownVpn => 20,
+        ErrorCode::InvalidConfig => 21,
+        ErrorCode::VpnFailed => 22,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -355,7 +358,7 @@ fn print_qr(d: &nexus_tui::qr::Drawing, ssid: &str) {
     println!("{}", crate::text::share_scan_hint(ssid));
 }
 
-fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
+pub(crate) fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
     let mut conn = match Connection::connect() {
         Ok(c) => c,
         Err(e) => return unreachable(&e),
@@ -363,7 +366,7 @@ fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
     report(conn.call(op), show)
 }
 
-fn report(
+pub(crate) fn report(
     result: std::io::Result<Result<Value, nexus_ipc::Failure>>,
     show: impl FnOnce(Value),
 ) -> ExitCode {
@@ -419,7 +422,7 @@ fn config_call(op: Op) -> ExitCode {
     }
 }
 
-fn unreachable(e: &std::io::Error) -> ExitCode {
+pub(crate) fn unreachable(e: &std::io::Error) -> ExitCode {
     let path = nexus_ipc::socket_path().map_or_else(
         || "(XDG_RUNTIME_DIR is not set)".into(),
         |p| p.display().to_string(),
@@ -449,6 +452,9 @@ mod tests {
             ErrorCode::PasswordRequired,
             ErrorCode::NotConnected,
             ErrorCode::HardBlocked,
+            ErrorCode::UnknownVpn,
+            ErrorCode::InvalidConfig,
+            ErrorCode::VpnFailed,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

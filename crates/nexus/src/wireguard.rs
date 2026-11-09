@@ -216,7 +216,10 @@ pub fn parse(text: &str) -> Result<Config, ParseError> {
                             return err(n, "PrivateKey is given twice");
                         }
                         if !is_key(value) {
-                            return err(n, "PrivateKey is not a WireGuard key (44 base64 characters)");
+                            return err(
+                                n,
+                                "PrivateKey is not a WireGuard key (44 base64 characters)",
+                            );
                         }
                         private_seen = true;
                         iface.private_key = Secret::new(value);
@@ -270,7 +273,10 @@ pub fn parse(text: &str) -> Result<Config, ParseError> {
                             return err(n, "PublicKey is given twice");
                         }
                         if !is_key(value) {
-                            return err(n, "PublicKey is not a WireGuard key (44 base64 characters)");
+                            return err(
+                                n,
+                                "PublicKey is not a WireGuard key (44 base64 characters)",
+                            );
                         }
                         peer_key_seen = true;
                         peer.public_key = value.to_owned();
@@ -405,7 +411,10 @@ mod tests {
         assert_eq!(c.peers.len(), 1);
         assert_eq!(c.peers[0].public_key, PEER);
         assert_eq!(c.peers[0].allowed_ips, ["0.0.0.0/0", "::/0"]);
-        assert_eq!(c.peers[0].endpoint.as_deref(), Some("vpn.example.net:51820"));
+        assert_eq!(
+            c.peers[0].endpoint.as_deref(),
+            Some("vpn.example.net:51820")
+        );
         assert_eq!(c.peers[0].keepalive, Some(25));
     }
 
@@ -445,19 +454,22 @@ mod tests {
     fn generated_keys_match_and_differ() {
         let (private, public) = generate();
         assert!(is_key(private.expose()) && is_key(&public));
-        assert_eq!(public_of(private.expose()).as_deref(), Some(public.as_str()));
+        assert_eq!(
+            public_of(private.expose()).as_deref(),
+            Some(public.as_str())
+        );
         assert_ne!(private, generate().0);
     }
 
     #[test]
     fn public_key_matches_the_wireguard_reference_vector() {
         // From the x25519 test in RFC 7748 section 6.1 (Alice), as base64.
-        let alice_priv = STANDARD.encode(
-            hex("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a"),
-        );
-        let alice_pub = STANDARD.encode(
-            hex("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"),
-        );
+        let alice_priv = STANDARD.encode(hex(
+            "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+        ));
+        let alice_pub = STANDARD.encode(hex(
+            "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+        ));
         assert_eq!(public_of(&alice_priv), Some(alice_pub));
     }
 
