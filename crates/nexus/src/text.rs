@@ -152,6 +152,11 @@ pub fn join_failure(ssid: &str, died_in: u32, reason: u32, secured: bool) -> Fai
         SUPPLICANT_DISCONNECT | SUPPLICANT_FAILED | SUPPLICANT_TIMEOUT if secured && auth_stage => {
             fail(ErrorCode::WrongPassword, wrong_password(ssid))
         }
+        // WPA3-SAE reports a wrong password as "SSID not found" while it is
+        // still authenticating.
+        SSID_NOT_FOUND if secured && auth_stage => {
+            fail(ErrorCode::WrongPassword, wrong_password(ssid))
+        }
         SSID_NOT_FOUND => fail(ErrorCode::OutOfRange, out_of_range_sentence(ssid)),
         5 | 6 | 15 | 16 | 17 => fail(
             ErrorCode::NoAddress,

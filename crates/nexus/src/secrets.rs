@@ -66,6 +66,25 @@ struct State {
     rejected: Vec<String>,
     /// How the latest prompt for each Network ended.
     ended: HashMap<String, Ended>,
+    /// Profiles (by uuid) being joined with a password the caller supplied:
+    /// a wrong one is an error for that caller, not a reason to prompt.
+    inline: Vec<String>,
+}
+
+/// See [`Broker::inline_password`].
+#[derive(Debug)]
+pub struct InlineGuard<'a> {
+    broker: &'a Broker,
+    uuid: String,
+}
+
+impl Drop for InlineGuard<'_> {
+    fn drop(&mut self) {
+        let mut state = self.broker.state.lock().expect("broker lock");
+        if let Some(i) = state.inline.iter().position(|u| *u == self.uuid) {
+            state.inline.remove(i);
+        }
+    }
 }
 
 pub struct Broker {
@@ -222,6 +241,26 @@ impl Broker {
             .expect("broker lock")
             .ended
             .remove(network_id)
+    }
+
+    /// Marks the Profile `uuid` as joined with a password the caller
+    /// supplied, until the guard drops. While marked, [`Broker::is_inline`]
+    /// is true and the Backend should not prompt for a replacement.
+    pub fn inline_password(&self, uuid: &str) -> InlineGuard<'_> {
+        self.state
+            .lock()
+            .expect("broker lock")
+            .inline
+            .push(uuid.to_owned());
+        InlineGuard {
+            broker: self,
+            uuid: uuid.to_owned(),
+        }
+    }
+
+    pub fn is_inline(&self, uuid: &str) -> bool {
+        let state = self.state.lock().expect("broker lock");
+        state.inline.iter().any(|u| u == uuid)
     }
 
     /// Forgets how earlier prompts ended, before a fresh attempt.

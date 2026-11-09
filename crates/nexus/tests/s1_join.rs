@@ -346,3 +346,31 @@ fn cli_without_a_daemon_still_exits_3() {
     let out = nexus_join(&world, &["Cafe"], None);
     assert_eq!(out.status.code(), Some(3), "{out:?}");
 }
+
+#[test]
+fn a_wpa3_wrong_password_arrives_as_reason_53_and_still_reads_as_wrong_password() {
+    let (world, _) = world();
+    world
+        .nm
+        .script_join_failure("Home", NEED_AUTH, SSID_NOT_FOUND);
+    let resp = join(&world, "Home", Some("typo-password"));
+    assert_eq!(resp["err"]["code"], "wrong_password", "{resp}");
+    assert_eq!(world.nm.profile_count(), 0);
+}
+
+#[test]
+fn a_forgotten_network_is_never_listed_as_joined_even_if_the_access_point_lags() {
+    let (world, _) = world();
+    world.nm.set_active_ap_lag(true);
+    assert!(join(&world, "Cafe", None).get("ok").is_some());
+    assert_eq!(row(&list(&world), "Cafe")["joined"], true);
+    let gone = world
+        .wire()
+        .call(json!({"op": "wifi_forget", "network": id("Cafe")}));
+    assert!(gone.get("ok").is_some(), "{gone}");
+    assert_eq!(
+        row(&list(&world), "Cafe")["joined"],
+        false,
+        "right after Forget"
+    );
+}

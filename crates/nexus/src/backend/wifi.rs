@@ -342,7 +342,9 @@ fn assemble(
             security: best.security,
             band: best.band,
             access_points,
-            joined: joined.contains(&ssid),
+            // NetworkManager keeps reporting the active access point for a
+            // moment after its Profile is deleted: no Profile, not joined.
+            joined: joined.contains(&ssid) && profile_of.contains_key(ssid.as_slice()),
             device: best.device,
             profile: profile_of
                 .get(ssid.as_slice())
@@ -506,7 +508,7 @@ pub async fn join(
 ) -> zbus::Result<Result<Joined, Failure>> {
     broker.forget_ended(network);
     loop {
-        let result = join_once(conn, network, password).await?;
+        let result = join_once(conn, broker, network, password).await?;
         let Err(failure) = &result else {
             return Ok(result);
         };
@@ -528,6 +530,7 @@ pub async fn join(
 
 async fn join_once(
     conn: &Connection,
+    broker: &Broker,
     network: &str,
     password: Option<&Secret>,
 ) -> zbus::Result<Result<Joined, Failure>> {
@@ -564,6 +567,7 @@ async fn join_once(
     let none = OwnedObjectPath::try_from("/").expect("root path");
     let device_obj = OwnedObjectPath::try_from(device_path.as_str()).expect("device path");
 
+    let mut inline = None;
     let (profile_path, uuid, created) = match saved {
         // A saved Profile brings its own secrets.
         Some((path, uuid)) => {
@@ -587,6 +591,7 @@ async fn join_once(
                 return Ok(Err(text::bad_passphrase_length(&name)));
             }
             let uuid = new_uuid();
+            inline = password.map(|_| broker.inline_password(&uuid));
             let settings = new_profile(&ssid, &name, &uuid, net.security, password);
             let options = HashMap::from([("persist".to_owned(), variant("memory"))]);
             match nm
@@ -600,6 +605,7 @@ async fn join_once(
     };
 
     let outcome = wait_for_link(&mut states, &mut owner, &name, secured).await;
+    drop(inline);
     let settings = no_cache!(SettingsConnectionProxy, conn, profile_path.as_str());
     match outcome {
         Ok(()) => {
