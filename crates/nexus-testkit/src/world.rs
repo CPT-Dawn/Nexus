@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use crate::{Bus, FakeBluez, FakeNm, FakeSystemd};
+use crate::{Bus, FakeBluez, FakeNm, FakeNotifications, FakeSystemd};
 
 /// How long to wait for the Daemon's socket, and for any single reply.
 pub const PATIENCE: Duration = Duration::from_secs(10);
@@ -20,6 +20,8 @@ pub struct WorldBuilder {
     bin: PathBuf,
     nm_running: bool,
     start_daemon: bool,
+    notifications: bool,
+    env: Vec<(String, String)>,
     bluez: Option<bool>,
 }
 
@@ -44,6 +46,20 @@ impl WorldBuilder {
         self
     }
 
+    /// Whether a notification server runs on a private session bus (default
+    /// no: the session bus then points at nothing and the Daemon must cope).
+    pub fn notifications(mut self, yes: bool) -> Self {
+        self.notifications = yes;
+        self
+    }
+
+    /// An extra environment variable for everything the world starts, e.g.
+    /// `TERMINAL`.
+    pub fn env(mut self, key: &str, value: &str) -> Self {
+        self.env.push((key.into(), value.into()));
+        self
+    }
+
     pub fn start(self) -> World {
         let tmp = tempfile::tempdir().expect("tempdir");
         for dir in ["run", "home", "bin"] {
@@ -56,12 +72,21 @@ impl WorldBuilder {
         }
         let systemd = FakeSystemd::start(&nm_bus.address);
         let bluez = self.bluez.map(|on| FakeBluez::start(&nm_bus.address, on));
+        let session = self
+            .notifications
+            .then(|| Bus::start(tmp.path(), "session-bus"));
+        let notifications = session
+            .as_ref()
+            .map(|b| FakeNotifications::start(&b.address));
         let mut world = World {
             bin: self.bin,
             nm,
-            bluez,
             systemd,
+            bluez,
             nm_bus,
+            session,
+            notifications,
+            env: self.env,
             daemon: None,
             kill_group: false,
             tmp,
@@ -81,8 +106,12 @@ pub struct World {
     /// The fake systemd (units start absent).
     pub systemd: FakeSystemd,
     bluez: Option<FakeBluez>,
+    /// The fake notification server, when the builder asked for one.
+    pub notifications: Option<FakeNotifications>,
     bin: PathBuf,
     nm_bus: Bus,
+    session: Option<Bus>,
+    env: Vec<(String, String)>,
     daemon: Option<Child>,
     /// The adopted child leads a process group that holds the real Daemon.
     kill_group: bool,
@@ -95,6 +124,8 @@ impl World {
             bin: bin.into(),
             nm_running: true,
             start_daemon: true,
+            notifications: false,
+            env: Vec::new(),
             bluez: None,
         }
     }
@@ -188,18 +219,26 @@ impl World {
             .env("HOME", self.tmp.path().join("home"))
             .env("XDG_RUNTIME_DIR", self.runtime_dir())
             .env("DBUS_SYSTEM_BUS_ADDRESS", &self.nm_bus.address)
-            // A session bus that does not exist: the Daemon must cope.
-            .env(
-                "DBUS_SESSION_BUS_ADDRESS",
-                format!(
-                    "unix:path={}",
-                    self.tmp.path().join("no-session-bus").display()
-                ),
-            );
+            .env("DBUS_SESSION_BUS_ADDRESS", self.session_address());
+        for (k, v) in &self.env {
+            cmd.env(k, v);
+        }
         if let Some(log) = std::env::var_os("RUST_LOG") {
             cmd.env("RUST_LOG", log);
         }
         cmd
+    }
+
+    /// The private session bus, else an address where nothing listens (the
+    /// Daemon must cope with no notification server).
+    fn session_address(&self) -> String {
+        match &self.session {
+            Some(bus) => bus.address.clone(),
+            None => format!(
+                "unix:path={}",
+                self.tmp.path().join("no-session-bus").display()
+            ),
+        }
     }
 
     fn path_var(&self) -> std::ffi::OsString {

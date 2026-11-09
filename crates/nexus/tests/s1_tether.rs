@@ -229,13 +229,13 @@ fn cli_exit_codes_tell_bluetooth_off_from_no_phone() {
     let (mut world, _) = world();
     world.bluez().set_powered(false);
     let out = world.run_nexus(&["tether", "connect"]);
-    assert_eq!(out.status.code(), Some(14), "{out:?}");
+    assert_eq!(out.status.code(), Some(15), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("Bluetooth is off"));
     world.bluez().set_powered(true);
 
     let empty = World::builder(NEXUS).bluez(true).start();
     let out = empty.run_nexus(&["tether", "connect"]);
-    assert_eq!(out.status.code(), Some(15), "{out:?}");
+    assert_eq!(out.status.code(), Some(16), "{out:?}");
 
     let out = empty.run_nexus(&["tether", "disconnect"]);
     assert_eq!(out.status.code(), Some(11), "{out:?}");

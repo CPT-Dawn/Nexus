@@ -153,6 +153,8 @@ struct ProfileModel {
     persisted: bool,
     /// Its secrets came from the secret agent, so deleting it tells the agent.
     agent_secrets: bool,
+    /// The stored Wi-Fi secret: `(key-mgmt, psk)`. `None` is an open Network.
+    secret: Option<(String, String)>,
     /// Set for a Bluetooth Profile: the phone's address as six bytes.
     bdaddr: Option<Vec<u8>>,
 }
@@ -246,8 +248,15 @@ struct Model {
     /// Ask the agent again with `REQUEST_NEW` after a wrong password (what
     /// NetworkManager does); `false` makes the join fail with reason 8 instead.
     request_new: bool,
+    /// Keep `ActiveAccessPoint` after the Link drops, as real NetworkManager
+    /// does for a moment.
+    ap_lag: bool,
     /// The `GetSecrets` request waiting on the agent: `(connection path, setting)`.
     pending_secrets: Option<(String, String)>,
+    /// `GetSecrets` calls on a Profile that were let through.
+    secret_reads: u32,
+    /// Refuse `GetSecrets` on Profiles, like a polkit denial.
+    deny_secret_reads: bool,
     /// The software Wi-Fi switch (`WirelessEnabled` as set by clients).
     wifi_soft: bool,
     /// A hardware switch holds the Wi-Fi radio off.
@@ -387,15 +396,26 @@ impl Manager {
                 persisted: persist.as_deref() == Some("disk"),
                 agent_secrets: needs_agent,
                 bdaddr: None,
+                secret: text("802-11-wireless-security", "key-mgmt")
+                    .zip(text("802-11-wireless-security", "psk")),
             }));
             m.profiles.len() - 1
         };
         os.at(profile_path(n), Profile(self.0.clone(), n)).await?;
         let dev = device_index(device.as_str())?;
         let given = text("802-11-wireless-security", "psk").unwrap_or_default();
-        let ask = needs_agent.then(|| Ask {
+        let wrong_inline = !needs_agent
+            && self
+                .0
+                .lock()
+                .unwrap()
+                .psks
+                .get(&ssid)
+                .is_some_and(|want| *want != given);
+        let ask = (needs_agent || wrong_inline).then(|| Ask {
             settings: clone_settings(&connection),
             path: profile_path(n),
+            wrong_inline,
         });
         let task = tokio::spawn(activate(
             conn.clone(),
@@ -595,7 +615,8 @@ async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u3
         let mut m = model.lock().unwrap();
         let old = m.devices[dev].state;
         m.devices[dev].state = new;
-        let dropped = (new == 30 || new == 120) && m.devices[dev].active_ap.take().is_some();
+        let dropped =
+            (new == 30 || new == 120) && !m.ap_lag && m.devices[dev].active_ap.take().is_some();
         (old, dropped)
     };
     let os = conn.object_server();
@@ -630,6 +651,9 @@ fn clone_settings(s: &SettingsDict) -> SettingsDict {
 struct Ask {
     settings: SettingsDict,
     path: String,
+    /// The profile came with a password that is wrong: like the real thing,
+    /// NetworkManager asks the agent for a new one (`REQUEST_NEW`) at once.
+    wrong_inline: bool,
 }
 
 const AGENT_PATH: &str = "/org/freedesktop/NetworkManager/SecretAgent";
@@ -682,6 +706,9 @@ async fn negotiate(
     wanted: Option<&str>,
 ) -> Result<SettingsDict, u32> {
     let mut flags = ALLOW_INTERACTION;
+    if ask.wrong_inline {
+        flags |= REQUEST_NEW;
+    }
     loop {
         model.lock().unwrap().pending_secrets = Some((ask.path.clone(), SECURITY.to_owned()));
         let body = (
@@ -991,6 +1018,13 @@ struct Profile(Shared, usize);
 
 #[interface(name = "org.freedesktop.NetworkManager.Settings.Connection")]
 impl Profile {
+    /// True while the Profile only lives in NetworkManager's memory.
+    #[zbus(property)]
+    fn unsaved(&self) -> bool {
+        let m = self.0.lock().unwrap();
+        m.profiles[self.1].as_ref().is_some_and(|p| !p.persisted)
+    }
+
     fn get_settings(&self) -> HashMap<String, HashMap<String, OwnedVariant>> {
         let m = self.0.lock().unwrap();
         let p = m.profiles[self.1].as_ref().expect("served profile exists");
@@ -1012,10 +1046,45 @@ impl Profile {
         }
         let mut wireless = HashMap::new();
         wireless.insert("ssid".to_owned(), v(Variant::from(p.ssid.clone())));
-        HashMap::from([
+        let mut all = HashMap::from([
             ("connection".to_owned(), connection),
             ("802-11-wireless".to_owned(), wireless),
-        ])
+        ]);
+        // Like NetworkManager, GetSettings leaves the secret itself out.
+        if let Some((key_mgmt, _)) = &p.secret {
+            let mut security = HashMap::new();
+            security.insert("key-mgmt".to_owned(), v(Variant::from(key_mgmt.clone())));
+            all.insert("802-11-wireless-security".to_owned(), security);
+        }
+        all
+    }
+
+    /// The stored secret of a setting. Refused while
+    /// [`FakeNm::deny_secret_reads`] says polkit said no.
+    fn get_secrets(
+        &self,
+        setting: &str,
+    ) -> zbus::fdo::Result<HashMap<String, HashMap<String, OwnedVariant>>> {
+        let mut m = self.0.lock().unwrap();
+        if m.deny_secret_reads {
+            return Err(zbus::fdo::Error::AccessDenied(
+                "Insufficient privileges.".into(),
+            ));
+        }
+        m.secret_reads += 1;
+        let p = m.profiles[self.1].as_ref().expect("served profile exists");
+        let mut out = HashMap::new();
+        if let Some((_, secret)) = &p.secret
+            && setting == "802-11-wireless-security"
+        {
+            let mut values = HashMap::new();
+            values.insert(
+                "psk".to_owned(),
+                OwnedVariant::try_from(Variant::from(secret.clone())).expect("plain value"),
+            );
+            out.insert(setting.to_owned(), values);
+        }
+        Ok(out)
     }
 
     /// Like NetworkManager, replaces the settings; the fake keeps only the
@@ -1129,6 +1198,8 @@ impl FakeNm {
             next_ap: 1,
             profiles: Vec::new(),
             psks: HashMap::new(),
+            secret_reads: 0,
+            deny_secret_reads: false,
             join_failures: HashMap::new(),
             bt_failures: HashMap::new(),
             scan_requests: 0,
@@ -1138,6 +1209,7 @@ impl FakeNm {
             agent: None,
             agent_calls: Vec::new(),
             request_new: true,
+            ap_lag: false,
             pending_secrets: None,
             wifi_soft: true,
             wifi_hard_blocked: false,
@@ -1519,6 +1591,7 @@ impl FakeNm {
                 autoconnect,
                 persisted: true,
                 agent_secrets: false,
+                secret: None,
                 bdaddr: None,
             }));
             m.profiles.len() - 1
@@ -1550,6 +1623,12 @@ impl FakeNm {
             .unwrap()
             .join_failures
             .insert(ssid.as_bytes().to_vec(), (died_in, reason));
+    }
+
+    /// While on, a Device that drops its Link keeps reporting the old
+    /// `ActiveAccessPoint` (real NetworkManager lags a moment after Forget).
+    pub fn set_active_ap_lag(&self, yes: bool) {
+        self.model.lock().unwrap().ap_lag = yes;
     }
 
     /// Whether a secret agent is registered with the fake AgentManager.
@@ -1590,6 +1669,25 @@ impl FakeNm {
     pub fn persisted_profiles(&self) -> usize {
         let m = self.model.lock().unwrap();
         m.profiles.iter().flatten().filter(|p| p.persisted).count()
+    }
+
+    /// Gives the Profile with this UUID a stored secret: `key_mgmt` is
+    /// NetworkManager's (`wpa-psk`, `sae`), `secret` the passphrase.
+    pub fn set_profile_secret(&self, uuid: &str, key_mgmt: &str, secret: &str) {
+        let mut m = self.model.lock().unwrap();
+        if let Some(p) = m.profiles.iter_mut().flatten().find(|p| p.uuid == uuid) {
+            p.secret = Some((key_mgmt.into(), secret.into()));
+        }
+    }
+
+    /// Makes `GetSecrets` on Profiles fail the way a polkit denial does.
+    pub fn deny_secret_reads(&self, yes: bool) {
+        self.model.lock().unwrap().deny_secret_reads = yes;
+    }
+
+    /// How many `GetSecrets` calls on Profiles were let through.
+    pub fn secret_reads(&self) -> u32 {
+        self.model.lock().unwrap().secret_reads
     }
 
     /// Whether the Profile with this UUID joins by itself; `None` if absent.

@@ -119,7 +119,10 @@ fn text_of(buf: &Buffer) -> String {
 fn phones_standard() {
     let rig = Rig::new(true);
     let frame = rig.text(STANDARD);
-    assert!(frame.contains("Pixel 8") && frame.contains("Sam's iPho"), "{frame}");
+    assert!(
+        frame.contains("Pixel 8") && frame.contains("Sam's iPho"),
+        "{frame}"
+    );
     insta::assert_snapshot!("tether_standard", frame);
 }
 
@@ -194,7 +197,9 @@ fn no_bluetooth_service_is_not_a_crash() {
 fn switching_bluetooth_off_and_on_updates_the_tab() {
     let mut rig = Rig::new(true);
     rig.world.bluez().set_powered(false);
-    rig.pump_until("Bluetooth off", |a| a.tether().bluetooth() == Bluetooth::Off);
+    rig.pump_until("Bluetooth off", |a| {
+        a.tether().bluetooth() == Bluetooth::Off
+    });
     assert!(rig.text(STANDARD).contains("Bluetooth is off"));
     rig.world.bluez().set_powered(true);
     rig.pump_until("Bluetooth on", |a| a.tether().bluetooth() == Bluetooth::On);
@@ -239,7 +244,9 @@ fn enter_tethers_x_drops_and_u_undoes() {
 #[test]
 fn a_failed_tether_toasts_the_reason_and_leaves_no_profile() {
     let mut rig = Rig::new(true);
-    rig.world.nm.script_tether_failure("AA:BB:CC:DD:EE:02", 70, 5);
+    rig.world
+        .nm
+        .script_tether_failure("AA:BB:CC:DD:EE:02", 70, 5);
     rig.key(KeyCode::Char('j'));
     rig.key(KeyCode::Char('j'));
     assert_eq!(rig.selected(), "Sam's iPhone");
@@ -248,5 +255,11 @@ fn a_failed_tether_toasts_the_reason_and_leaves_no_profile() {
     assert!(rig.toast().contains("Sam's iPhone"), "{}", rig.toast());
     assert_eq!(rig.world.nm.phone_profiles("AA:BB:CC:DD:EE:02"), 0);
     assert!(rig.app.tether().busy.is_none());
+    // The Daemon tells us the half-made Profile is gone.
+    rig.pump_until("the phone to settle", |a| {
+        a.tether()
+            .selected()
+            .is_some_and(|p| !p.saved && !p.connecting)
+    });
     insta::assert_snapshot!("tether_failed", rig.text(STANDARD));
 }

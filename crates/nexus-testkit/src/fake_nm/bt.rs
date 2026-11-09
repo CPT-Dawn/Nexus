@@ -97,6 +97,7 @@ pub(super) async fn add_and_activate(
             autoconnect: true,
             persisted: persist_disk,
             agent_secrets: false,
+            secret: None,
             bdaddr: Some(addr),
         }));
         m.profiles.len() - 1

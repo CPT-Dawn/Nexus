@@ -10,7 +10,7 @@ use std::future::Future;
 
 use nexus_ipc::{
     AutoconnectSet, Disconnected, Forgotten, Joined, Radios, ScanOutcome, Secret, Status, Tethered,
-    Tethers, Untethered, WifiList,
+    Tethers, Untethered, WifiList, WifiShare,
 };
 
 use crate::text::Failure;
@@ -122,6 +122,13 @@ pub trait Backend: Send + Sync + 'static {
         network: String,
         enabled: bool,
     ) -> impl Future<Output = Result<AutoconnectSet, BackendError>> + Send;
+
+    /// Reads the join details of a saved Network, password included. Needs
+    /// the Backend's authorization; a refusal is `reveal_denied`.
+    fn wifi_reveal(
+        &self,
+        network: String,
+    ) -> impl Future<Output = Result<WifiShare, BackendError>> + Send;
 
     /// Bluetooth's state and the paired phones that offer network access.
     fn tethers(&self) -> impl Future<Output = Result<Tethers, BackendError>> + Send;

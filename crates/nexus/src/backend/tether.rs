@@ -78,6 +78,8 @@ trait PhoneSettings {
     default_service = "org.freedesktop.NetworkManager"
 )]
 trait PhoneProfile {
+    #[zbus(property)]
+    fn unsaved(&self) -> zbus::Result<bool>;
     fn get_settings(&self) -> zbus::Result<HashMap<String, HashMap<String, OwnedVariant>>>;
     fn save(&self) -> zbus::Result<()>;
     fn delete(&self) -> zbus::Result<()>;
@@ -227,6 +229,11 @@ async fn saved_profiles(conn: &Connection) -> zbus::Result<Vec<Saved>> {
     let mut out = Vec::new();
     for path in settings.list_connections().await? {
         let proxy = no_cache!(PhoneProfileProxy, conn, path.as_str());
+        // A Profile only in memory is a Link still coming up (or one that
+        // failed): not something the person saved.
+        if proxy.unsaved().await.unwrap_or(true) {
+            continue;
+        }
         let Ok(all) = proxy.get_settings().await else {
             continue;
         };

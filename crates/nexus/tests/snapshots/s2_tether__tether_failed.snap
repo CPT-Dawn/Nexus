@@ -23,10 +23,10 @@ expression: rig.text(STANDARD)
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
 ╭ Problem ───────────────────────────────────────────────────────────────────────────────────────╮ │
 │ Could not tether through Sam's iPhone (stopped while asking for an address: the network never  │ │
+│ gave this computer an address). Check that Bluetooth tethering is switched on in the phone's   │ │
+│ settings.                                                                                      │ │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────╯ │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
  j/k move  enter tether  h/l tab  ? help  q quit

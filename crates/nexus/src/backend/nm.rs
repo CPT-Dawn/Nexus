@@ -14,6 +14,7 @@ use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
     AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind,
     Radio, Radios, ScanOutcome, Secret, State, Status, Tethered, Tethers, Untethered, WifiList,
+    WifiShare,
 };
 use std::pin::Pin;
 
@@ -407,6 +408,12 @@ impl Backend for NetworkManager {
         enabled: bool,
     ) -> Result<AutoconnectSet, BackendError> {
         self.with_bus(|c| async move { super::wifi::set_autoconnect(&c, &network, enabled).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_reveal(&self, network: String) -> Result<WifiShare, BackendError> {
+        self.with_bus(|c| async move { super::wifi::reveal(&c, &network).await })
             .await?
             .map_err(BackendError::Refused)
     }

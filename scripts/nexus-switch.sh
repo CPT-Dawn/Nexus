@@ -131,7 +131,7 @@ write_wired_profiles() {
     [ -f "$f" ] || continue
     name=$(sed -n 's/^Name=\([A-Za-z0-9_.:*-]*\)$/\1/p' "$f" | head -n1)
     [ -n "$name" ] || { say "  skip $f (no plain Name= match)"; continue; }
-    case $name in wl* | wlan*) say "  skip $name (Wi-Fi is handled by iwd)"; continue ;; esac
+    case $name in wl*) say "  skip $name (Wi-Fi is handled by iwd)"; continue ;; esac
     slug=${name//\*/any}
     iface="interface-name=$name"
     case $name in *\**) iface='' ;; esac

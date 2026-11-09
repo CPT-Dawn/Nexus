@@ -12,6 +12,7 @@
 mod bus;
 mod fake_bluez;
 mod fake_nm;
+mod fake_notifications;
 mod fake_systemd;
 mod real;
 pub mod scenarios;
@@ -23,6 +24,7 @@ pub use fake_nm::{
     ActiveConnection, Ap, ApId, DeviceId, FakeNm, NmConnectivity, NmState, SCAN_RATE_LIMIT_MS,
     boottime_ms,
 };
+pub use fake_notifications::{FakeNotifications, Notified};
 pub use fake_systemd::{FakeSystemd, Unit};
 pub use real::RealWorld;
 pub use world::{PATIENCE, Wire, World, WorldBuilder};
