@@ -1,5 +1,6 @@
 ---
 source: crates/nexus/tests/s2_tui.rs
+assertion_line: 239
 expression: rig.text(STANDARD)
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
@@ -12,7 +13,7 @@ expression: rig.text(STANDARD)
 │     Not connected│  1 - 6                Jump to a tab                        ██░░████████░░     │
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █░  ░░░░░░░░       │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
-│                  │  Esc                  Back out; never quits                █ks healthy.       │
+│                  │  Esc                  Back out; never quits                │ks healthy.       │
 │                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │──────────────────╯
 │                  │  ?                    Show or hide this help               │──────────────────╮

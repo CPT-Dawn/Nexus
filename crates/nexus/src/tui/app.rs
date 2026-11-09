@@ -4,6 +4,7 @@
 
 mod eth_keys;
 mod hotspot_keys;
+mod settings_keys;
 mod vpn_keys;
 
 use std::collections::VecDeque;
@@ -27,6 +28,7 @@ use super::hidden::{HiddenForm, Typed as HiddenTyped};
 use super::hits::Hit;
 use super::hotspot::{self, HotspotTab};
 use super::profile::{Action, Editor, ProfileMsg};
+use super::settings::SettingsTab;
 use super::share::{Share, Stage};
 use super::tether::TetherTab;
 use super::theme::{Look, Theme};
@@ -86,6 +88,14 @@ pub enum Msg {
     FixDone(Result<(), String>),
     /// Something about the Profile settings editor.
     Profile(ProfileMsg),
+    /// The Daemon's config (first connect, or `config_reloaded`), with the
+    /// reason it is being ignored, if it is.
+    Config {
+        config: serde_json::Value,
+        warning: Option<String>,
+    },
+    /// A setting the person changed was refused (`Err`) or taken.
+    Setting(Result<(), String>),
     /// The Daemon cannot be reached (never connected, or the link dropped).
     Down,
     /// A running effect asked for a frame.
@@ -132,6 +142,7 @@ impl Tab {
     pub fn rows(self) -> usize {
         match self {
             Tab::Overview => 4,
+            Tab::Settings => super::settings::ITEMS.len(),
             _ => 0,
         }
     }
@@ -219,6 +230,13 @@ pub struct App {
     vpn: VpnTab,
     vpn_runner: Option<vpn::Runner>,
     tether: TetherTab,
+    settings: SettingsTab,
+    /// What the flags and terminal allowed before the config had a say.
+    flag_caps: Caps,
+    /// The environment asked for reduced motion.
+    env_motion: bool,
+    /// Why the configured theme is not in force, if it is not.
+    theme_note: Option<String>,
     ethernet: EthernetTab,
     hotspot: HotspotTab,
     /// An open Secret prompt: it has the keys until answered or cancelled.
@@ -269,6 +287,10 @@ impl App {
             vpn: VpnTab::default(),
             vpn_runner: None,
             tether: TetherTab::default(),
+            settings: SettingsTab::default(),
+            flag_caps: caps,
+            env_motion: false,
+            theme_note: None,
             ethernet: EthernetTab::default(),
             hotspot: HotspotTab::default(),
             field: None,
@@ -329,6 +351,10 @@ impl App {
 
     pub fn wifi(&self) -> &WifiTab {
         &self.wifi
+    }
+
+    pub fn settings(&self) -> &SettingsTab {
+        &self.settings
     }
 
     pub fn tether(&self) -> &TetherTab {
@@ -522,7 +548,8 @@ impl App {
     /// Reduced motion: no gliding, sliding, shaking or pulsing; the colour
     /// changes that say what happened stay.
     pub fn reduce_motion(&mut self, on: bool) {
-        self.fx.reduce(on);
+        self.env_motion = on;
+        self.fx.reduce(self.env_motion || self.settings_motion());
     }
 
     /// Runs the effects over the frame just drawn into `buf`, advancing them
@@ -656,6 +683,12 @@ impl App {
             Msg::Vpns(list) => self.vpn.refresh(list) && self.tab == Tab::Vpn,
             Msg::Vpn(done) => self.vpn_done(*done),
             Msg::Tethers(tethers) => self.tether.refresh(tethers),
+            Msg::Config { config, warning } => self.apply_config(config, warning),
+            Msg::Setting(Err(message)) => {
+                self.say(message, true, None);
+                true
+            }
+            Msg::Setting(Ok(())) => false,
             Msg::Ethernet(list) => self.ethernet.refresh(list),
             Msg::Wired(done) => self.eth_done(*done),
             Msg::Hotspot(info) => {
@@ -1168,7 +1201,7 @@ impl App {
                 if self.narrow()
                     && !matches!(
                         self.tab,
-                        Tab::WiFi | Tab::Ethernet | Tab::Vpn | Tab::Hotspot
+                        Tab::WiFi | Tab::Ethernet | Tab::Vpn | Tab::Hotspot | Tab::Settings
                     ) =>
             {
                 self.layer = Layer::Sheet;
@@ -1190,6 +1223,7 @@ impl App {
             Tab::Vpn => self.vpn_key(key),
             Tab::Ethernet => self.eth_key(key),
             Tab::Hotspot => self.hotspot_tab_key(key),
+            Tab::Settings => self.settings_key(key),
             _ => false,
         }
     }
@@ -1553,6 +1587,8 @@ impl App {
                     v.extend(self.vpn_hints(false));
                 } else if self.tab == Tab::Hotspot {
                     v.extend(self.tether_hints());
+                } else if self.tab == Tab::Settings {
+                    v.extend(self.settings_hints());
                 } else if self.tab == Tab::Ethernet {
                     v.extend(self.eth_hints());
                 }
@@ -1570,6 +1606,11 @@ impl App {
                     v.extend(self.wifi_hints(!narrow));
                 } else if self.tab == Tab::Vpn {
                     v.extend(self.vpn_hints(!narrow));
+                } else if self.tab == Tab::Settings {
+                    v.extend(self.settings_hints());
+                    if narrow && self.rows() > 0 {
+                        v.push(("d", "details"));
+                    }
                 } else if self.tab == Tab::Hotspot {
                     v.extend(self.tether_hints());
                     if narrow && self.rows() > 0 {

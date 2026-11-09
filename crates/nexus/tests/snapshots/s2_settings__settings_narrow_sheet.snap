@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_settings.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Settings ▾  6/6                           ● Offline
+    ╭ Theme ───────────────────────────────────────────────╮
+    │ The colours of the TUI. Enter picks the next one.    │
+    │                                                      │
+    │ ● ████████ Midnight Bloom                            │
+    │   ████████ Catppuccin                                │
+    │   ████████ Gruvbox                                   │
+    │   ████████ Nord                                      │
+    │   ████████ Tokyo Night                               │
+    │   ████████ Rosé Pine                                 │
+    │   ████████ High contrast                             │
+    │   broken (has a mistake, see below)                  │
+    │   ████████ sunrise (custom)                          │
+    │                                                      │
+    │ Make your own in config.toml:                        │
+    │   [themes.mine]                                      │
+    │   base = "nord"                                      │
+    │   accent = "#ff8800"                                 │
+    ╰──────────────────────────────────────────────────────╯
+ esc back  enter change  r reset  ? help

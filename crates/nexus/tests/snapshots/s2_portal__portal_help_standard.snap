@@ -1,5 +1,6 @@
 ---
 source: crates/nexus/tests/s2_portal.rs
+assertion_line: 176
 expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Portal
@@ -12,7 +13,7 @@ expression: frame
 │     Not connected│  1 - 6                Jump to a tab                        ██░░████████░░     │
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █░  ░░░░░░░░       │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
-│                  │  Esc                  Back out; never quits                █n-in page is      │
+│                  │  Esc                  Back out; never quits                │n-in page is      │
 │                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │nager 1.58.1      │
 │                  │  ?                    Show or hide this help               │──────────────────╯

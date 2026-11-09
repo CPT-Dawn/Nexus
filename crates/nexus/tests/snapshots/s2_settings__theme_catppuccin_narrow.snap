@@ -1,0 +1,65 @@
+---
+source: crates/nexus/tests/s2_settings.rs
+expression: frame
+---
+ Nexus  Settings ▾  6/6                           ● Offline
+╭ Settings ────────────────────────────────────────────────╮
+│ ▸ Theme                                       Catppuccin │
+│   Nerd Font icons                                    off │
+│   Reduced motion                                     off │
+│   Notify: joined                                      on │
+│   Notify: lost                                       off │
+│   Notify: bad password                                on │
+│   Notify: prompt                                      on │
+│   Notify: login                                       on │
+│   Notify: VPN drop                                    on │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ enter change  r reset  d details  : palette  ? help
+
+  765 cells  fg=Reset bg=Reset mods=[]
+    7 cells  fg=Reset bg=Rgb(44, 44, 66) mods=[]
+   17 cells  fg=Reset bg=Rgb(45, 44, 66) mods=[]
+   14 cells  fg=Reset bg=Rgb(46, 44, 66) mods=[]
+   27 cells  fg=Reset bg=Rgb(47, 44, 66) mods=[]
+   10 cells  fg=Reset bg=Rgb(48, 44, 66) mods=[]
+   26 cells  fg=Reset bg=Rgb(49, 44, 66) mods=[]
+   14 cells  fg=Reset bg=Rgb(50, 44, 66) mods=[]
+    7 cells  fg=Reset bg=Rgb(51, 44, 66) mods=[]
+    9 cells  fg=Rgb(127, 132, 156) bg=Reset mods=[]
+    4 cells  fg=Rgb(127, 132, 156) bg=Rgb(45, 44, 66) mods=[]
+    4 cells  fg=Rgb(166, 168, 247) bg=Reset mods=[]
+   16 cells  fg=Rgb(166, 173, 200) bg=Rgb(47, 44, 66) mods=[]
+    7 cells  fg=Rgb(166, 173, 200) bg=Rgb(48, 44, 66) mods=[]
+   15 cells  fg=Rgb(166, 173, 200) bg=Rgb(49, 44, 66) mods=[]
+    6 cells  fg=Rgb(166, 173, 200) bg=Rgb(50, 44, 66) mods=[]
+   10 cells  fg=Rgb(166, 227, 161) bg=Reset mods=[]
+    8 cells  fg=Rgb(170, 166, 247) bg=Reset mods=[]
+   12 cells  fg=Rgb(177, 166, 247) bg=Reset mods=[]
+   13 cells  fg=Rgb(183, 166, 247) bg=Reset mods=[]
+   15 cells  fg=Rgb(190, 166, 247) bg=Reset mods=[]
+   16 cells  fg=Rgb(196, 166, 247) bg=Reset mods=[]
+   18 cells  fg=Rgb(203, 166, 247) bg=Reset mods=[]
+    6 cells  fg=Rgb(203, 166, 247) bg=Reset mods=[bold]
+    1 cells  fg=Rgb(203, 166, 247) bg=Rgb(44, 44, 66) mods=[bold]
+    5 cells  fg=Rgb(203, 166, 247) bg=Rgb(46, 44, 66) mods=[]
+    1 cells  fg=Rgb(203, 166, 247) bg=Rgb(47, 44, 66) mods=[]
+    1 cells  fg=Rgb(203, 166, 247) bg=Rgb(48, 44, 66) mods=[]
+    2 cells  fg=Rgb(203, 166, 247) bg=Rgb(49, 44, 66) mods=[]
+    8 cells  fg=Rgb(205, 214, 244) bg=Reset mods=[bold]
+    2 cells  fg=Rgb(205, 214, 244) bg=Rgb(44, 44, 66) mods=[bold]
+    6 cells  fg=Rgb(205, 214, 244) bg=Rgb(47, 44, 66) mods=[]
+    3 cells  fg=Rgb(205, 214, 244) bg=Rgb(48, 44, 66) mods=[]
+   68 cells  fg=Rgb(205, 214, 244) bg=Rgb(49, 50, 68) mods=[bold]
+   13 cells  fg=Rgb(210, 166, 247) bg=Reset mods=[]
+   12 cells  fg=Rgb(216, 166, 247) bg=Reset mods=[]
+   14 cells  fg=Rgb(223, 166, 247) bg=Reset mods=[]
+   12 cells  fg=Rgb(229, 166, 247) bg=Reset mods=[]
+    5 cells  fg=Rgb(236, 166, 247) bg=Reset mods=[]
+    1 cells  fg=Rgb(243, 139, 168) bg=Rgb(47, 44, 66) mods=[bold]

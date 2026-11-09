@@ -51,6 +51,13 @@
 //!   tethers, `x` drops the tether, `u` undoes. `d` opens details when narrow.
 //! - `tether-off`: the same, with Bluetooth switched off, so `enter` shows how
 //!   to turn it on.
+//! - `settings`: Press `6`. `j`/`k` move, `enter` changes the row (the theme
+//!   cycles through the seven built-ins and the custom `sunrise`; switches
+//!   flip), `r` resets it. The config file (with its comments) is edited in
+//!   place, so `nexus config get` in another shell agrees. `Lost` notifications
+//!   start switched off.
+//! - `settings-bad`: the same, but the config selects the mistaken theme
+//!   `broken`: the TUI falls back to Midnight Bloom and says why.
 //! - `hotspot`: the Hotspot tab (press `5`) on a machine whose Wi-Fi card can
 //!   host one, above the Tethering phones. `n` starts one with a made-up
 //!   password, `c` opens the form for your own name and password, then `s`
@@ -105,7 +112,9 @@ fn main() {
     let scenario = args.next().unwrap_or_else(|| "online".into());
     let rest: Vec<String> = args.collect();
 
-    let world = if let Some(start) = match scenario.as_str() {
+    let world = if scenario.starts_with("settings") {
+        nexus_testkit::scenarios::settings_world(&bin, scenario == "settings-bad")
+    } else if let Some(start) = match scenario.as_str() {
         "hotspot" => Some(nexus_testkit::scenarios::HotspotStart::Capable),
         "hotspot-on" => Some(nexus_testkit::scenarios::HotspotStart::Running),
         "hotspot-nocard" => Some(nexus_testkit::scenarios::HotspotStart::NoCard),
@@ -123,7 +132,8 @@ fn main() {
     let opened = world.dir().join("opened.log");
     let mut wlan0 = None;
     match scenario.as_str() {
-        "offline" | "tether" | "tether-off" | "hotspot" | "hotspot-on" | "hotspot-nocard" => {}
+        "offline" | "tether" | "tether-off" | "settings" | "settings-bad" | "hotspot"
+        | "hotspot-on" | "hotspot-nocard" => {}
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.

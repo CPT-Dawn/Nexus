@@ -1,5 +1,6 @@
 ---
 source: crates/nexus/tests/s2_palette.rs
+assertion_line: 351
 expression: top
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
@@ -12,7 +13,7 @@ expression: top
 │     Not connected│  1 - 6                Jump to a tab                        █                  │
 │   ○ Hotspot      │  Enter                Open the selected card's tab         █                  │
 │     Not started  │  d                    Details sheet (small windows)        █                  │
-│                  │  Esc                  Back out; never quits                █                  │
+│                  │  Esc                  Back out; never quits                │                  │
 │                  │  o                    Open a Portal's login page           │                  │
 │                  │  f                    Overview: run the fix (asks first)   │──────────────────╯
 │                  │  ?                    Show or hide this help               │──────────────────╮

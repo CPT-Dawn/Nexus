@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_settings.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Settings ▾  6/6                           ● Offline
+╭ Settings ────────────────────────────────────────────────╮
+│ ▸ Theme                                   Midnight Bloom │
+│   Nerd Font icons                                    off │
+│   Reduced motion                                     off │
+│   Notify: joined                                      on │
+│   Notify: lost                                       off │
+│   Notify: bad password                                on │
+│   Notify: prompt                                      on │
+│   Notify: login                                       on │
+│   Notify: VPN drop                                    on │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ enter change  r reset  d details  : palette  ? help
