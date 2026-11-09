@@ -49,12 +49,18 @@ async fn open() -> Result<Collection, Unavailable> {
             .method_timeout(PATIENCE)
             .build()
             .await
-            .map_err(why)?;
+            .map_err(|e| {
+                tracing::debug!("no session bus for the keyring: {e}");
+                Unavailable("there is no session bus to find it on".into())
+            })?;
         // Encrypted if the service can, plain (over the private session bus)
         // if it cannot, whatever way it says no.
         let service = match Service::encrypted_with_connection(&cnx).await {
             Ok(service) => service,
-            Err(_) => Service::plain_with_connection(&cnx).await.map_err(why)?,
+            Err(_) => Service::plain_with_connection(&cnx).await.map_err(|e| {
+                tracing::debug!("no Secret Service: {e}");
+                Unavailable("no Secret Service is running".into())
+            })?,
         };
         let collection = service.default_collection().await.map_err(why)?;
         if collection.is_locked().await.map_err(why)? {

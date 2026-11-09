@@ -5,7 +5,7 @@
 //! cargo build -p nexus
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|vpn]
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|tether|tether-off]
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|wifi-enterprise|profile]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|wifi-enterprise|profile|profile-keyring]
 //! ```
 //!
 //! Scenarios:
@@ -45,6 +45,13 @@
 //!   countdown, `y` keeps, `n` or waiting reverts) or `G` `k` `e` on Parents
 //!   House (saved at once). In the form: `tab` next row, `space` or arrows
 //!   change a choice, type into address rows, `enter` apply, `esc` cancel.
+//! - `profile-keyring`: `profile`, with a stand-in Secret Service (keyring)
+//!   running. Press `G` `k` `e` for Parents House, `tab` to the Keyring row
+//!   (last), `space` to switch it to "yes, in your keyring", `enter` applies:
+//!   the password moves into the keyring and NetworkManager stops holding it.
+//!   Open the form again to see it stayed on; `enter` on the row's neighbour
+//!   (`space` back to "no, system store") moves it back. On `profile` (no
+//!   keyring) the same switch is refused with a message saying why.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -65,6 +72,8 @@ fn main() {
 
     let world = if scenario.starts_with("tether") {
         nexus_testkit::scenarios::tether_world(&bin, scenario == "tether")
+    } else if scenario == "profile-keyring" {
+        World::builder(&bin).keyring(true).start()
     } else {
         World::start(&bin)
     };
@@ -76,12 +85,12 @@ fn main() {
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" | "wifi-enterprise" | "profile" => {
+        "wifi" | "wifi-prompt" | "wifi-enterprise" | "profile" | "profile-keyring" => {
             if scenario == "wifi" {
                 nexus_testkit::scenarios::wifi_busy(&world);
             } else if scenario == "wifi-enterprise" {
                 nexus_testkit::scenarios::wifi_enterprise(&world);
-            } else if scenario == "profile" {
+            } else if scenario == "profile" || scenario == "profile-keyring" {
                 nexus_testkit::scenarios::profile_busy(&world);
             } else {
                 // Same, plus a password prompt for Work-Secure, already open.

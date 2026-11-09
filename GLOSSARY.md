@@ -79,6 +79,10 @@ _Avoid_: client, UI
 A request from the Backend for something only the user knows, such as a Wi-Fi password or a VPN one-time code, answered through a Front end.
 _Avoid_: password dialog, auth request
 
+**Keyring**:
+The user's Secret Service (gnome-keyring, KWallet, KeePassXC) as an opt-in home for one Profile's Wi-Fi password. A Profile "kept in the keyring" has its password marked agent-owned, so NetworkManager never stores it and asks the Daemon, which answers from the keyring. The system store (NetworkManager's own) stays the default.
+_Avoid_: wallet, vault, password manager
+
 **Reveal**:
 Reading a stored secret back out of the Backend, such as a saved Wi-Fi password, so it can be shown or turned into a QR code. Always an explicit act of the user, and the Backend must authorize it.
 _Avoid_: unlock, decrypt, export
