@@ -6,7 +6,7 @@ expression: frame
 ╭ Status ──────────────────────────────────────────────────╮
 │ ● Portal                                                 │
 │ You're connected via Wi-Fi (CafeGuest), but a sign-in    │
-│ page is required.                                        │
+│ page is required. Press o to open it.                    │
 ╰──────────────────────────────────────────────────────────╯
 ╭ Traffic ─────────────────────────────────────────────────╮
 │ ↓ 0 B/s          ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
@@ -21,4 +21,4 @@ expression: frame
 ╭ Diagnostics ─────────────────────────────────────────────╮
 │ ● A sign-in page is blocking the internet                │
 ╰──────────────────────────────────────────────────────────╯
- j/k move  enter open  h/l tab  ? help  q quit
+ j/k move  enter open  o login  h/l tab  ? help  q quit

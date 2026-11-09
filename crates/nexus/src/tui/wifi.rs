@@ -104,6 +104,8 @@ pub enum Cmd {
     Cancel {
         prompt: u64,
     },
+    /// Open the Portal's login page in the browser.
+    OpenPortal,
 }
 
 impl Cmd {
@@ -129,6 +131,7 @@ impl Cmd {
                 secret: secret.clone(),
             },
             Cmd::Cancel { prompt } => Op::SecretCancel { prompt: *prompt },
+            Cmd::OpenPortal => Op::PortalOpen,
         }
     }
 

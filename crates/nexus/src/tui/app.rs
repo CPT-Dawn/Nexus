@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use nexus_ipc::{
-    ActivityEntry, Event, Finding, PromptClosed, PromptKind, Secret, Status, Traffic, WifiList,
+    ActivityEntry, ActivityKind, Connectivity, Event, Finding, PromptClosed, PromptKind, Secret,
+    Status, Traffic, WifiList,
 };
 
 use super::caps::Caps;
@@ -266,6 +267,15 @@ impl App {
         self.status.as_ref()
     }
 
+    /// The Network whose Portal wants a login, while the Link is behind one.
+    pub fn portal(&self) -> Option<&str> {
+        let status = self.status.as_ref().filter(|_| self.conn == Conn::Up)?;
+        match (status.connectivity, &status.link) {
+            (Connectivity::Portal, Some(link)) => Some(&link.name),
+            _ => None,
+        }
+    }
+
     /// Recent traffic, for the graphs.
     pub fn rates(&self) -> &Rates {
         &self.rates
@@ -385,9 +395,13 @@ impl App {
                 changed && self.tab == Tab::Overview
             }
             Msg::Happened(entry) => {
+                let online = entry.kind == ActivityKind::Online;
+                if online {
+                    self.say("You're online.", false, None);
+                }
                 self.activity.insert(0, entry);
                 self.activity.truncate(ACTIVITY);
-                self.tab == Tab::Overview
+                online || self.tab == Tab::Overview
             }
             Msg::Findings(list) => {
                 let changed = self.findings != list;
@@ -525,6 +539,9 @@ impl App {
                 };
                 self.say(text, false, Some(undo));
             }
+            (Cmd::OpenPortal, Ok(_)) => {
+                self.say("Opened the login page in your browser.", false, None);
+            }
             (_, Err(message)) => self.say(message, true, None),
             _ => return false,
         }
@@ -653,6 +670,10 @@ impl App {
                 self.layer = Layer::Confirm;
                 self.fix = FixState::Asking;
                 true
+            }
+            KeyCode::Char('o') if self.portal().is_some() => {
+                self.send(Cmd::OpenPortal);
+                false
             }
             KeyCode::Tab | KeyCode::Right | KeyCode::Char('l' | ']') => self.step_tab(1),
             KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h' | '[') => self.step_tab(-1),
@@ -803,6 +824,9 @@ impl App {
                     && self.runnable_fix().is_some()
                 {
                     v.push(("f", "fix"));
+                }
+                if self.portal().is_some() {
+                    v.push(("o", "login"));
                 }
                 v.push(("h/l", "tab"));
                 v.push(("?", "help"));
