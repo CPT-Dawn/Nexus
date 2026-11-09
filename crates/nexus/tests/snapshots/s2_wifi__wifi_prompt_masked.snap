@@ -4,7 +4,7 @@ expression: masked
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
 ╭ Wi-Fi ─────────────────────╮╭ Work-Secure ───────────────────────────────────────────────────────╮
-│   ● Home-5G    ▂▄▆█ wpa2   ││ ~ Joining...                                                       │
+│     Home-5G    ▂▄▆█ wpa2   ││ ~ Joining...                                                       │
 │ ▸ ~ Work-Secu… ▂▄▆█ wpa3   ││                                                                    │
 │     Cafe Guest ▂▄▆█ open   ││ Signal         64%  ▂▄▆█                                           │
 │     Neighbour… ▂▄▆█ wpa2   ││ Security      WPA3 personal                                        │

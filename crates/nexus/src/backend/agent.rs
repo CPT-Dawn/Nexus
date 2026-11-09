@@ -147,7 +147,12 @@ impl Agent {
 pub async fn keep_registered(conn: &Connection, broker: Arc<Broker>) -> zbus::Result<()> {
     use zbus::{MatchRule, MessageStream, message::Type};
     conn.object_server()
-        .at(AGENT_PATH, Agent { broker })
+        .at(
+            AGENT_PATH,
+            Agent {
+                broker: broker.clone(),
+            },
+        )
         .await?;
     // Watch first, so an owner change during registration is not missed.
     let rule = MatchRule::builder()
@@ -177,6 +182,8 @@ pub async fn keep_registered(conn: &Connection, broker: Arc<Broker>) -> zbus::Re
                     return Err(zbus::Error::Failure("bus connection closed".into()));
                 }
                 registered = false;
+                // A restarted NetworkManager no longer waits for any answer.
+                broker.withdraw_all();
             }
             () = async {
                 if retry {

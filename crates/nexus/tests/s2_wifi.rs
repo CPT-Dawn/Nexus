@@ -44,7 +44,10 @@ impl Rig {
         let wlan0 = wifi_busy(&world);
         let mut rig = Rig::start(world, Some(wlan0), caps);
         rig.key(KeyCode::Char('2'));
-        rig.pump_until("the Wi-Fi list", |a| a.wifi().len() == 8);
+        // Settled: the scenario's join is visible, so no late list moves a frame.
+        rig.pump_until("the Wi-Fi list", |a| {
+            a.wifi().len() == 8 && a.wifi().rows()[0].joined()
+        });
         rig
     }
 
@@ -61,6 +64,18 @@ impl Rig {
             rx,
             _client: client,
         }
+    }
+
+    /// Drops the scenario's link and waits for it to show, so a later join
+    /// cannot change the Home-5G row halfway through a snapshot.
+    fn drop_link(&mut self) {
+        self.select("Home-5G");
+        self.key(KeyCode::Char('x'));
+        self.pump_until("the link to drop", |a| {
+            a.toast().is_some()
+                && a.wifi().rows()[0].name() == "Home-5G"
+                && !a.wifi().rows()[0].joined()
+        });
     }
 
     fn dev(&self) -> DeviceId {
@@ -398,6 +413,7 @@ fn enter_joins_an_open_network_and_the_list_keeps_its_order() {
 #[test]
 fn a_secured_network_asks_for_its_password_inline_masked_with_a_reveal_key() {
     let mut rig = Rig::busy();
+    rig.drop_link();
     rig.select("Work-Secure");
     rig.key(KeyCode::Enter);
     rig.pump_until("the prompt", |a| a.field().is_some());
@@ -435,6 +451,7 @@ fn a_secured_network_asks_for_its_password_inline_masked_with_a_reveal_key() {
 #[test]
 fn a_wrong_password_reopens_the_field_with_the_message() {
     let mut rig = Rig::busy();
+    rig.drop_link();
     rig.world.nm.set_psk("Work-Secure", "correct-horse");
     rig.select("Work-Secure");
     rig.key(KeyCode::Enter);
@@ -554,6 +571,7 @@ fn forget_is_not_offered_for_a_network_that_is_not_saved() {
 #[test]
 fn autoconnect_toggles_with_a_toast_and_undo() {
     let mut rig = Rig::busy();
+    rig.drop_link();
     rig.select("Parents House");
     rig.key(KeyCode::Char('a'));
     rig.pump_until("the toggle", |a| a.toast().is_some());

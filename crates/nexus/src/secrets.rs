@@ -196,6 +196,16 @@ impl Broker {
         }
     }
 
+    /// Closes every open prompt: the Backend that asked is gone (or came back
+    /// without remembering it asked).
+    pub fn withdraw_all(&self) {
+        let mut state = self.state.lock().expect("broker lock");
+        let ids: Vec<u64> = state.pending.keys().copied().collect();
+        for id in ids {
+            self.close(&mut state, id, Ended::Withdrawn);
+        }
+    }
+
     /// Notes that the Backend rejected the last secret for this Network, so
     /// the next prompt for it reads as a retry.
     pub fn mark_rejected(&self, network_id: &str) {

@@ -4,7 +4,7 @@ expression: "{\n    rig.size(NARROW); let narrow = rig.text(NARROW); rig.size(ST
 ---
  Nexus  Wi-Fi ▾  2/6                              ● Offline
 ╭ Wi-Fi ───────────────────────────────────────────────────╮
-│   ● Home-5G                             ▂▄▆█ wpa2     5G │
+│     Home-5G                             ▂▄▆█ wpa2     5G │
 │ ▸ ~ Work-Secure                         ▂▄▆█ wpa3     5G │
 │     Cafe Guest                          ▂▄▆█ open   2.4G │
 │     Neighbour-2G                        ▂▄▆█ wpa2   2.4G │
