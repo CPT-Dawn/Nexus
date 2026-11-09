@@ -2,6 +2,7 @@ mod backend;
 mod cli;
 mod config;
 mod daemon;
+mod doctor;
 mod secrets;
 mod text;
 mod wifi_view;
@@ -39,6 +40,15 @@ enum Command {
     Wifi {
         #[command(subcommand)]
         action: WifiAction,
+    },
+    /// Explain why the machine is or is not online, and how to fix it.
+    Doctor {
+        /// Print the findings as JSON.
+        #[arg(long)]
+        json: bool,
+        /// Offer to run the fixes (asks first; privileged ones go through pkexec).
+        #[arg(long)]
+        fix: bool,
     },
     /// Read or change the config file.
     Config {
@@ -146,6 +156,7 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Forget { ssid, json },
         } => cli::wifi_forget(&ssid, json),
+        Command::Doctor { json, fix } => cli::doctor(json, fix),
         Command::Config {
             action: ConfigAction::Get { key },
         } => cli::config_get(key),

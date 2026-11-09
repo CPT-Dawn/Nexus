@@ -10,6 +10,8 @@ use serde_json::Value;
 pub const EXIT_UNREACHABLE: u8 = 3;
 /// Exit code when the Daemon answered with an error.
 pub const EXIT_DAEMON_ERROR: u8 = 4;
+/// Exit code of `nexus doctor` when it found a problem (a warning alone is 0).
+pub const EXIT_PROBLEM: u8 = 12;
 
 /// The exit code for a refusal, one per failure class, so scripts can tell
 /// a typo'd password (5) from a Network out of range (6) and so on.
@@ -50,6 +52,80 @@ pub fn status(json: bool) -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+/// `nexus doctor [--json] [--fix]`.
+pub fn doctor(json: bool, fix: bool) -> ExitCode {
+    let mut conn = match Connection::connect() {
+        Ok(c) => c,
+        Err(e) => return unreachable(&e),
+    };
+    let report = match conn.doctor() {
+        Err(e) => return unreachable(&e),
+        Ok(Err(failure)) => {
+            eprintln!("nexus: the daemon refused: {}", failure.message);
+            return ExitCode::from(EXIT_DAEMON_ERROR);
+        }
+        Ok(Ok(report)) => report,
+    };
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&report).expect("report serializes")
+        );
+    } else {
+        print!("{}", crate::doctor::render(&report));
+    }
+    if fix && !json {
+        for finding in report.findings.iter().filter(|f| f.is_trouble()) {
+            let Some(fix) = finding.fix.as_ref().filter(|f| f.runnable) else {
+                continue;
+            };
+            if !confirm_fix(&finding.title, fix) {
+                continue;
+            }
+            let op = Op::DoctorFix {
+                finding: finding.id.clone(),
+                confirm: true,
+            };
+            match conn.call(op) {
+                Err(e) => return unreachable(&e),
+                Ok(Err(failure)) => {
+                    eprintln!("nexus: {}", failure.message);
+                    return ExitCode::from(exit_code(failure.code));
+                }
+                Ok(Ok(_)) => println!("Done. Run `nexus doctor` again to check."),
+            }
+        }
+    }
+    if report.worst() >= nexus_ipc::Severity::Problem {
+        ExitCode::from(EXIT_PROBLEM)
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+/// Shows what would run and asks. Anything but a typed yes on a terminal is a no.
+fn confirm_fix(title: &str, fix: &nexus_ipc::Fix) -> bool {
+    use std::io::{BufRead, IsTerminal, Write};
+    println!("\nFix for \"{title}\":");
+    for command in &fix.commands {
+        println!("    $ {command}");
+    }
+    if !std::io::stdin().is_terminal() {
+        println!("(not a terminal: nothing was run; run the commands yourself)");
+        return false;
+    }
+    let who = if fix.privileged {
+        " They run as administrator: polkit will ask for your password."
+    } else {
+        ""
+    };
+    print!("Run these now?{who} [y/N] ");
+    let _ = std::io::stdout().flush();
+    let mut answer = String::new();
+    std::io::stdin().lock().read_line(&mut answer).is_ok()
+        && matches!(answer.trim(), "y" | "Y" | "yes")
 }
 
 /// `nexus wifi list [--json]`.

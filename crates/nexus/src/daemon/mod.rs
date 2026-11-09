@@ -49,7 +49,7 @@ async fn serve() -> std::io::Result<()> {
     let broker = Arc::new(Broker::new(events.clone(), settings.clone()));
     let backend = Arc::new(NetworkManager::new(broker.clone()));
     tokio::spawn(config::watch(settings.clone()));
-    let live = Arc::new(Live::default());
+    let live = Arc::new(Live::new(events.clone()));
     // The baseline is read before the socket exists, so anything a client
     // can see happening is a change from it (and gets an activity entry).
     let baseline = tokio::time::timeout(BASELINE_WAIT, async {
@@ -101,10 +101,21 @@ async fn serve() -> std::io::Result<()> {
 const BASELINE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// What the Daemon remembers between requests.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Live {
     traffic: traffic::Sampler,
     activity: activity::Log,
+    doctor: crate::doctor::Memory,
+}
+
+impl Live {
+    fn new(events: broadcast::Sender<Event>) -> Self {
+        Self {
+            traffic: traffic::Sampler::default(),
+            activity: activity::Log::default(),
+            doctor: crate::doctor::Memory::new(events),
+        }
+    }
 }
 
 /// Tells subscribers what changed. The Backend coalesces each burst of
@@ -172,6 +183,20 @@ async fn answer<B: Backend>(
             })
             .expect("wire types serialize"),
         ),
+        Op::Doctor => Response::ok(
+            req.id,
+            serde_json::to_value(crate::doctor::run(backend, settings, &live.doctor).await)
+                .expect("wire types serialize"),
+        ),
+        Op::DoctorFix { finding, confirm } => {
+            match crate::doctor::run_fix(backend, settings, &finding, confirm).await {
+                Ok(done) => Response::ok(
+                    req.id,
+                    serde_json::to_value(done).expect("wire types serialize"),
+                ),
+                Err(f) => Response::err(Some(req.id), f.code, f.message),
+            }
+        }
         Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
         Op::WifiJoin { network, password } => {
