@@ -73,6 +73,12 @@ pub enum Op {
     /// `WifiNetwork.id`. Result: [`AutoconnectSet`]; `unknown_network` when
     /// nothing is saved for it.
     WifiAutoconnect { network: String, enabled: bool },
+    /// Reveal what a phone needs to join a saved Network, by `WifiNetwork.id`:
+    /// reads the stored password, which needs the Backend's authorization
+    /// (NetworkManager asks polkit). Result: [`WifiShare`]; `unknown_network`
+    /// when nothing is saved for it, `reveal_denied` when authorization was
+    /// refused. Front ends call it only after the person pressed a reveal key.
+    WifiReveal { network: String },
     /// Answer an open Secret prompt (`prompt` is the id from its `secret_prompt_opened`
     /// event). The only request besides `wifi_join` that carries a secret.
     /// Result `{}`; `unknown_prompt` when it is closed already.
@@ -233,6 +239,8 @@ pub enum ErrorCode {
     NoPortal,
     /// The browser could not be started.
     OpenFailed,
+    /// The Backend refused to hand over a stored secret (authorization denied).
+    RevealDenied,
     #[serde(other)]
     Unknown,
 }
@@ -737,6 +745,62 @@ pub struct Forgotten {
 pub struct AutoconnectSet {
     pub ssid: String,
     pub enabled: bool,
+}
+
+/// How a Network authenticates, in the words of the Wi-Fi QR code format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShareAuth {
+    /// WPA or WPA2 with a passphrase.
+    Wpa,
+    /// WPA3 with a passphrase.
+    Sae,
+    Wep,
+    /// No password (open, or OWE).
+    Open,
+}
+
+/// The `wifi_reveal` result: the join details of a saved Network.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiShare {
+    pub ssid: String,
+    pub auth: ShareAuth,
+    /// Absent for an open Network.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<Secret>,
+}
+
+impl WifiShare {
+    /// The text a phone camera reads from the QR code:
+    /// `WIFI:T:WPA;S:name;P:pass;;`. Wiped from memory when dropped.
+    pub fn payload(&self) -> zeroize::Zeroizing<String> {
+        // Backslash, semicolon, comma, colon and quote are escaped. Digit-only
+        // values stay unquoted, as Android writes them, so phones read them back.
+        fn field(value: &str) -> String {
+            let mut out = String::with_capacity(value.len() + 2);
+            for c in value.chars() {
+                if matches!(c, '\\' | ';' | ',' | ':' | '"') {
+                    out.push('\\');
+                }
+                out.push(c);
+            }
+            out
+        }
+        let t = match self.auth {
+            ShareAuth::Wpa => "WPA",
+            ShareAuth::Sae => "SAE",
+            ShareAuth::Wep => "WEP",
+            ShareAuth::Open => "nopass",
+        };
+        let mut out = zeroize::Zeroizing::new(format!("WIFI:T:{t};S:{};", field(&self.ssid)));
+        if let Some(p) = &self.password {
+            out.push_str("P:");
+            out.push_str(&field(p.expose()));
+            out.push(';');
+        }
+        out.push(';');
+        out
+    }
 }
 
 /// Encodes a value as one line, newline included.

@@ -160,6 +160,21 @@ impl Runner {
         Runner { socket, tx }
     }
 
+    /// Reads a saved Network's join details for the share view; the answer
+    /// arrives as [`Msg::Shared`]. NetworkManager may wait for the person to
+    /// authorize it, so it has its own connection and thread.
+    pub fn reveal(&self, network: String) {
+        let (socket, tx) = (self.socket.clone(), self.tx.clone());
+        let spawned = thread::Builder::new()
+            .name("nexus-reveal".into())
+            .spawn(move || {
+                let _ = tx.send(Msg::Shared(fetch_share(&socket, network)));
+            });
+        if let Err(e) = spawned {
+            tracing::warn!("cannot spawn a reveal thread: {e}");
+        }
+    }
+
     pub fn run(&self, cmd: Cmd) {
         let (socket, tx) = (self.socket.clone(), self.tx.clone());
         let spawned = thread::Builder::new()
@@ -174,6 +189,17 @@ impl Runner {
             tracing::warn!("cannot spawn a command thread: {e}");
         }
     }
+}
+
+fn fetch_share(socket: &std::path::Path, network: String) -> Result<nexus_ipc::WifiShare, String> {
+    let mut conn =
+        Connection::connect_to(socket).map_err(|_| "Can't reach the Nexus daemon.".to_string())?;
+    let value = conn
+        .call(Op::WifiReveal { network })
+        .map_err(|_| "Lost the Nexus daemon.".to_string())?
+        .map_err(|f: Failure| f.message)?;
+    serde_json::from_value(value)
+        .map_err(|_| "The daemon sent details Nexus cannot read.".to_string())
 }
 
 fn execute(socket: &std::path::Path, cmd: &Cmd) -> Result<Option<ScanOutcome>, String> {
