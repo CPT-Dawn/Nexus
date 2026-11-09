@@ -463,6 +463,10 @@ async fn join(
                 restore = Some((proxy, before));
             }
             if let Err(e) = nm.activate_connection(&p.path, &port.path, &none).await {
+                // Refused (a cable pulled just now, say): the old Profile stays as it was.
+                if let Some((proxy, before)) = restore {
+                    let _ = proxy.update(before).await;
+                }
                 return Ok(Err(text::ethernet_refused(&name, &e.to_string())));
             }
             let enterprise = p.enterprise || eap.is_some();

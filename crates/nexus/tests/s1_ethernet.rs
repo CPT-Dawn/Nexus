@@ -301,6 +301,20 @@ fn a_sign_in_on_an_unplugged_port_is_unplugged() {
     assert_eq!(resp["err"]["code"], "unplugged", "{resp}");
 }
 
+#[test]
+fn a_refused_sign_in_puts_the_saved_profile_back_as_it_was() {
+    let (world, _) = world();
+    world.nm.add_ethernet_profile(OFFICE, "Office", "enp3s0");
+    // The cable goes between the carrier check and the activation.
+    world.nm.refuse_wired_activation(true);
+    let resp = join_eap(&world, peap("alice@office.example", "hunter2"));
+    assert!(resp.get("err").is_some(), "{resp}");
+    assert!(
+        !world.nm.profile_has_group(OFFICE, "802-1x"),
+        "the failed sign-in left its 802.1X settings behind"
+    );
+}
+
 // ---- Profile settings of a wired Profile ------------------------------------
 
 const OFFICE: &str = "33333333-3333-4333-8333-333333333333";

@@ -322,6 +322,8 @@ struct Model {
     scan_requests: u32,
     /// Refuse every `RequestScan`, whatever `LastScan` says.
     refuse_scans: bool,
+    /// Refuse to activate any wired Profile, like a cable pulled mid-join.
+    refuse_wired_activation: bool,
     /// Reads of `Statistics.RxBytes`/`TxBytes`.
     statistics_reads: u32,
     /// What the Daemon wrote to `Statistics.RefreshRateMs`.
@@ -2116,6 +2118,7 @@ impl FakeNm {
             hotspot_fails: false,
             scan_requests: 0,
             refuse_scans: false,
+            refuse_wired_activation: false,
             statistics_reads: 0,
             refresh_rate_ms: 0,
             agent: None,
@@ -2503,6 +2506,22 @@ impl FakeNm {
     /// What was last written to `Statistics.RefreshRateMs` (0 = never).
     pub fn refresh_rate_ms(&self) -> u32 {
         self.model.lock().unwrap().refresh_rate_ms
+    }
+
+    /// Makes NetworkManager refuse to activate wired Profiles, as when the
+    /// cable is pulled between the carrier check and the activation.
+    pub fn refuse_wired_activation(&self, yes: bool) {
+        self.model.lock().unwrap().refuse_wired_activation = yes;
+    }
+
+    /// Whether the Profile `uuid` has a setting group `group` right now.
+    pub fn profile_has_group(&self, uuid: &str, group: &str) -> bool {
+        let m = self.model.lock().unwrap();
+        m.profiles
+            .iter()
+            .flatten()
+            .find(|p| p.uuid == uuid)
+            .is_some_and(|p| p.settings.contains_key(group))
     }
 
     /// Makes NetworkManager refuse every `RequestScan`.

@@ -275,11 +275,9 @@ pub(super) async fn add_and_activate(
 
 /// NetworkManager will not activate a Device without a carrier.
 pub(super) fn refuse_unplugged(model: &Shared, dev: usize) -> zbus::fdo::Result<()> {
-    let plugged = model.lock().unwrap().devices[dev]
-        .wired
-        .as_ref()
-        .is_none_or(|w| w.carrier);
-    if plugged {
+    let m = model.lock().unwrap();
+    let plugged = m.devices[dev].wired.as_ref().is_none_or(|w| w.carrier);
+    if plugged && !m.refuse_wired_activation {
         Ok(())
     } else {
         Err(zbus::fdo::Error::Failed(
