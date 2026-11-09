@@ -354,7 +354,7 @@ fn can_start(app: &App) -> Result<(), &'static str> {
 static HOTSPOT: &[Verb] = &[
     hotspot(
         "Start Hotspot",
-        "share connection wifi access point password generate",
+        "share connection access point password",
         "n",
         "Share this connection with a made-up password",
         KeyCode::Char('n'),
@@ -362,7 +362,7 @@ static HOTSPOT: &[Verb] = &[
     ),
     hotspot(
         "Start Hotspot with my own name and password",
-        "share connection wifi access point custom ssid",
+        "share connection access point name",
         "c",
         "Start a Hotspot with a name and password you choose",
         KeyCode::Char('c'),
@@ -370,7 +370,7 @@ static HOTSPOT: &[Verb] = &[
     ),
     hotspot(
         "Stop Hotspot",
-        "share connection wifi access point end off",
+        "share connection access point end",
         "S",
         "Stop the Hotspot",
         KeyCode::Char('S'),
@@ -384,7 +384,7 @@ static HOTSPOT: &[Verb] = &[
     ),
     hotspot(
         "Share Hotspot as QR code",
-        "hotspot wifi password phone join",
+        "hotspot password phone join",
         "s",
         "Show the Hotspot's QR code and password (asks first)",
         KeyCode::Char('s'),

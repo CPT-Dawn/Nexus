@@ -150,12 +150,7 @@ pub(super) fn form_view(f: &mut Frame, form: &Form, body: Rect, look: &Look, sym
         tail(&dots(form.password.chars().count(), sym))
     };
     let lines = vec![
-        line(
-            Field::Name,
-            "Name",
-            tail(&form.ssid),
-            "empty: Nexus-XXXX",
-        ),
+        line(Field::Name, "Name", tail(&form.ssid), "empty: Nexus-XXXX"),
         line(
             Field::Password,
             "Password",

@@ -292,6 +292,15 @@ fn stopping_pushes_an_event_and_stops_counting() {
     let mut ev = world.wire();
     ev.subscribe();
     start(&world, json!({"ssid": "Garage"}));
+    // Starting and stopping inside one coalesced burst would be no change at
+    // all, so hear the start first.
+    loop {
+        let e = ev.next_event("hotspot_changed");
+        if e["hotspot"]["on"] == true {
+            assert_eq!(e["hotspot"]["ssid"], "Garage");
+            break;
+        }
+    }
     world.wire().call(json!({"op": "hotspot_stop"}));
     loop {
         let e = ev.next_event("hotspot_changed");

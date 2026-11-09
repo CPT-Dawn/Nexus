@@ -86,7 +86,9 @@ impl Rig {
         while !self.text(STANDARD).contains(needle) {
             let left = deadline
                 .checked_duration_since(Instant::now())
-                .unwrap_or_else(|| panic!("timed out waiting for {what}:\n{}", self.text(STANDARD)));
+                .unwrap_or_else(|| {
+                    panic!("timed out waiting for {what}:\n{}", self.text(STANDARD))
+                });
             let msg = self.rx.recv_timeout(left).unwrap_or_else(|_| {
                 panic!("timed out waiting for {what}:\n{}", self.text(STANDARD))
             });
@@ -100,8 +102,10 @@ impl Rig {
     }
 
     fn ctrl(&mut self, c: char) {
-        self.app
-            .update(Msg::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL)));
+        self.app.update(Msg::Key(KeyEvent::new(
+            KeyCode::Char(c),
+            KeyModifiers::CONTROL,
+        )));
     }
 
     fn type_text(&mut self, text: &str) {
@@ -151,8 +155,14 @@ const PASSWORD: &str = "open sesame 42";
 fn the_panel_sits_above_the_phones_when_off() {
     let rig = Rig::new(HotspotStart::Capable);
     let frame = rig.text(STANDARD);
-    assert!(frame.contains("Hotspot") && frame.contains("Off"), "{frame}");
-    assert!(frame.contains("Tethering") && frame.contains("Pixel 8"), "{frame}");
+    assert!(
+        frame.contains("Hotspot") && frame.contains("Off"),
+        "{frame}"
+    );
+    assert!(
+        frame.contains("Tethering") && frame.contains("Pixel 8"),
+        "{frame}"
+    );
     assert!(rig.footer().contains("hotspot"), "{}", rig.footer());
     insta::assert_snapshot!("hotspot_off_standard", frame);
 }
@@ -192,7 +202,11 @@ fn a_card_that_cannot_host_explains_why() {
     insta::assert_snapshot!("hotspot_nocard_narrow", rig.text(NARROW));
     // n says the same instead of trying.
     rig.key(KeyCode::Char('n'));
-    assert!(rig.toast().contains("cannot host a Hotspot"), "{}", rig.toast());
+    assert!(
+        rig.toast().contains("cannot host a Hotspot"),
+        "{}",
+        rig.toast()
+    );
     assert!(rig.app.toast().unwrap().bad);
     assert!(!rig.app.hotspot().on());
 }
@@ -225,7 +239,10 @@ fn n_starts_with_a_made_up_password_and_s_reveals_it_behind_a_question() {
     let password = rig.world.nm.hotspot_psk(&name).expect("a password");
     assert_eq!(password.len(), 16);
     let frame = rig.text(STANDARD);
-    assert!(!frame.contains(&password), "the password stays hidden: {frame}");
+    assert!(
+        !frame.contains(&password),
+        "the password stays hidden: {frame}"
+    );
     assert_eq!(rig.world.nm.secret_reads(), 0, "nothing read yet");
 
     // s only asks.
@@ -233,7 +250,6 @@ fn n_starts_with_a_made_up_password_and_s_reveals_it_behind_a_question() {
     let ask = rig.text(STANDARD);
     assert!(ask.contains("Show the password and a QR code"), "{ask}");
     assert_eq!(rig.world.nm.secret_reads(), 0, "still nothing read");
-    insta::assert_snapshot!("hotspot_share_ask", ask);
     // enter reveals: the QR, the password as dots.
     rig.key(KeyCode::Enter);
     rig.pump_until_text("the QR code", "Password");
@@ -252,6 +268,7 @@ fn n_starts_with_a_made_up_password_and_s_reveals_it_behind_a_question() {
 fn the_qr_view_shows_the_code_and_the_dots() {
     let mut rig = Rig::new(HotspotStart::Running);
     rig.key(KeyCode::Char('s'));
+    insta::assert_snapshot!("hotspot_share_ask", rig.text(STANDARD));
     rig.key(KeyCode::Enter);
     rig.pump_until_text("the QR code", "Password");
     let frame = rig.text(STANDARD);
@@ -371,13 +388,6 @@ fn the_overview_card_follows_the_hotspot() {
     let running = rig.text(STANDARD);
     assert!(!running.contains("Not started"), "{running}");
     assert!(running.contains("Nexus-"), "{running}");
-}
-
-#[test]
-fn the_overview_card_says_when_there_is_no_card_to_host_with() {
-    let mut rig = Rig::new(HotspotStart::NoCard);
-    rig.key(KeyCode::Char('1'));
-    assert!(rig.text(STANDARD).contains("Not available"));
 }
 
 // ---- the palette --------------------------------------------------------------

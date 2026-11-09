@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
-    ActivityEntry, ActivityKind, Connectivity, Event, Finding, Hotspot, Op, PromptClosed, PromptKind,
-    Secret, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
+    ActivityEntry, ActivityKind, Connectivity, Event, Finding, Hotspot, Op, PromptClosed,
+    PromptKind, Secret, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
@@ -1222,6 +1222,15 @@ impl App {
         let changed = tab != self.tab;
         self.tab = tab;
         self.selected = 0;
+        if changed && tab == Tab::Hotspot {
+            // A card plugged in or a radio switched is not pushed: look again.
+            if let Some(runner) = &self.runner {
+                runner.call(Op::Hotspot, |r| match r.map(serde_json::from_value) {
+                    Ok(Ok(info)) => Msg::Hotspot(info),
+                    _ => Msg::Tick,
+                });
+            }
+        }
         changed
     }
 

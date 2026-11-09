@@ -254,6 +254,14 @@ async fn sync_tethers<B: Backend>(
     seen.tethers = Some(tethers);
 }
 
+/// Whether two pictures say the same about the running Hotspot. Whether the
+/// machine *can* host one is left out on purpose: it changes when a Wi-Fi card
+/// is plugged in or the radio is switched, which no Front end needs pushed
+/// (the TUI asks again when its Hotspot tab opens).
+fn same_hotspot(a: &Hotspot, b: &Hotspot) -> bool {
+    (a.on, a.starting, &a.ssid, a.devices) == (b.on, b.starting, &b.ssid, b.devices)
+}
+
 /// Pushes `hotspot_changed` when the Hotspot or its device count differs from
 /// what subscribers were last told.
 async fn sync_hotspot<B: Backend>(
@@ -270,7 +278,11 @@ async fn sync_hotspot<B: Backend>(
             return;
         }
     };
-    if push == Push::All || (push == Push::Changes && seen.hotspot.as_ref() != Some(&hotspot)) {
+    let differs = seen
+        .hotspot
+        .as_ref()
+        .is_none_or(|before| !same_hotspot(before, &hotspot));
+    if push == Push::All || (push == Push::Changes && differs) {
         let _ = events.send(Event::HotspotChanged {
             hotspot: hotspot.clone(),
         });
@@ -343,11 +355,14 @@ async fn watch_backend<B: Backend>(
     let portal = status
         .as_ref()
         .and_then(|s| portal::of_status(s, &live.settings));
+    // Read here rather than in the baseline: it is not worth a startup wait,
+    // and a Backend that is down simply has no first picture.
+    let hotspot = backend.hotspot().await.ok();
     let mut seen = Seen {
         status,
         wifi,
         tethers,
-        hotspot: None,
+        hotspot,
         portal,
         vpns,
     };

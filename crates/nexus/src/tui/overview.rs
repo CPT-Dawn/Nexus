@@ -320,11 +320,12 @@ pub fn card(app: &App, row: usize) -> (&'static str, String, bool) {
     if row == 3
         && let Some(h) = app.hotspot().info()
     {
-        return match (&h.ssid, h.on) {
-            (Some(ssid), true) => (name, ssid.clone(), true),
-            _ if !h.available => (name, "Not available".into(), false),
-            _ => (name, idle.into(), false),
-        };
+        // Whether the machine *can* host one is the Hotspot tab's to say: the
+        // picture arrives after the first frame, and a card that flips
+        // between two wordings would be noise.
+        if let (Some(ssid), true) = (&h.ssid, h.on) {
+            return (name, ssid.clone(), true);
+        }
     }
     match link {
         Some(l) if kinds.contains(&l.kind) => (name, l.name.clone(), true),

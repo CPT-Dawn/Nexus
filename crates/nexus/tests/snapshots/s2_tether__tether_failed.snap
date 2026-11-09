@@ -3,18 +3,18 @@ source: crates/nexus/tests/s2_tether.rs
 expression: rig.text(STANDARD)
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
-╭ Tethering ─────────────────╮╭ Sam's iPhone ──────────────────────────────────────────────────────╮
-│ ● Bluetooth is on          ││ Paired                                                             │
-│                            ││                                                                    │
-│     Galaxy S24…     paired ││ Address     AA:BB:CC:DD:EE:02                                      │
-│     Pixel 8          saved ││ Bluetooth   on                                                     │
-│ ▸   Sam's iPho…     paired ││ Profile     none yet                                               │
-│                            ││                                                                    │
-│                            ││ Press enter to tether. Switch on Bluetooth tethering on the phone  │
+╭ Hotspot ───────────────────╮╭ Sam's iPhone ──────────────────────────────────────────────────────╮
+│ ○ Not available            ││ Paired                                                             │
+│ This machine has no Wi-Fi  ││                                                                    │
+│ card, so it cannot host a  ││ Address     AA:BB:CC:DD:EE:02                                      │
+│ Hotspot.                   ││ Bluetooth   on                                                     │
+╰────────────────────────────╯│ Profile     none yet                                               │
+╭ Tethering ─────────────────╮│                                                                    │
+│ ● Bluetooth is on          ││ Press enter to tether. Switch on Bluetooth tethering on the phone  │
 │                            ││ first.                                                             │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
+│     Galaxy S24…     paired ││                                                                    │
+│     Pixel 8          saved ││                                                                    │
+│ ▸   Sam's iPho…     paired ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
