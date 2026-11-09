@@ -501,9 +501,12 @@ impl Backend for NetworkManager {
         &self,
         name: Option<String>,
         config: Secret,
+        plugin: Option<String>,
     ) -> Result<VpnAdded, BackendError> {
-        self.with_bus(|c| async move { super::vpn::import(&c, name.as_deref(), &config).await })
-            .await?
+        self.with_bus(|c| async move {
+            super::vpn::import(&c, name.as_deref(), &config, plugin.as_deref()).await
+        })
+        .await?
             .map_err(BackendError::Refused)
     }
 

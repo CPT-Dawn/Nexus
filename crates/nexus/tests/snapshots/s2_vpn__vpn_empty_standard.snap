@@ -5,8 +5,8 @@ expression: frame
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
 ╭ VPN ───────────────────────╮╭ VPN ───────────────────────────────────────────────────────────────╮
 │ No VPNs yet.               ││ Nothing selected.                                                  │
-│ Press i to import a        ││                                                                    │
-│ WireGuard .conf,           ││                                                                    │
+│ Press i to import a .conf  ││                                                                    │
+│ or .ovpn,                  ││                                                                    │
 │ or c to create a tunnel.   ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

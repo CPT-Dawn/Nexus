@@ -37,6 +37,7 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::UnknownVpn => 21,
         ErrorCode::InvalidConfig => 22,
         ErrorCode::VpnFailed => 23,
+        ErrorCode::MissingPlugin => 30,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -258,6 +259,12 @@ pub fn wifi_join(ssid: &str, source: PasswordSource, json: bool) -> ExitCode {
     }
     // No password given: the Daemon opens a Secret prompt if the Network needs
     // one, and this terminal answers it.
+    answering_prompts(op, &network, show)
+}
+
+/// Runs `op` while this terminal answers the Secret prompts it opens for
+/// `network` (a Network id, or a VPN Profile id).
+pub fn answering_prompts(op: Op, network: &str, show: impl FnOnce(Value)) -> ExitCode {
     let (mut call, mut events) = match (Connection::connect(), Connection::connect()) {
         (Ok(a), Ok(b)) => (a, b),
         (Err(e), _) | (_, Err(e)) => return unreachable(&e),
@@ -549,6 +556,7 @@ mod tests {
             ErrorCode::UnknownVpn,
             ErrorCode::InvalidConfig,
             ErrorCode::VpnFailed,
+            ErrorCode::MissingPlugin,
             ErrorCode::BluetoothOff,
             ErrorCode::NoPhone,
             ErrorCode::UnknownPhone,

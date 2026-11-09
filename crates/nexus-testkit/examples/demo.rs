@@ -33,6 +33,11 @@
 //!   key, `s` then `enter` reveals its config as a QR code (needs a window of
 //!   about 70 by 38 cells), `i` imports a `.conf` (type a path), `c` creates a
 //!   tunnel with generated keys, `esc` closes a layer.
+//! - `vpn-plugin`: plugin VPNs. Press `4`. `Office OpenVPN` asks for a user
+//!   name, a password and a one-time code on `enter` (type, `enter` sends,
+//!   `ctrl-r` shows, `esc` declines); any answers work. `Legacy L2TP` has no
+//!   plugin installed, so `enter` says which package to install. `i` imports
+//!   the sample `.ovpn` whose path the demo prints on stderr.
 //! - `tether`: Bluetooth on and three paired phones (Pixel 8 with a saved
 //!   Profile, Sam's iPhone, a long-named Galaxy). Press `5` for the Hotspot tab
 //!   (Tethering lives there until the Hotspot arrives); `j`/`k` move, `enter`
@@ -91,6 +96,10 @@ fn main() {
             world.nm.set_state(NmState::ConnectedGlobal);
         }
         "vpn" => nexus_testkit::scenarios::vpn_busy(&world),
+        "vpn-plugin" => {
+            let file = nexus_testkit::scenarios::vpn_plugins(&world);
+            eprintln!("A sample file to import with `i`: {}", file.display());
+        }
         "portal" => {
             // No browser: the stand-in records the URL, which also plays "signed in".
             world.install_tool(

@@ -62,7 +62,7 @@ impl WorldBuilder {
 
     pub fn start(self) -> World {
         let tmp = tempfile::tempdir().expect("tempdir");
-        for dir in ["run", "home", "bin"] {
+        for dir in ["run", "home", "bin", "plugins"] {
             std::fs::create_dir(tmp.path().join(dir)).expect("mkdir");
         }
         let nm_bus = Bus::start(tmp.path(), "system-bus");
@@ -165,6 +165,52 @@ impl World {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     }
 
+    /// Makes the NetworkManager VPN plugin `name` (`openvpn`) look installed
+    /// to the Daemon. Worlds start with none.
+    pub fn install_vpn_plugin(&self, name: &str) {
+        std::fs::write(
+            self.tmp
+                .path()
+                .join("plugins")
+                .join(format!("nm-{name}-service.name")),
+            "[VPN Connection]\n",
+        )
+        .expect("write plugin description");
+    }
+
+    /// Puts a stand-in `nmcli` on the `PATH` that supports only
+    /// `connection import type <t> file <f>`: it adds a `vpn` Profile named
+    /// after the file to the fake NetworkManager (over `busctl`), refuses a
+    /// file without a `remote` line, and records what it saw in
+    /// `nmcli.log` (arguments, the file's mode and its directory's mode).
+    pub fn install_fake_nmcli(&self) {
+        self.install_tool(
+            "nmcli",
+            r#"log="$(dirname "$0")/../nmcli.log"
+[ "$1 $2 $3" = "connection import type" ] && [ "$5" = file ] || { echo "Error: unsupported" >&2; exit 2; }
+type="$4"; file="$6"
+echo "args: $*" >> "$log"
+echo "file-mode: $(stat -c %a "$file") dir-mode: $(stat -c %a "$(dirname "$file")")" >> "$log"
+if ! grep -q '^remote ' "$file"; then
+  echo "Error: failed to import '$file': missing remote" >&2
+  exit 1
+fi
+base="$(basename "$file")"; name="${base%.*}"
+uuid="$(cat /proc/sys/kernel/random/uuid)"
+busctl --address "$DBUS_SYSTEM_BUS_ADDRESS" call org.freedesktop.NetworkManager \
+  /org/freedesktop/NetworkManager/Settings org.freedesktop.NetworkManager.Settings \
+  AddConnection 'a{sa{sv}}' 2 \
+  connection 3 id s "$name" type s vpn uuid s "$uuid" \
+  vpn 2 service-type s "org.freedesktop.NetworkManager.$type" data 'a{ss}' 0 >/dev/null || exit 1
+echo "Connection '$name' ($uuid) successfully added.""#,
+        );
+    }
+
+    /// What the stand-in `nmcli` logged (empty if it never ran).
+    pub fn nmcli_log(&self) -> String {
+        std::fs::read_to_string(self.tmp.path().join("nmcli.log")).unwrap_or_default()
+    }
+
     /// The process id of the Daemon this world started, if one runs. With
     /// socket activation under a wrapper it is the wrapper's, not the Daemon's.
     pub fn daemon_pid(&self) -> Option<u32> {
@@ -219,7 +265,8 @@ impl World {
             .env("HOME", self.tmp.path().join("home"))
             .env("XDG_RUNTIME_DIR", self.runtime_dir())
             .env("DBUS_SYSTEM_BUS_ADDRESS", &self.nm_bus.address)
-            .env("DBUS_SESSION_BUS_ADDRESS", self.session_address());
+            .env("DBUS_SESSION_BUS_ADDRESS", self.session_address())
+            .env("NEXUS_VPN_PLUGIN_DIRS", self.tmp.path().join("plugins"));
         for (k, v) in &self.env {
             cmd.env(k, v);
         }

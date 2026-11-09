@@ -587,7 +587,9 @@ impl App {
 
     fn prompt_event(&mut self, event: Event) -> bool {
         match event {
-            Event::SecretPromptOpened { prompt } if prompt.kind == PromptKind::WifiPassword => {
+            Event::SecretPromptOpened { prompt }
+                if matches!(prompt.kind, PromptKind::WifiPassword | PromptKind::VpnSecret) =>
+            {
                 self.palette = None;
                 self.field = Some(PasswordField::new(prompt));
                 true
@@ -1204,8 +1206,13 @@ impl App {
         if self.eap.is_some() {
             return vec![("tab", "next"), ("enter", "join"), ("esc", "cancel")];
         }
-        if self.field.is_some() {
-            return vec![("enter", "join"), ("ctrl-r", "show"), ("esc", "cancel")];
+        if let Some(field) = &self.field {
+            let go = if field.prompt.kind == PromptKind::VpnSecret {
+                "send"
+            } else {
+                "join"
+            };
+            return vec![("enter", go), ("ctrl-r", "show"), ("esc", "cancel")];
         }
         if self.confirm.is_some() {
             return vec![("y", "forget"), ("esc", "keep")];

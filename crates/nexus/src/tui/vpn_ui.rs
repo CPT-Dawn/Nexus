@@ -58,7 +58,7 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
     f.render_widget(block, area);
     if vpn.is_empty() {
         let msg = if vpn.has_list() {
-            "No VPNs yet.\nPress i to import a WireGuard .conf,\nor c to create a tunnel."
+            "No VPNs yet.\nPress i to import a .conf or .ovpn,\nor c to create a tunnel."
         } else {
             "Looking for VPNs..."
         };
@@ -206,7 +206,7 @@ fn form_view(f: &mut Frame, form: &Form, body: Rect, look: &Look, sym: &Sym) {
         (Some(why), _) => Line::styled(why.clone(), look.err()),
         (None, false) => Line::styled(
             match form.kind {
-                super::vpn::FormKind::Import => "A private key stays inside NetworkManager.",
+                super::vpn::FormKind::Import => "Keys and passwords stay inside NetworkManager.",
                 super::vpn::FormKind::Create => "Nexus makes the key pair for you.",
             },
             look.muted(),

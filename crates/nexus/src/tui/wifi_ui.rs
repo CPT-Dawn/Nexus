@@ -2,7 +2,7 @@
 //! (password field, Forget confirmation, toast). Pure like the rest of the
 //! views: `App` in, cells out.
 
-use nexus_ipc::{Security, WifiNetwork};
+use nexus_ipc::{PromptField, PromptKind, Security, WifiNetwork};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
@@ -335,7 +335,18 @@ pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &
     if let Some(field) = app.field() {
         let rect = centered(body, 62, 7);
         f.render_widget(Clear, rect);
-        let title = format!("Join {}", field.prompt.network);
+        let vpn = field.prompt.kind == PromptKind::VpnSecret;
+        let title = if vpn {
+            format!("VPN {}", field.prompt.network)
+        } else {
+            format!("Join {}", field.prompt.network)
+        };
+        let (label, action) = match field.prompt.field {
+            PromptField::Otp => ("Code      ", "enter send"),
+            PromptField::Username => ("User name ", "enter send"),
+            _ if vpn => ("Password  ", "enter send"),
+            _ => ("Password  ", "enter join"),
+        };
         let block = sym.block(look, &title, true);
         let inner = block.inner(rect);
         f.render_widget(block, rect);
@@ -362,12 +373,12 @@ pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, look: &Look, sym: &
             Line::styled(field.prompt.message.clone(), message_style),
             Line::default(),
             Line::from(vec![
-                Span::styled("Password  ", look.muted()),
+                Span::styled(label, look.muted()),
                 Span::styled(shown, look.text()),
                 Span::styled("_", look.accent()),
             ]),
             Line::default(),
-            Line::styled("enter join   ctrl-r show   esc cancel", look.dim()),
+            Line::styled(format!("{action}   ctrl-r show   esc cancel"), look.dim()),
         ];
         f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
     } else if let Some(confirm) = app.confirm() {

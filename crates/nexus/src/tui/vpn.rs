@@ -93,6 +93,7 @@ fn call(socket: &std::path::Path, cmd: &Cmd) -> Result<Reply, String> {
             Op::VpnImport {
                 name,
                 config: Secret::new(text.as_str()),
+                plugin: crate::plugin::for_path(path).map(|p| p.name.to_owned()),
             }
         }
         Cmd::Create(tunnel) => Op::VpnCreate(tunnel.clone()),
@@ -147,7 +148,7 @@ impl Form {
             fields: vec![
                 Field {
                     label: "File",
-                    hint: "path to a WireGuard .conf",
+                    hint: "path to a .conf, .ovpn or .pcf",
                     value: String::new(),
                 },
                 Field {
@@ -185,7 +186,7 @@ impl Form {
 
     pub fn title(&self) -> &'static str {
         match self.kind {
-            FormKind::Import => "Import a WireGuard config",
+            FormKind::Import => "Import a VPN config",
             FormKind::Create => "Create a WireGuard VPN",
         }
     }

@@ -148,6 +148,12 @@ impl App {
                 }
             }
             (Cmd::Import { .. } | Cmd::Create(_), Ok(Reply::Added(added))) => {
+                if added.public_key.is_empty() {
+                    // A plugin VPN has no key to hand over.
+                    self.vpn.layer = None;
+                    self.say(format!("Saved {}.", added.name), false, None);
+                    return true;
+                }
                 // The new tunnel's public key is the next thing the person needs.
                 self.vpn.layer = Some(Layer::Key {
                     name: added.name,

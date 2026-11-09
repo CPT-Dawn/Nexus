@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_vpn.rs
+expression: rig.text(WIDE)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
+╭ VPN ─────────────────────────────────╮╭ Office ──────────────────────────────────────────────────────────────────────────────────────────╮
+│ ▸ ~ Office                      down ││ ~ Starting...                                                                                    │
+│                                      ││                                                                                                  │
+│                                      ││ Kind        Plugin VPN                                                                           │
+│                                      ││                                                                                                  │
+│                                      ││ Press enter to bring it up.                                                                      │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ╭ VPN Office ────────────────────────────────────────────────╮                                      │
+│                                      │ Password for Office                                        │                                      │
+│                                      │                                                            │                                      │
+│                                      │ Password  •••••••_                                         │                                      │
+│                                      │                                                            │                                      │
+│                                      │ enter send   ctrl-r show   esc cancel                      │                                      │
+│                                      ╰────────────────────────────────────────────────────────────╯                                      │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ enter send  ctrl-r show  esc cancel

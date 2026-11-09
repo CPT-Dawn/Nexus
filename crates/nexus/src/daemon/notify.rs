@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures_util::StreamExt as _;
-use nexus_ipc::{ActivityKind, Event, Portal, PromptKind};
+use nexus_ipc::{ActivityKind, Event, Portal, PromptField, PromptKind};
 use tokio::sync::{broadcast, mpsc};
 use zbus::Variant;
 
@@ -274,14 +274,20 @@ impl Task {
             Event::PortalChanged { portal } => self.portal_changed(portal, config.portal).await,
             Event::SecretPromptOpened { prompt }
                 if config.secret_prompt
-                    && prompt.kind == PromptKind::WifiPassword
+                    && matches!(prompt.kind, PromptKind::WifiPassword | PromptKind::VpnSecret)
                     && self.frontends.count() == 0 =>
             {
                 let millis =
                     i32::try_from(prompt.expires_in.saturating_mul(1000)).unwrap_or(i32::MAX);
+                let title = match (prompt.kind, prompt.field) {
+                    (PromptKind::VpnSecret, PromptField::Otp) => "One-time code needed",
+                    (PromptKind::VpnSecret, PromptField::Username) => "VPN user name needed",
+                    (PromptKind::VpnSecret, _) => "VPN password needed",
+                    _ => "Password needed",
+                };
                 let id = self
                     .show(
-                        "Password needed",
+                        title,
                         &prompt.message,
                         URGENCY_CRITICAL,
                         &[ENTER, "Enter password"],

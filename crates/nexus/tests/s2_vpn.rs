@@ -414,3 +414,110 @@ fn a_tunnel_toggles_from_the_narrow_list_too() {
             .any(|v| v.name == "Home Lab" && v.state == VpnState::Up)
     });
 }
+
+// ---- plugin VPNs: prompts, import, the missing plugin ----
+
+/// A world with one OpenVPN Profile that asks for `secrets` when it starts.
+fn plugin_rig(secrets: &[&str]) -> Rig {
+    let world = World::start(NEXUS);
+    world.install_vpn_plugin("openvpn");
+    world
+        .nm
+        .add_plugin_vpn_of("uuid-ovpn", "Office", Some("openvpn"));
+    world.nm.script_vpn_asks("uuid-ovpn", secrets);
+    Rig::over(world, 1)
+}
+
+#[test]
+fn a_vpn_that_wants_a_password_asks_in_the_tui() {
+    let mut rig = plugin_rig(&["password"]);
+    rig.key(KeyCode::Enter);
+    rig.pump_until("the prompt", |a| a.field().is_some());
+    rig.type_text("hunter2");
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("Password for Office"), "{frame}");
+    assert!(!frame.contains("hunter2"), "the password is masked: {frame}");
+    insta::assert_snapshot!("vpn_prompt_standard", frame);
+    rig.size(NARROW);
+    insta::assert_snapshot!("vpn_prompt_narrow", rig.text(NARROW));
+    rig.size(WIDE);
+    insta::assert_snapshot!("vpn_prompt_wide", rig.text(WIDE));
+
+    rig.key(KeyCode::Enter);
+    rig.pump_until("Office up", |a| {
+        a.toast().is_some_and(|t| t.text.contains("Office is up"))
+    });
+    assert_eq!(
+        rig.world.nm.vpn_answers("uuid-ovpn"),
+        [("password".to_owned(), "hunter2".to_owned())]
+    );
+}
+
+#[test]
+fn a_user_name_shows_as_typed_and_a_code_is_asked_after_it() {
+    let mut rig = plugin_rig(&["username", "otp"]);
+    rig.key(KeyCode::Enter);
+    rig.pump_until("the user name prompt", |a| a.field().is_some());
+    rig.type_text("ada");
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("User name for Office"), "{frame}");
+    assert!(frame.contains("User name ada"), "{frame}");
+    insta::assert_snapshot!("vpn_prompt_username", frame);
+    rig.key(KeyCode::Enter);
+    rig.pump_until("the code prompt", |a| {
+        a.field()
+            .is_some_and(|f| f.prompt.field == nexus_ipc::PromptField::Otp)
+    });
+    rig.type_text("424242");
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("One-time code for Office"), "{frame}");
+    assert!(!frame.contains("424242"), "{frame}");
+    insta::assert_snapshot!("vpn_prompt_code", frame);
+    rig.key(KeyCode::Enter);
+    rig.pump_until("Office up", |a| {
+        a.toast().is_some_and(|t| t.text.contains("Office is up"))
+    });
+}
+
+#[test]
+fn escape_declines_the_prompt_and_the_vpn_stays_down() {
+    let mut rig = plugin_rig(&["password"]);
+    rig.key(KeyCode::Enter);
+    rig.pump_until("the prompt", |a| a.field().is_some());
+    rig.key(KeyCode::Esc);
+    rig.pump_until("the failure", |a| a.toast().is_some_and(|t| t.bad));
+    assert_eq!(rig.state_of("Office"), VpnState::Down);
+}
+
+#[test]
+fn importing_an_ovpn_file_adds_a_plugin_row() {
+    let world = World::start(NEXUS);
+    world.install_vpn_plugin("openvpn");
+    world.install_fake_nmcli();
+    let mut rig = Rig::over(world, 0);
+    let path = rig.world.dir().join("Branch.ovpn");
+    std::fs::write(&path, "client\nremote vpn.example.net 1194\n").unwrap();
+    rig.key(KeyCode::Char('i'));
+    rig.type_text(path.to_str().unwrap());
+    rig.key(KeyCode::Enter);
+    rig.key(KeyCode::Enter);
+    rig.pump_until("the new row", |a| {
+        a.vpn().len() == 1 && a.toast().is_some_and(|t| t.text == "Saved Branch.")
+    });
+    assert_eq!(rig.selected(), "Branch");
+    insta::assert_snapshot!("vpn_imported_ovpn", rig.text(STANDARD));
+}
+
+#[test]
+fn a_missing_plugin_says_which_package_to_install() {
+    let world = World::start(NEXUS);
+    world
+        .nm
+        .add_plugin_vpn_of("uuid-ovpn", "Office", Some("openvpn"));
+    let mut rig = Rig::over(world, 1);
+    rig.key(KeyCode::Enter);
+    rig.pump_until("the refusal", |a| a.toast().is_some_and(|t| t.bad));
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("networkmanager-openvpn"), "{frame}");
+    insta::assert_snapshot!("vpn_missing_plugin", frame);
+}

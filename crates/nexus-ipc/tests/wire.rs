@@ -182,6 +182,7 @@ fn prompt_events_carry_no_secret_field() {
             prompt: nexus_ipc::Prompt {
                 id: 4,
                 kind: nexus_ipc::PromptKind::WifiPassword,
+                field: nexus_ipc::PromptField::Password,
                 network: "Home".into(),
                 network_id: nexus_ipc::network_id(b"Home"),
                 retry: true,

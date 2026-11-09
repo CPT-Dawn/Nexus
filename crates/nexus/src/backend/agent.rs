@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::StreamExt as _;
-use nexus_ipc::PromptKind;
+use nexus_ipc::{PromptField, PromptKind};
 use zbus::{Connection, interface};
 use zbus::{OwnedObjectPath, OwnedVariant, Variant};
 
@@ -24,6 +24,9 @@ pub const AGENT_PATH: &str = "/org/freedesktop/NetworkManager/SecretAgent";
 const IDENTIFIER: &str = "dev.cptdawn.Nexus";
 const SERVICE: &str = "org.freedesktop.NetworkManager";
 const SECURITY: &str = "802-11-wireless-security";
+const VPN: &str = "vpn";
+/// The hint prefix a VPN plugin uses for a sentence to show the person.
+const MESSAGE_HINT: &str = "x-vpn-message:";
 /// How long to wait before registering again after a failure.
 const RETRY: Duration = Duration::from_secs(2);
 
@@ -89,6 +92,97 @@ fn key(connection_path: &str, setting_name: &str) -> String {
     format!("{connection_path}\n{setting_name}")
 }
 
+fn connection_text(connection: &Settings, section: &str, key: &str) -> Option<String> {
+    connection
+        .get(section)?
+        .get(key)?
+        .try_clone()
+        .ok()?
+        .try_into()
+        .ok()
+}
+
+/// What a VPN secret called `name` is, from its name.
+fn field_of(name: &str) -> PromptField {
+    let n = name.to_lowercase();
+    if ["otp", "challenge", "token", "2fa", "code"]
+        .iter()
+        .any(|k| n.contains(k))
+    {
+        PromptField::Otp
+    } else if n.contains("user") {
+        PromptField::Username
+    } else {
+        PromptField::Password
+    }
+}
+
+impl Agent {
+    /// A plugin VPN's secrets: one Secret prompt per name in the hints
+    /// (`password`, `cert-pass`, ...), answers returned as `vpn.secrets`.
+    async fn vpn_secrets(
+        &self,
+        connection: Settings,
+        connection_path: OwnedObjectPath,
+        hints: Vec<String>,
+        flags: u32,
+    ) -> Result<Settings, AgentError> {
+        if flags & (ALLOW_INTERACTION | REQUEST_NEW) == 0 {
+            return Err(AgentError::NoSecrets(
+                "interaction is not allowed for this request".into(),
+            ));
+        }
+        let message = hints
+            .iter()
+            .find_map(|h| h.strip_prefix(MESSAGE_HINT))
+            .map(str::to_owned);
+        let mut names: Vec<&str> = hints
+            .iter()
+            .map(String::as_str)
+            .filter(|h| !h.starts_with(MESSAGE_HINT))
+            .collect();
+        if names.is_empty() {
+            names.push("password");
+        }
+        let vpn = connection_text(&connection, "connection", "id").unwrap_or_else(|| "VPN".into());
+        let uuid = connection_uuid(&connection).unwrap_or_default();
+        let mut answers: HashMap<String, String> = HashMap::new();
+        for name in names {
+            let request = Request {
+                kind: PromptKind::VpnSecret,
+                field: field_of(name),
+                message: message.clone(),
+                network: vpn.clone(),
+                network_id: uuid.clone(),
+                retry: flags & REQUEST_NEW != 0,
+            };
+            match self
+                .broker
+                .ask(&key(connection_path.as_str(), VPN), request)
+                .await
+            {
+                Resolution::Answered(secret) => {
+                    answers.insert(name.to_owned(), secret.expose().to_owned());
+                }
+                Resolution::Cancelled => {
+                    return Err(AgentError::UserCanceled("the user declined".into()));
+                }
+                Resolution::Expired => {
+                    return Err(AgentError::NoSecrets("nobody answered in time".into()));
+                }
+                Resolution::Withdrawn => {
+                    return Err(AgentError::AgentCanceled("request withdrawn".into()));
+                }
+            }
+        }
+        let value = OwnedVariant::try_from(Variant::new(answers)).map_err(AgentError::ZBus)?;
+        Ok(HashMap::from([(
+            VPN.to_owned(),
+            HashMap::from([("secrets".to_owned(), value)]),
+        )]))
+    }
+}
+
 #[interface(name = "org.freedesktop.NetworkManager.SecretAgent")]
 impl Agent {
     async fn get_secrets(
@@ -99,8 +193,13 @@ impl Agent {
         hints: Vec<String>,
         flags: u32,
     ) -> Result<Settings, AgentError> {
+        if setting_name == VPN {
+            return self
+                .vpn_secrets(connection, connection_path, hints, flags)
+                .await;
+        }
         let Some(ssid) = wifi_name(&connection).filter(|_| setting_name == SECURITY) else {
-            // VPN and 802.1X prompts come with later tickets.
+            // 802.1X prompts come with a later ticket.
             return Err(AgentError::NoSecrets(
                 "Nexus cannot ask for this kind of secret yet".into(),
             ));
@@ -127,6 +226,8 @@ impl Agent {
             .to_owned();
         let request = Request {
             kind: PromptKind::WifiPassword,
+            field: PromptField::Password,
+            message: None,
             network: String::from_utf8_lossy(&ssid).into_owned(),
             network_id: nexus_ipc::network_id(&ssid),
             retry: flags & REQUEST_NEW != 0,
