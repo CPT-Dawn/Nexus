@@ -300,16 +300,16 @@ mod cli {
         assert_eq!(out(&k).trim(), public);
 
         let o = world.run_nexus(&["vpn", "up", "nothing"]);
-        assert_eq!(o.status.code(), Some(20));
+        assert_eq!(o.status.code(), Some(30));
         let file = world.dir().join("bad.conf");
         std::fs::write(&file, "[Interface]\n").unwrap();
         let o = world.run_nexus(&["vpn", "import", file.to_str().unwrap()]);
-        assert_eq!(o.status.code(), Some(21));
+        assert_eq!(o.status.code(), Some(31));
         world
             .nm
             .script_vpn_failure(&world.nm.vpn_uuid("Home").unwrap(), true);
         let o = world.run_nexus(&["vpn", "up", "home"]);
-        assert_eq!(o.status.code(), Some(22));
+        assert_eq!(o.status.code(), Some(32));
     }
 }
 

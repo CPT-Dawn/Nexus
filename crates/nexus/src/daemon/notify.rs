@@ -18,16 +18,18 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures_util::StreamExt as _;
-use nexus_ipc::{ActivityKind, Event, PromptKind};
+use nexus_ipc::{ActivityKind, Event, Portal, PromptKind};
 use tokio::sync::{broadcast, mpsc};
 use zbus::Variant;
 
+use super::portal::SharedOpener;
 use crate::config::Settings;
 use crate::secrets::Broker;
 
 const APP_NAME: &str = "Nexus";
 const DESKTOP_ENTRY: &str = "nexus";
 const ENTER: &str = "enter";
+const OPEN_LOGIN: &str = "open-login";
 /// Notification urgency levels from the specification.
 const URGENCY_NORMAL: u8 = 1;
 const URGENCY_CRITICAL: u8 = 2;
@@ -186,6 +188,7 @@ impl Notifier {
         broker: &Broker,
         frontends: Frontends,
         terminal: Arc<dyn Terminal>,
+        opener: SharedOpener,
     ) -> Notifier {
         let (tx, rx) = mpsc::unbounded_channel();
         let (feed, backlog) = broker.subscribe();
@@ -193,9 +196,11 @@ impl Notifier {
             settings,
             frontends,
             terminal,
+            opener,
             tx: tx.clone(),
             session: None,
             shown: HashMap::new(),
+            portal: None,
         };
         tokio::spawn(task.run(feed, backlog, rx));
         Notifier { tx }
@@ -217,10 +222,13 @@ struct Task {
     settings: Arc<Settings>,
     frontends: Frontends,
     terminal: Arc<dyn Terminal>,
+    opener: SharedOpener,
     tx: mpsc::UnboundedSender<Input>,
     session: Option<NotificationsProxy<'static>>,
     /// Secret prompt id -> the notification offering to answer it.
     shown: HashMap<u64, u32>,
+    /// The "Login required" notification and the Portal it is about.
+    portal: Option<(u32, Portal)>,
 }
 
 impl Task {
@@ -258,7 +266,12 @@ impl Task {
                     self.show(&entry.text, "", URGENCY_NORMAL, &[], BRIEF_MS)
                         .await;
                 }
+                if entry.kind == ActivityKind::Online && config.portal {
+                    self.show("You're online", &entry.text, URGENCY_NORMAL, &[], BRIEF_MS)
+                        .await;
+                }
             }
+            Event::PortalChanged { portal } => self.portal_changed(portal, config.portal).await,
             Event::SecretPromptOpened { prompt }
                 if config.secret_prompt
                     && prompt.kind == PromptKind::WifiPassword
@@ -288,6 +301,30 @@ impl Task {
         }
     }
 
+    async fn portal_changed(&mut self, portal: Option<Portal>, wanted: bool) {
+        // Whatever was offered before is stale now: another Network, or signed in.
+        if let Some((note, _)) = self.portal.take()
+            && let Some(session) = &self.session
+        {
+            let _ = session.close_notification(note).await;
+        }
+        let Some(portal) = portal.filter(|_| wanted) else {
+            return;
+        };
+        let id = self
+            .show(
+                &format!("Login required for {}", portal.network),
+                "This network wants you to sign in before it gives internet access.",
+                URGENCY_CRITICAL,
+                &[OPEN_LOGIN, "Open login page"],
+                0,
+            )
+            .await;
+        if let Some(note) = id {
+            self.portal = Some((note, portal));
+        }
+    }
+
     async fn input(&mut self, input: Input) {
         match input {
             Input::WrongPassword(message) => {
@@ -309,11 +346,22 @@ impl Task {
                 }
             }
             Input::Action { note, key } => {
+                if key == OPEN_LOGIN
+                    && let Some((_, portal)) = self.portal.as_ref().filter(|(n, _)| *n == note)
+                    && let Err(e) = self.opener.open(&portal.url)
+                {
+                    tracing::warn!("cannot open the login page: {e}");
+                }
                 if key == ENTER && self.shown.values().any(|n| *n == note) {
                     self.terminal.open_tui();
                 }
             }
-            Input::Closed(note) => self.shown.retain(|_, n| *n != note),
+            Input::Closed(note) => {
+                self.shown.retain(|_, n| *n != note);
+                if self.portal.as_ref().is_some_and(|(n, _)| *n == note) {
+                    self.portal = None;
+                }
+            }
             Input::Gone => self.session = None,
         }
     }

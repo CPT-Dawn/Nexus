@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_tether.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Tethering ─────────────────╮╭ Pixel 8 ───────────────────────────────────────────────────────────╮
+│ ● Bluetooth is on          ││ ● Connected                                                        │
+│                            ││                                                                    │
+│     Galaxy S24…     paired ││ Address     AA:BB:CC:DD:EE:01                                      │
+│ ▸ ● Pixel 8      connected ││ Bluetooth   on                                                     │
+│     Sam's iPho…     paired ││ Profile     saved                                                  │
+│                            ││                                                                    │
+│                            ││ Press x to drop the tether.                                        │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                              ╭ Done ─────────────────────────────╮ │
+│                            ││                              │ Tethered through Pixel 8.  u undo │ │
+│                            ││                              ╰───────────────────────────────────╯ │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  x drop tether  u undo  h/l tab  ? help  q quit

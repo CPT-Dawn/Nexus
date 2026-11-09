@@ -38,6 +38,9 @@ pub struct Notifications {
     pub secret_prompt: bool,
     /// A VPN went down without being asked to.
     pub vpn_dropped: bool,
+    /// "Login required for <network>" (with an action that opens the login
+    /// page) and "You're online" once the login is done.
+    pub portal: bool,
 }
 
 impl Default for Notifications {
@@ -48,6 +51,7 @@ impl Default for Notifications {
             wrong_password: true,
             secret_prompt: true,
             vpn_dropped: true,
+            portal: true,
         }
     }
 }
@@ -201,6 +205,16 @@ impl Settings {
     pub fn prompt_timeout(&self) -> std::time::Duration {
         let state = self.state.lock().expect("settings lock");
         std::time::Duration::from_secs(state.config.prompts.timeout_secs)
+    }
+
+    /// The connectivity check as configured right now.
+    pub fn connectivity(&self) -> ConnectivityCheck {
+        self.state
+            .lock()
+            .expect("settings lock")
+            .config
+            .connectivity
+            .clone()
     }
 
     /// Which notifications are on right now.

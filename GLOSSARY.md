@@ -22,6 +22,10 @@ _Avoid_: adapter, interface (in the UI), NIC
 A Device's live state while it carries a Network: the joined Network, addresses, speed and traffic.
 _Avoid_: active connection, session
 
+**Pending change**:
+An edit to the Profile carrying the current Link that has been applied but not yet kept. It reverts by itself unless the person confirms within the countdown (ADR-0004).
+_Avoid_: draft, transaction, trial
+
 **Forget**:
 Deleting a Profile, so Nexus no longer joins its Network automatically.
 _Avoid_: delete connection, remove
@@ -41,6 +45,10 @@ _Avoid_: access point, AP mode, tethering (that is joining a phone's Network)
 **Tethering**:
 Joining the internet through a phone, over Bluetooth or USB.
 _Avoid_: hotspot, PAN
+
+**Phone**:
+A paired Bluetooth phone that offers network access, which Tethering joins. Listed by name and Bluetooth address; a phone that offers only dial-up is not a Phone to Nexus.
+_Avoid_: device (that is a hardware interface), handset, PAN client
 
 ### System
 

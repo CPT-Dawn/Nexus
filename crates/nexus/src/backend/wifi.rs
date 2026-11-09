@@ -141,6 +141,8 @@ macro_rules! no_cache {
     };
 }
 
+pub(super) mod profile;
+
 async fn radios(conn: &Connection) -> zbus::Result<Vec<Radio>> {
     let nm = super::nm::NetworkManagerProxy::builder(conn)
         .cache_properties(CacheProperties::No)

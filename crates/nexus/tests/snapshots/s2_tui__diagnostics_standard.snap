@@ -13,7 +13,7 @@ expression: frame
 │   ○ Hotspot                ││   ░░        ░░    ░░  ░░    ░░    ░░  ░░  ░░░░░░                   │
 │     Not started            ││                                                                    │
 │                            ││ You're connected via Wi-Fi (CafeGuest), but a sign-in page is      │
-│                            ││ required.                                                          │
+│                            ││ required. Press o to open it.                                      │
 │                            ││ Internet: sign-in required  |  Backend: networkmanager 1.58.1      │
 │                            │╰────────────────────────────────────────────────────────────────────╯
 │                            │╭ Traffic ───────────────────────────────────────────────────────────╮
@@ -22,11 +22,11 @@ expression: frame
 │                            │╰────────────────────────────────────────────────────────────────────╯
 │                            │╭ Diagnostics ───────────────────────────────────────────────────────╮
 │                            ││ ● A sign-in page is blocking the internet                          │
-│                            ││   Open a browser and visit any plain http:// page; the network'... │
+│                            ││   Press o in Nexus to open the sign-in page, or visit any plain... │
 │                            │╰────────────────────────────────────────────────────────────────────╯
 │                            │╭ Recent activity ───────────────────────────────────────────────────╮
 │                            ││ ● Joined CafeGuest (Wi-Fi)                                         │
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter open  h/l tab  ? help  q quit
+ j/k move  enter open  o login  h/l tab  ? help  q quit

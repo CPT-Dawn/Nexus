@@ -207,6 +207,9 @@ fn session(
     {
         send(Msg::Vpns(list))?;
     }
+    if let Ok(tethers) = conn.tethers()? {
+        send(Msg::Tethers(tethers))?;
+    }
     send(Msg::Activity(
         conn.activity()?
             .map_err(|f| refused("activity", f))?
@@ -217,11 +220,15 @@ fn session(
             Some(Event::StatusChanged { status }) => push(status)?,
             Some(Event::NetworksChanged { wifi }) => send(Msg::Wifi(wifi))?,
             Some(Event::VpnsChanged { vpns }) => send(Msg::Vpns(vpns))?,
+            Some(Event::TethersChanged { tethers }) => send(Msg::Tethers(tethers))?,
             Some(event @ (Event::SecretPromptOpened { .. } | Event::SecretPromptClosed { .. })) => {
                 send(Msg::Prompt(event))?
             }
             Some(Event::Activity { entry }) => send(Msg::Happened(entry))?,
             Some(Event::DoctorFindings { findings }) => send(Msg::Findings(findings))?,
+            Some(event @ (Event::ProfilePending { .. } | Event::ProfileSettled { .. })) => {
+                send(Msg::Profile(super::ProfileMsg::Event(event)))?
+            }
             Some(_) => {}
             None => {
                 // A refusal (say NetworkManager vanished) just skips a sample.

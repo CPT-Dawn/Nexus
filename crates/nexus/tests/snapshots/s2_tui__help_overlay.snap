@@ -2,31 +2,31 @@
 source: crates/nexus/tests/s2_tui.rs
 expression: rig.text(STANDARD)
 ---
- Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
-╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
-│ ▸ ● Wi-Fi                  ││     ░░    ░░░░    ░░      ░░░░░░  ░░░░    ░░░░░░                   │
-│     Home-5G        ╭ All keys ──────────────────────────────────────────────╮█░░                 │
-│   ○ Ethernet       │  j / k, Down / Up     Move in the list                 │░                   │
-│     Not connected  │  g / G                Jump to top / bottom             │░                   │
-│   ○ VPN            │  h / l, Left / Right  Previous / next tab              │░                   │
-│     Not connected  │  Tab / Shift-Tab      Next / previous tab              │█░░                 │
-│   ○ Hotspot        │  1 - 6                Jump to a tab                    │░                   │
-│     Not started    │  Enter                Open the selected card's tab     │                    │
-│                    │  d                    Details sheet (small windows)    │ooks healthy.       │
-│                    │  Wi-Fi: Enter         Join the selected Network        │.1                  │
-│                    │  Wi-Fi: r             Rescan                           │────────────────────╯
-│                    │  Wi-Fi: x             Disconnect                       │────────────────────╮
-│                    │  Wi-Fi: f             Forget (asks first)              │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  Wi-Fi: a             Toggle autoconnect               │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+ Nexus  Overview  Wi-╭ All keys ──────────────────────────────────────────────╮            ● Online
+╭ Connections ───────│  j / k, Down / Up     Move in the list                 │────────────────────╮
+│ ▸ ● Wi-Fi          │  g / G                Jump to top / bottom             │░                   │
+│     Home-5G        │  h / l, Left / Right  Previous / next tab              │█░░                 │
+│   ○ Ethernet       │  Tab / Shift-Tab      Next / previous tab              │░                   │
+│     Not connected  │  1 - 6                Jump to a tab                    │░                   │
+│   ○ VPN            │  Enter                Open the selected card's tab     │░                   │
+│     Not connected  │  d                    Details sheet (small windows)    │█░░                 │
+│   ○ Hotspot        │  Wi-Fi: Enter         Join the selected Network        │░                   │
+│     Not started    │  Wi-Fi: r             Rescan                           │                    │
+│                    │  Wi-Fi: x             Disconnect                       │ooks healthy.       │
+│                    │  Wi-Fi: f             Forget (asks first)              │.1                  │
+│                    │  Wi-Fi: a             Toggle autoconnect               │────────────────────╯
+│                    │  Wi-Fi: e             Edit the Profile's settings      │────────────────────╮
 │                    │  Wi-Fi: s             Share as a QR code (asks first)  │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
 │                    │  Wi-Fi: u             Undo the toast's action          │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    │  VPN: Enter           Bring the VPN up or down         │────────────────────╯
-│                    │  VPN: i / c           Import / create a WireGuard VPN  │────────────────────╮
-│                    │  VPN: p / s           Public key / config as a QR code │                    │
-│                    │  Esc                  Back out; never quits            │                    │
-│                    │  ?                    Show or hide this help           │                    │
+│                    │  VPN: Enter           Up or down (more keys in the foo │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  o                    Open a Portal's login page       │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  Esc                  Back out; never quits            │────────────────────╯
+│                    │  ?                    Show or hide this help           │────────────────────╮
 │                    │  q, Ctrl-C            Quit                             │                    │
-│                    ╰────────────────────────────────────────────────────────╯                    │
-│                            ││                                                                    │
-╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+│                    │                                                        │                    │
+│                    │ Login page won't show? A browser with secure DNS (DNS  │                    │
+│                    │ over HTTPS) hides the Portal by skipping the network's │                    │
+│                    │ resolver. Turn it off until you have signed in, or     │                    │
+│                    │ press o: Nexus opens a plain http:// page.             │                    │
+╰────────────────────╰────────────────────────────────────────────────────────╯────────────────────╯
  esc close

@@ -422,7 +422,7 @@ fn reachability(i: &Inputs, out: &mut Vec<Finding>) {
                 "A sign-in page is blocking the internet",
                 "This network (a hotel, cafe or campus) holds all traffic until you sign in on its web page.",
             ),
-            "Open a browser and visit any plain http:// page; the network's sign-in page will appear.",
+            "Press o in Nexus to open the sign-in page, or visit any plain http:// page in a browser. If nothing appears, turn off the browser's secure DNS (DNS over HTTPS) until you have signed in: it hides the sign-in page.",
         ));
     }
     let linked_without_internet = matches!(i.status.state, State::Local | State::Site)

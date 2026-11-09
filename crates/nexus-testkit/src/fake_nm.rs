@@ -37,6 +37,8 @@ use zbus::object_server::SignalEmitter;
 use zbus::{Connection, connection, interface};
 use zbus::{OwnedVariant, Variant};
 
+mod bt;
+
 const MANAGER_PATH: &str = "/org/freedesktop/NetworkManager";
 const ACTIVE_PATH: &str = "/org/freedesktop/NetworkManager/ActiveConnection/1";
 const NAME: &str = "org.freedesktop.NetworkManager";
@@ -137,6 +139,8 @@ struct DeviceModel {
     /// `NMDeviceState`.
     state: u32,
     active_ap: Option<u32>,
+    /// Set for a paired phone (a Bluetooth Device).
+    bt: Option<bt::BtModel>,
 }
 
 #[derive(Debug)]
@@ -153,6 +157,13 @@ struct ProfileModel {
     secret: Option<(String, String)>,
     /// Set for VPN Profiles.
     vpn: Option<VpnModel>,
+    /// Set for a Bluetooth Profile: the phone's address as six bytes.
+    bdaddr: Option<Vec<u8>>,
+    /// Every setting a client wrote with `Update`/`Update2`, merged over the
+    /// basics when read back.
+    settings: SettingsDict,
+    /// `VersionId`: bumped by every change.
+    version: u64,
 }
 
 /// What makes a Profile a VPN.
@@ -166,6 +177,14 @@ struct VpnModel {
     active: u32,
     /// Activation ends in failure (state 4) instead of success.
     fails: bool,
+}
+
+/// A checkpoint: the Profiles as they were, to put back on rollback.
+#[derive(Debug)]
+struct CheckpointModel {
+    id: u32,
+    profiles: Vec<(usize, SettingsDict, bool)>,
+    timer: Option<tokio::task::AbortHandle>,
 }
 
 /// `NMState`.
@@ -240,6 +259,8 @@ struct Model {
     psks: HashMap<Vec<u8>, String>,
     /// Joins that die on purpose: `(NMDeviceState died in, reason)`.
     join_failures: HashMap<Vec<u8>, (u32, u32)>,
+    /// Tethering Links that die on purpose, by phone address.
+    bt_failures: HashMap<String, (u32, u32)>,
     /// `RequestScan` calls NetworkManager accepted.
     scan_requests: u32,
     /// Refuse every `RequestScan`, whatever `LastScan` says.
@@ -279,6 +300,11 @@ struct Model {
     gateway4: Option<String>,
     /// Whether the primary connection has an IPv6 address.
     ipv6: bool,
+    /// Open checkpoints.
+    checkpoints: Vec<CheckpointModel>,
+    next_checkpoint: u32,
+    /// Checkpoints that were rolled back, by timeout or by request.
+    checkpoint_rollbacks: u32,
 }
 
 type Shared = Arc<Mutex<Model>>;
@@ -396,6 +422,15 @@ impl Manager {
         OwnedObjectPath,
         HashMap<String, OwnedVariant>,
     )> {
+        if connection.contains_key("bluetooth") {
+            let persist_disk = options
+                .get("persist")
+                .and_then(|v| v.try_clone().ok()?.try_into().ok())
+                .is_some_and(|p: String| p == "disk");
+            let dev = device_index(device.as_str())?;
+            let path = bt::add_and_activate(conn, &self.0, connection, dev, persist_disk).await?;
+            return Ok((opath(&path), opath(ACTIVE_PATH), HashMap::new()));
+        }
         let text = |section: &str, key: &str| -> Option<String> {
             connection
                 .get(section)?
@@ -425,6 +460,9 @@ impl Manager {
                 autoconnect: true,
                 persisted: persist.as_deref() == Some("disk"),
                 agent_secrets: needs_agent,
+                bdaddr: None,
+                settings: SettingsDict::new(),
+                version: 1,
                 secret: text("802-11-wireless-security", "key-mgmt")
                     .zip(text("802-11-wireless-security", "psk")),
                 vpn: None,
@@ -484,16 +522,20 @@ impl Manager {
             start_vpn(conn, &self.0, n).await?;
             return Ok(opath(&vpn_active_path(n)));
         }
-        let ssid = self
+        let (ssid, is_bt) = self
             .0
             .lock()
             .unwrap()
             .profiles
             .get(n)
             .and_then(|p| p.as_ref())
-            .map(|p| p.ssid.clone())
+            .map(|p| (p.ssid.clone(), p.bdaddr.is_some()))
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no such connection".into()))?;
         let dev = device_index(device.as_str())?;
+        if is_bt {
+            bt::start(conn, &self.0, dev);
+            return Ok(opath(ACTIVE_PATH));
+        }
         // A saved profile brings its own (right) secrets.
         let task = tokio::spawn(activate(
             conn.clone(),
@@ -507,12 +549,137 @@ impl Manager {
         Ok(opath(ACTIVE_PATH))
     }
 
+    /// Remembers every Profile; unless destroyed within `rollback_timeout`
+    /// seconds (0 = never) the Profiles are put back, like NetworkManager.
+    async fn checkpoint_create(
+        &self,
+        _devices: Vec<OwnedObjectPath>,
+        rollback_timeout: u32,
+        _flags: u32,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<OwnedObjectPath> {
+        let (id, profiles) = {
+            let mut m = self.0.lock().unwrap();
+            let id = m.next_checkpoint;
+            m.next_checkpoint += 1;
+            let profiles = m
+                .profiles
+                .iter()
+                .enumerate()
+                .filter_map(|(n, p)| {
+                    let p = p.as_ref()?;
+                    Some((n, clone_settings(&p.settings), p.autoconnect))
+                })
+                .collect();
+            (id, profiles)
+        };
+        let timer = (rollback_timeout > 0).then(|| {
+            let (conn, model) = (conn.clone(), self.0.clone());
+            tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(u64::from(rollback_timeout)))
+                    .await;
+                roll_back(&conn, &model, id, false).await;
+            })
+            .abort_handle()
+        });
+        self.0.lock().unwrap().checkpoints.push(CheckpointModel {
+            id,
+            profiles,
+            timer,
+        });
+        Ok(opath(&checkpoint_path(id)))
+    }
+
+    fn checkpoint_destroy(&self, checkpoint: OwnedObjectPath) -> zbus::fdo::Result<()> {
+        let id = checkpoint_id(checkpoint.as_str())?;
+        let mut m = self.0.lock().unwrap();
+        let at = m
+            .checkpoints
+            .iter()
+            .position(|c| c.id == id)
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no such checkpoint".into()))?;
+        if let Some(t) = m.checkpoints.remove(at).timer {
+            t.abort();
+        }
+        Ok(())
+    }
+
+    async fn checkpoint_rollback(
+        &self,
+        checkpoint: OwnedObjectPath,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<HashMap<String, u32>> {
+        let id = checkpoint_id(checkpoint.as_str())?;
+        if roll_back(conn, &self.0, id, true).await {
+            Ok(HashMap::new())
+        } else {
+            Err(zbus::fdo::Error::InvalidArgs("no such checkpoint".into()))
+        }
+    }
+
     #[zbus(signal)]
     async fn device_added(emitter: &SignalEmitter<'_>, device: OwnedObjectPath)
     -> zbus::Result<()>;
 
     #[zbus(signal, name = "StateChanged")]
     async fn nm_state_changed(emitter: &SignalEmitter<'_>, state: u32) -> zbus::Result<()>;
+}
+
+fn checkpoint_path(id: u32) -> String {
+    format!("{MANAGER_PATH}/Checkpoint/{id}")
+}
+
+fn checkpoint_id(path: &str) -> zbus::fdo::Result<u32> {
+    path.rsplit('/')
+        .next()
+        .and_then(|n| n.parse().ok())
+        .ok_or_else(|| zbus::fdo::Error::InvalidArgs("bad checkpoint path".into()))
+}
+
+/// Puts the Profiles of checkpoint `id` back, bumping their versions, and
+/// forgets it. False if there is no such checkpoint (it was destroyed or
+/// rolled back already).
+async fn roll_back(conn: &Connection, model: &Shared, id: u32, stop_timer: bool) -> bool {
+    let restored: Vec<usize> = {
+        let mut m = model.lock().unwrap();
+        let Some(at) = m.checkpoints.iter().position(|c| c.id == id) else {
+            return false;
+        };
+        let cp = m.checkpoints.remove(at);
+        if stop_timer && let Some(t) = cp.timer {
+            t.abort();
+        }
+        m.checkpoint_rollbacks += 1;
+        let mut restored = Vec::new();
+        for (n, dict, auto) in cp.profiles {
+            if let Some(p) = m.profiles[n].as_mut() {
+                p.autoconnect = auto;
+                p.settings = dict;
+                p.version += 1;
+                restored.push(n);
+            }
+        }
+        restored
+    };
+    for n in restored {
+        if let Ok(i) = conn
+            .object_server()
+            .interface::<_, Profile>(profile_path(n))
+            .await
+        {
+            let _ = Profile::updated(i.signal_emitter()).await;
+        }
+    }
+    true
+}
+
+fn flag(dict: &SettingsDict, section: &str, key: &str) -> Option<bool> {
+    dict.get(section)?
+        .get(key)?
+        .try_clone()
+        .ok()?
+        .try_into()
+        .ok()
 }
 
 struct Active(Shared);
@@ -733,7 +900,12 @@ impl Device {
 
     #[zbus(property)]
     fn device_type(&self) -> u32 {
-        2 // NM_DEVICE_TYPE_WIFI
+        // NM_DEVICE_TYPE_BT or NM_DEVICE_TYPE_WIFI
+        if self.0.lock().unwrap().devices[self.1].bt.is_some() {
+            5
+        } else {
+            2
+        }
     }
 
     #[zbus(property)]
@@ -1196,6 +1368,9 @@ impl Settings {
                 persisted: true,
                 agent_secrets: false,
                 secret: None,
+                settings: Default::default(),
+                version: 1,
+                bdaddr: None,
                 vpn: Some(VpnModel {
                     kind,
                     settings: clone_settings(&connection),
@@ -1291,10 +1466,39 @@ fn vpn_secrets(settings: &SettingsDict, setting: &str) -> SettingsDict {
     out
 }
 
+#[derive(Debug, zbus::DBusError)]
+#[zbus(prefix = "org.freedesktop.NetworkManager.Settings.Error")]
+enum SettingsError {
+    #[zbus(error)]
+    ZBus(zbus::Error),
+    VersionIdMismatch(String),
+}
+
 struct Profile(Shared, usize);
+
+impl Profile {
+    /// Replaces what the Profile holds with what a client wrote.
+    fn store(&self, settings: SettingsDict) {
+        let auto = flag(&settings, "connection", "autoconnect");
+        if let Some(p) = self.0.lock().unwrap().profiles[self.1].as_mut() {
+            p.autoconnect = auto.unwrap_or(true);
+            p.persisted = true;
+            p.version += 1;
+            p.settings = settings;
+            p.settings.remove(SECURITY);
+        }
+    }
+}
 
 #[interface(name = "org.freedesktop.NetworkManager.Settings.Connection")]
 impl Profile {
+    /// True while the Profile only lives in NetworkManager's memory.
+    #[zbus(property)]
+    fn unsaved(&self) -> bool {
+        let m = self.0.lock().unwrap();
+        m.profiles[self.1].as_ref().is_some_and(|p| !p.persisted)
+    }
+
     fn get_settings(&self) -> HashMap<String, HashMap<String, OwnedVariant>> {
         let m = self.0.lock().unwrap();
         let p = m.profiles[self.1].as_ref().expect("served profile exists");
@@ -1307,12 +1511,32 @@ impl Profile {
         connection.insert("uuid".to_owned(), v(Variant::from(p.uuid.clone())));
         connection.insert("type".to_owned(), v(Variant::from("802-11-wireless")));
         connection.insert("autoconnect".to_owned(), v(Variant::from(p.autoconnect)));
+        if let Some(addr) = &p.bdaddr {
+            connection.insert("type".to_owned(), v(Variant::from("bluetooth")));
+            let mut bluetooth = HashMap::new();
+            bluetooth.insert("bdaddr".to_owned(), v(Variant::from(addr.clone())));
+            bluetooth.insert("type".to_owned(), v(Variant::from("panu")));
+            return HashMap::from([
+                ("connection".to_owned(), connection),
+                ("bluetooth".to_owned(), bluetooth),
+            ]);
+        }
         let mut wireless = HashMap::new();
         wireless.insert("ssid".to_owned(), v(Variant::from(p.ssid.clone())));
-        let mut all = HashMap::from([
+        let mut all: HashMap<String, HashMap<String, OwnedVariant>> = HashMap::from([
             ("connection".to_owned(), connection),
             ("802-11-wireless".to_owned(), wireless),
         ]);
+        // What clients wrote comes back, except the identity they cannot change.
+        for (section, values) in &p.settings {
+            let into = all.entry(section.clone()).or_default();
+            for (key, value) in values {
+                let identity = matches!(key.as_str(), "id" | "uuid" | "type" | "ssid");
+                if !identity && let Ok(value) = value.try_clone() {
+                    into.insert(key.clone(), value);
+                }
+            }
+        }
         // Like NetworkManager, GetSettings leaves the secret itself out.
         if let Some((key_mgmt, _)) = &p.secret {
             let mut security = HashMap::new();
@@ -1353,6 +1577,39 @@ impl Profile {
         Ok(out)
     }
 
+    #[zbus(property)]
+    fn version_id(&self) -> u64 {
+        self.0.lock().unwrap().profiles[self.1]
+            .as_ref()
+            .map_or(0, |p| p.version)
+    }
+
+    /// Like `Update`, but a nonzero `version-id` in `args` must match the
+    /// Profile's `VersionId`, or nothing changes.
+    async fn update2(
+        &self,
+        settings: HashMap<String, HashMap<String, OwnedVariant>>,
+        _flags: u32,
+        args: HashMap<String, OwnedVariant>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> Result<HashMap<String, OwnedVariant>, SettingsError> {
+        let wanted: u64 = args
+            .get("version-id")
+            .and_then(|v| v.try_clone().ok()?.try_into().ok())
+            .unwrap_or(0);
+        let have = self.0.lock().unwrap().profiles[self.1]
+            .as_ref()
+            .map_or(0, |p| p.version);
+        if wanted != 0 && wanted != have {
+            return Err(SettingsError::VersionIdMismatch(
+                "The profile changed since it was read".into(),
+            ));
+        }
+        self.store(settings);
+        Self::updated(&emitter).await?;
+        Ok(HashMap::new())
+    }
+
     /// Like NetworkManager, replaces the settings; the fake keeps only the
     /// `connection.autoconnect` flag, the one thing the Backend changes.
     async fn update(
@@ -1360,14 +1617,7 @@ impl Profile {
         settings: HashMap<String, HashMap<String, OwnedVariant>>,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> zbus::fdo::Result<()> {
-        let auto: Option<bool> = settings
-            .get("connection")
-            .and_then(|c| c.get("autoconnect"))
-            .and_then(|v| v.try_clone().ok()?.try_into().ok());
-        if let Some(p) = self.0.lock().unwrap().profiles[self.1].as_mut() {
-            p.autoconnect = auto.unwrap_or(true);
-            p.persisted = true;
-        }
+        self.store(settings);
         Self::updated(&emitter).await?;
         Ok(())
     }
@@ -1393,12 +1643,17 @@ impl Profile {
             let mut m = self.0.lock().unwrap();
             let gone = m.profiles[self.1].take();
             let told_agent = gone.as_ref().is_some_and(|p| p.agent_secrets);
+            let bdaddr = gone.as_ref().and_then(|p| p.bdaddr.clone());
             let ssid = gone.map(|p| p.ssid).unwrap_or_default();
             let in_use = (0..m.devices.len())
-                .filter(|d| {
-                    m.devices[*d]
+                .filter(|d| match (&bdaddr, &m.devices[*d].bt) {
+                    (Some(addr), Some(b)) => {
+                        *addr == bt::bdaddr(&b.address) && m.devices[*d].state >= 40
+                    }
+                    (Some(_), None) | (None, Some(_)) => false,
+                    (None, None) => m.devices[*d]
                         .active_ap
-                        .is_some_and(|ap| m.aps[&ap].ssid == ssid)
+                        .is_some_and(|ap| m.aps[&ap].ssid == ssid),
                 })
                 .collect();
             (in_use, told_agent)
@@ -1463,6 +1718,7 @@ impl FakeNm {
             secret_reads: 0,
             deny_secret_reads: false,
             join_failures: HashMap::new(),
+            bt_failures: HashMap::new(),
             scan_requests: 0,
             refuse_scans: false,
             statistics_reads: 0,
@@ -1480,6 +1736,9 @@ impl FakeNm {
             check_enabled: true,
             gateway4: None,
             ipv6: false,
+            checkpoints: Vec::new(),
+            next_checkpoint: 1,
+            checkpoint_rollbacks: 0,
         }));
         let mut nm = FakeNm {
             rt,
@@ -1627,10 +1886,14 @@ impl FakeNm {
                 .serve_at(IP4_PATH, Ip4Config(model.clone()))
                 .serve_at(IP6_PATH, Ip6Config);
             for n in 0..devices {
-                b = b
-                    .serve_at(device_path(n), Device(model.clone(), n))
-                    .serve_at(device_path(n), Statistics(model.clone(), n))
-                    .serve_at(device_path(n), Wireless(model.clone(), n));
+                b = b.serve_at(device_path(n), Device(model.clone(), n));
+                if model.lock().unwrap().devices[n].bt.is_some() {
+                    b = b.serve_at(device_path(n), bt::Bluetooth(model.clone(), n));
+                } else {
+                    b = b
+                        .serve_at(device_path(n), Statistics(model.clone(), n))
+                        .serve_at(device_path(n), Wireless(model.clone(), n));
+                }
             }
             for id in aps {
                 b = b.serve_at(ap_path(id), AccessPoint(model.clone(), id));
@@ -1708,6 +1971,7 @@ impl FakeNm {
                 tx_bytes: 0,
                 state: 30, // NM_DEVICE_STATE_DISCONNECTED
                 active_ap: None,
+                bt: None,
             });
             m.devices.len() - 1
         };
@@ -1852,8 +2116,11 @@ impl FakeNm {
                 autoconnect,
                 persisted: true,
                 agent_secrets: false,
+                settings: SettingsDict::new(),
+                version: 1,
                 secret: None,
                 vpn: None,
+                bdaddr: None,
             }));
             m.profiles.len() - 1
         };
@@ -1979,6 +2246,9 @@ impl FakeNm {
                 persisted: true,
                 agent_secrets: false,
                 secret: None,
+                settings: Default::default(),
+                version: 1,
+                bdaddr: None,
                 vpn: Some(VpnModel {
                     kind: "vpn".into(),
                     settings: HashMap::from([("connection".to_owned(), connection)]),
@@ -2063,6 +2333,58 @@ impl FakeNm {
             .flatten()
             .find(|p| p.vpn.is_some() && p.id == name)
             .map(|p| p.uuid.clone())
+    }
+
+    /// A text setting of the Profile with this UUID, as a client wrote it.
+    pub fn profile_text(&self, uuid: &str, section: &str, key: &str) -> Option<String> {
+        let m = self.model.lock().unwrap();
+        let p = m.profiles.iter().flatten().find(|p| p.uuid == uuid)?;
+        p.settings
+            .get(section)?
+            .get(key)?
+            .try_clone()
+            .ok()?
+            .try_into()
+            .ok()
+    }
+
+    /// A whole-number setting (`i32` or `u32`) of the Profile with this UUID.
+    pub fn profile_int(&self, uuid: &str, section: &str, key: &str) -> Option<i64> {
+        let m = self.model.lock().unwrap();
+        let p = m.profiles.iter().flatten().find(|p| p.uuid == uuid)?;
+        let v = p.settings.get(section)?.get(key)?.try_clone().ok()?;
+        i32::try_from(v.try_clone().ok()?)
+            .map(i64::from)
+            .or_else(|_| u32::try_from(v).map(i64::from))
+            .ok()
+    }
+
+    /// The Profile's `VersionId`.
+    pub fn profile_version(&self, uuid: &str) -> Option<u64> {
+        let m = self.model.lock().unwrap();
+        m.profiles
+            .iter()
+            .flatten()
+            .find(|p| p.uuid == uuid)
+            .map(|p| p.version)
+    }
+
+    /// Somebody else (say `nmcli`) changed the Profile: its version moves on.
+    pub fn edit_profile_externally(&self, uuid: &str) {
+        let mut m = self.model.lock().unwrap();
+        if let Some(p) = m.profiles.iter_mut().flatten().find(|p| p.uuid == uuid) {
+            p.version += 1;
+        }
+    }
+
+    /// Checkpoints that are open right now.
+    pub fn checkpoints_open(&self) -> usize {
+        self.model.lock().unwrap().checkpoints.len()
+    }
+
+    /// How many checkpoints were rolled back (by timeout or by request).
+    pub fn checkpoint_rollbacks(&self) -> u32 {
+        self.model.lock().unwrap().checkpoint_rollbacks
     }
 
     /// Profiles that exist at all, in memory or on disk.

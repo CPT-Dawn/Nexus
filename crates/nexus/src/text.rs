@@ -343,6 +343,62 @@ pub fn forgot(ssid: &str) -> String {
     format!("Forgot {ssid}.")
 }
 
+// Profile settings
+
+pub fn invalid_settings(problems: &[String]) -> Failure {
+    fail(
+        ErrorCode::InvalidSettings,
+        format!("Nothing was changed. {}", problems.join(" ")),
+    )
+}
+
+/// The Profile changed since it was read.
+pub fn profile_conflict(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::Conflict,
+        format!(
+            "{ssid} was changed elsewhere while you were editing. \
+             Nothing was saved; open its settings again."
+        ),
+    )
+}
+
+pub fn change_waiting(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::Conflict,
+        format!("A change to {ssid} is waiting to be kept or reverted. Settle it first."),
+    )
+}
+
+pub fn nothing_pending() -> Failure {
+    fail(
+        ErrorCode::NothingPending,
+        "No change is waiting for confirmation. It was kept, reverted or timed out already.",
+    )
+}
+
+pub fn checkpoint_refused(why: &str) -> Failure {
+    fail(
+        ErrorCode::Internal,
+        format!(
+            "NetworkManager would not set up the safety net for this change, so nothing was \
+             changed: {why}"
+        ),
+    )
+}
+
+pub fn profile_kept(ssid: &str) -> String {
+    format!("Keeping the new settings of {ssid}.")
+}
+
+pub fn profile_reverted(ssid: &str) -> String {
+    format!("Reverted: {ssid} has its old settings again.")
+}
+
+pub fn profile_saved(ssid: &str) -> String {
+    format!("Saved the settings of {ssid}.")
+}
+
 pub fn share_password(ssid: &str, password: &str) -> String {
     format!("{ssid}: {password}")
 }
@@ -416,6 +472,97 @@ pub fn vpn_dropped(name: &str) -> String {
 
 pub fn vpn_scan_hint(name: &str) -> String {
     format!("Scan with the WireGuard app to copy {name} to a phone.")
+}
+
+// Bluetooth Tethering.
+
+pub fn bluetooth_off() -> Failure {
+    fail(
+        ErrorCode::BluetoothOff,
+        "Bluetooth is off. Turn it on (`bluetoothctl power on`, or `rfkill unblock bluetooth`) and try again.",
+    )
+}
+
+pub fn bluetooth_absent() -> Failure {
+    fail(
+        ErrorCode::BluetoothOff,
+        "This machine has no Bluetooth adapter, or the Bluetooth service is not running \
+         (`systemctl start bluetooth`).",
+    )
+}
+
+pub fn no_phone() -> Failure {
+    fail(
+        ErrorCode::NoPhone,
+        "No paired phone offers network access. Pair your phone (`bluetoothctl`), switch on \
+         Bluetooth tethering in its settings, and try again.",
+    )
+}
+
+pub fn unknown_phone(who: &str, paired: &[String]) -> Failure {
+    fail(
+        ErrorCode::UnknownPhone,
+        format!(
+            "No paired phone is called {who}. Paired: {}.",
+            paired.join(", ")
+        ),
+    )
+}
+
+pub fn which_phone(paired: &[String]) -> Failure {
+    fail(
+        ErrorCode::UnknownPhone,
+        format!(
+            "Several phones are paired ({}). Say which one to tether through.",
+            paired.join(", ")
+        ),
+    )
+}
+
+/// A Tethering Link that died on the way up.
+pub fn tether_failure(phone: &str, died_in: u32, reason: u32) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!(
+            "Could not tether through {phone} (stopped while {}: {}). Check that Bluetooth \
+             tethering is switched on in the phone's settings.",
+            device_state(died_in),
+            device_reason(reason).to_lowercase()
+        ),
+    )
+}
+
+pub fn tether_refused(phone: &str, why: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("NetworkManager would not tether through {phone}: {why}"),
+    )
+}
+
+pub fn tether_timed_out(phone: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("Tethering through {phone} took too long, so Nexus gave up."),
+    )
+}
+
+pub fn tether_interrupted(phone: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("NetworkManager restarted while tethering through {phone}. Try again."),
+    )
+}
+
+pub fn not_tethered() -> Failure {
+    fail(ErrorCode::NotConnected, "Not tethered to any phone.")
+}
+
+pub fn tethered(phone: &str) -> String {
+    format!("Tethered through {phone}.")
+}
+
+pub fn untethered(phone: &str) -> String {
+    format!("Dropped the tether to {phone}.")
 }
 
 #[cfg(test)]

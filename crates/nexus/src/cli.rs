@@ -26,10 +26,17 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::PasswordRequired => 10,
         ErrorCode::NotConnected => 11,
         ErrorCode::HardBlocked => 12,
+        // 13 is `nexus doctor` finding a problem.
+        ErrorCode::BluetoothOff => 18,
+        ErrorCode::NoPhone => 19,
+        ErrorCode::UnknownPhone => 20,
+        ErrorCode::InvalidSettings => 15,
+        ErrorCode::Conflict => 16,
+        ErrorCode::NothingPending => 17,
         ErrorCode::RevealDenied => 14,
-        ErrorCode::UnknownVpn => 20,
-        ErrorCode::InvalidConfig => 21,
-        ErrorCode::VpnFailed => 22,
+        ErrorCode::UnknownVpn => 30,
+        ErrorCode::InvalidConfig => 31,
+        ErrorCode::VpnFailed => 32,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -358,6 +365,42 @@ fn print_qr(d: &nexus_tui::qr::Drawing, ssid: &str) {
     println!("{}", crate::text::share_scan_hint(ssid));
 }
 
+/// `nexus tether list [--json]`.
+pub fn tether_list(json: bool) -> ExitCode {
+    wifi_call(Op::Tethers, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::Tethers>(value) {
+            Ok(t) => print!("{}", crate::tether_view::table(&t)),
+            Err(e) => eprintln!("nexus: undecodable list: {e}"),
+        }
+    })
+}
+
+/// `nexus tether connect [phone]`.
+pub fn tether_connect(phone: Option<String>, json: bool) -> ExitCode {
+    wifi_call(Op::TetherConnect { phone }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(t) = serde_json::from_value::<nexus_ipc::Tethered>(value) {
+            println!("{}", crate::text::tethered(&t.phone));
+        }
+    })
+}
+
+/// `nexus tether disconnect`.
+pub fn tether_disconnect(json: bool) -> ExitCode {
+    wifi_call(Op::TetherDisconnect, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(t) = serde_json::from_value::<nexus_ipc::Untethered>(value) {
+            println!("{}", crate::text::untethered(&t.phone));
+        }
+    })
+}
+
 pub(crate) fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
     let mut conn = match Connection::connect() {
         Ok(c) => c,
@@ -455,6 +498,12 @@ mod tests {
             ErrorCode::UnknownVpn,
             ErrorCode::InvalidConfig,
             ErrorCode::VpnFailed,
+            ErrorCode::BluetoothOff,
+            ErrorCode::NoPhone,
+            ErrorCode::UnknownPhone,
+            ErrorCode::InvalidSettings,
+            ErrorCode::Conflict,
+            ErrorCode::NothingPending,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

@@ -4,12 +4,18 @@
 //! ```text
 //! cargo build -p nexus
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|vpn]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|tether|tether-off]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|profile]
 //! ```
 //!
 //! Scenarios:
 //! - `online`: joined to Home-5G, no traffic.
 //! - `offline`: nothing connected.
-//! - `portal`: joined to CafeGuest behind a sign-in page.
+//! - `portal`: joined to CafeGuest behind a sign-in page. The Overview hero says
+//!   so; press `o` to "open the login page" (a stand-in `xdg-open` only logs
+//!   the URL, no browser starts) and two seconds later the fake network lets you
+//!   in: the hero turns Online and a toast says "You're online.". Press `4` to
+//!   see the banner other tabs get while the Portal is up.
 //! - `wifi`: six Wi-Fi Networks in range (Home-5G joined), two saved ones out
 //!   of range. Press `2` for the Wi-Fi tab; `r` rescans, `enter` joins, `x`
 //!   disconnects, `f` forgets, `a` toggles autoconnect, `u` undoes. `s` on a saved
@@ -22,6 +28,18 @@
 //!   key, `s` then `enter` reveals its config as a QR code (needs a window of
 //!   about 70 by 38 cells), `i` imports a `.conf` (type a path), `c` creates a
 //!   tunnel with generated keys, `esc` closes a layer.
+//! - `tether`: Bluetooth on and three paired phones (Pixel 8 with a saved
+//!   Profile, Sam's iPhone, a long-named Galaxy). Press `5` for the Hotspot tab
+//!   (Tethering lives there until the Hotspot arrives); `j`/`k` move, `enter`
+//!   tethers, `x` drops the tether, `u` undoes. `d` opens details when narrow.
+//! - `tether-off`: the same, with Bluetooth switched off, so `enter` shows how
+//!   to turn it on.
+//! - `profile`: `wifi`, where Parents House (saved, out of range) already has a
+//!   static address, custom DNS, metered and a priority. Press `2`, then `e`
+//!   on Home-5G (in use: Apply starts the 15 s "Keep these settings?"
+//!   countdown, `y` keeps, `n` or waiting reverts) or `G` `k` `e` on Parents
+//!   House (saved at once). In the form: `tab` next row, `space` or arrows
+//!   change a choice, type into address rows, `enter` apply, `esc` cancel.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -40,17 +58,24 @@ fn main() {
     let scenario = args.next().unwrap_or_else(|| "online".into());
     let rest: Vec<String> = args.collect();
 
-    let world = World::start(&bin);
+    let world = if scenario.starts_with("tether") {
+        nexus_testkit::scenarios::tether_world(&bin, scenario == "tether")
+    } else {
+        World::start(&bin)
+    };
     let mut _prompt = None;
+    let opened = world.dir().join("opened.log");
     let mut wlan0 = None;
     match scenario.as_str() {
-        "offline" => {}
+        "offline" | "tether" | "tether-off" => {}
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" => {
+        "wifi" | "wifi-prompt" | "profile" => {
             if scenario == "wifi" {
                 nexus_testkit::scenarios::wifi_busy(&world);
+            } else if scenario == "profile" {
+                nexus_testkit::scenarios::profile_busy(&world);
             } else {
                 // Same, plus a password prompt for Work-Secure, already open.
                 _prompt = Some(nexus_testkit::scenarios::wifi_with_open_prompt(&world));
@@ -60,6 +85,11 @@ fn main() {
         }
         "vpn" => nexus_testkit::scenarios::vpn_busy(&world),
         "portal" => {
+            // No browser: the stand-in records the URL, which also plays "signed in".
+            world.install_tool(
+                "xdg-open",
+                &format!("echo \"$1\" >> '{}'", opened.display()),
+            );
             world
                 .nm
                 .set_primary(Some(ActiveConnection::wifi("CafeGuest")));
@@ -106,6 +136,16 @@ fn main() {
                     }
                     std::thread::sleep(Duration::from_secs(1));
                 }
+            });
+        }
+        if scenario == "portal" {
+            let (done, nm, opened) = (&done, &world.nm, &opened);
+            scope.spawn(move || {
+                while !done.load(Ordering::SeqCst) && !opened.exists() {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                std::thread::sleep(Duration::from_secs(2));
+                nm.set_connectivity(NmConnectivity::Full);
             });
         }
         let status = cmd.args(&rest).status().expect("run nexus");
