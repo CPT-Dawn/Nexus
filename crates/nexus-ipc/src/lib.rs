@@ -8,6 +8,7 @@
 use std::io::{self, BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -299,6 +300,8 @@ pub fn parse_request(line: &str) -> Result<Request, Response> {
 pub struct Connection {
     reader: BufReader<UnixStream>,
     next_id: u64,
+    /// Half a line read before a timeout.
+    partial: String,
 }
 
 impl Connection {
@@ -313,6 +316,7 @@ impl Connection {
         Ok(Self {
             reader: BufReader::new(UnixStream::connect(path)?),
             next_id: 1,
+            partial: String::new(),
         })
     }
 
@@ -343,6 +347,36 @@ impl Connection {
                 Outcome::Err(f) => Err(f),
             });
         }
+    }
+
+    /// Waits up to `wait` for the next event line, skipping responses.
+    /// `None` means nothing arrived in time. Call `Op::Subscribe` first or
+    /// none will come.
+    pub fn next_event(&mut self, wait: Duration) -> io::Result<Option<Event>> {
+        self.reader.get_ref().set_read_timeout(Some(wait))?;
+        let result = loop {
+            match self.reader.read_line(&mut self.partial) {
+                Ok(0) => break Err(io::ErrorKind::UnexpectedEof.into()),
+                Ok(_) if !self.partial.ends_with('\n') => continue,
+                Ok(_) => {
+                    let line = std::mem::take(&mut self.partial);
+                    if let Ok(line) = serde_json::from_str::<EventLine>(&line) {
+                        break Ok(Some(line.event));
+                    }
+                }
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                    ) =>
+                {
+                    break Ok(None);
+                }
+                Err(e) => break Err(e),
+            }
+        };
+        self.reader.get_ref().set_read_timeout(None)?;
+        result
     }
 
     /// Convenience for the `status` op.
