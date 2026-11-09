@@ -42,6 +42,10 @@ _Avoid_: access point, AP mode, tethering (that is joining a phone's Network)
 Joining the internet through a phone, over Bluetooth or USB.
 _Avoid_: hotspot, PAN
 
+**Phone**:
+A paired Bluetooth phone that offers network access, which Tethering joins. Listed by name and Bluetooth address; a phone that offers only dial-up is not a Phone to Nexus.
+_Avoid_: device (that is a hardware interface), handset, PAN client
+
 ### System
 
 **Backend**:

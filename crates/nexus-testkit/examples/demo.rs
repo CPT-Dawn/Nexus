@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! cargo build -p nexus
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|tether|tether-off]
 //! ```
 //!
 //! Scenarios:
@@ -16,6 +16,12 @@
 //!   row (Home-5G, Parents House, Hotel Lobby) opens the share view; `enter`
 //!   reveals the QR code, `p` shows the password, `esc` closes.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
+//! - `tether`: Bluetooth on and three paired phones (Pixel 8 with a saved
+//!   Profile, Sam's iPhone, a long-named Galaxy). Press `5` for the Hotspot tab
+//!   (Tethering lives there until the Hotspot arrives); `j`/`k` move, `enter`
+//!   tethers, `x` drops the tether, `u` undoes. `d` opens details when narrow.
+//! - `tether-off`: the same, with Bluetooth switched off, so `enter` shows how
+//!   to turn it on.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -34,11 +40,15 @@ fn main() {
     let scenario = args.next().unwrap_or_else(|| "online".into());
     let rest: Vec<String> = args.collect();
 
-    let world = World::start(&bin);
+    let world = if scenario.starts_with("tether") {
+        nexus_testkit::scenarios::tether_world(&bin, scenario == "tether")
+    } else {
+        World::start(&bin)
+    };
     let mut _prompt = None;
     let mut wlan0 = None;
     match scenario.as_str() {
-        "offline" => {}
+        "offline" | "tether" | "tether-off" => {}
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
