@@ -151,6 +151,28 @@ fn follow_shows_a_running_hotspot() {
 }
 
 #[test]
+fn follow_flags_a_plugged_port_that_gets_no_address() {
+    let world = World::start(NEXUS);
+    let eth = world.nm.add_ethernet_device("enp3s0");
+    let follow = Follow::start(&world);
+    follow.until("offline", |v| !has_class(v, "ethernet-problem"));
+    world.nm.set_dhcp(eth, false);
+    let refused = world.run_nexus(&["ethernet", "connect"]);
+    assert_eq!(refused.status.code(), Some(7));
+    let line = follow.until("the port problem", |v| has_class(v, "ethernet-problem"));
+    assert!(
+        line["tooltip"]
+            .as_str()
+            .unwrap()
+            .contains("Ethernet enp3s0"),
+        "{line}"
+    );
+    // The one-shot form folds it in too.
+    let (once, _) = waybar_once(&world);
+    assert!(has_class(&once, "ethernet-problem"), "{once}");
+}
+
+#[test]
 fn follow_survives_the_daemon_going_away_and_coming_back() {
     let mut world = World::start(NEXUS);
     go_online(&world);

@@ -2,7 +2,10 @@
 //! JSON (`text`, `tooltip`, `class`, `alt`). Pure: the CLI feeds it what the
 //! Daemon said and prints what it returns.
 
-use nexus_ipc::{Connectivity, Hotspot, LinkKind, State, Status, Vpn, VpnList, VpnState};
+use nexus_ipc::{
+    Connectivity, EthernetList, EthernetState, Hotspot, LinkKind, State, Status, Vpn, VpnList,
+    VpnState,
+};
 use serde::Serialize;
 
 /// One line of Waybar output.
@@ -21,12 +24,17 @@ pub struct Output {
 
 /// What the module shows for the Daemon being out of reach.
 pub fn unavailable() -> Output {
-    render(&Status::unavailable(), None, None)
+    render(&Status::unavailable(), None, None, None)
 }
 
 /// Builds the module from the Daemon's status and, when known, its VPNs and
 /// Hotspot.
-pub fn render(status: &Status, vpns: Option<&VpnList>, hotspot: Option<&Hotspot>) -> Output {
+pub fn render(
+    status: &Status,
+    vpns: Option<&VpnList>,
+    hotspot: Option<&Hotspot>,
+    ethernet: Option<&EthernetList>,
+) -> Output {
     let live: Vec<&Vpn> = vpns
         .into_iter()
         .flat_map(|l| &l.vpns)
@@ -67,6 +75,16 @@ pub fn render(status: &Status, vpns: Option<&VpnList>, hotspot: Option<&Hotspot>
     if hosting.is_some() {
         class.push("hotspot".into());
     }
+    // A cable that is in but does not work is the one Ethernet fact the Link
+    // cannot show: there is no primary Link to name it.
+    let stuck: Vec<_> = ethernet
+        .into_iter()
+        .flat_map(|e| &e.ports)
+        .filter(|p| p.state == EthernetState::Misconfigured)
+        .collect();
+    if !stuck.is_empty() {
+        class.push("ethernet-problem".into());
+    }
 
     let mut tooltip = vec![capitalise(&status.human())];
     for vpn in &live {
@@ -85,6 +103,14 @@ pub fn render(status: &Status, vpns: Option<&VpnList>, hotspot: Option<&Hotspot>
             (false, Some(n)) => format!("Hotspot {name}: {n} devices"),
             (false, None) => format!("Hotspot {name}: on"),
         });
+    }
+
+    for port in stuck {
+        let why = port
+            .trouble
+            .as_ref()
+            .map_or("not working", |t| t.message.as_str());
+        tooltip.push(format!("Ethernet {}: {why}", port.id));
     }
 
     let alt = if vpn_up && state == "online" {
@@ -173,7 +199,7 @@ mod tests {
             Connectivity::Full,
             Some(("Home", LinkKind::Wifi)),
         );
-        let out = render(&s, None, None);
+        let out = render(&s, None, None, None);
         assert_eq!(out.text, "Home");
         assert_eq!(out.alt, "online");
         assert_eq!(out.class, ["online", "wifi"]);
@@ -187,7 +213,7 @@ mod tests {
             Connectivity::Portal,
             Some(("Cafe", LinkKind::Wifi)),
         );
-        let out = render(&s, None, None);
+        let out = render(&s, None, None, None);
         assert_eq!(out.alt, "portal");
         assert_eq!(out.class[0], "portal");
     }
@@ -196,6 +222,7 @@ mod tests {
     fn offline_and_unavailable_have_words() {
         let off = render(
             &status(State::Offline, Connectivity::None, None),
+            None,
             None,
             None,
         );
@@ -218,11 +245,38 @@ mod tests {
         let vpns = VpnList {
             vpns: vec![vpn("Work", VpnState::Up), vpn("Spare", VpnState::Down)],
         };
-        let out = render(&s, Some(&vpns), None);
+        let out = render(&s, Some(&vpns), None, None);
         assert_eq!(out.text, "enp3s0 + VPN");
         assert_eq!(out.alt, "vpn");
         assert_eq!(out.class, ["online", "ethernet", "vpn"]);
         assert_eq!(out.tooltip, "Online via enp3s0\nVPN Work: up");
+    }
+
+    #[test]
+    fn a_plugged_port_that_does_not_work_is_flagged() {
+        use nexus_ipc::{EthernetPort, EthernetProblem, EthernetTrouble};
+        let mut stuck = EthernetPort::bare("enp3s0", EthernetState::Misconfigured);
+        stuck.trouble = Some(EthernetTrouble {
+            kind: EthernetProblem::SignIn,
+            message: "enp3s0 wants an 802.1X sign-in.".into(),
+        });
+        let fine = EthernetPort::bare("enp4s0", EthernetState::Unplugged);
+        let list = EthernetList {
+            ports: vec![stuck, fine],
+        };
+        let s = status(State::Offline, Connectivity::None, None);
+        let out = render(&s, None, None, Some(&list));
+        assert!(out.class.contains(&"ethernet-problem".to_string()));
+        assert!(
+            out.tooltip
+                .contains("Ethernet enp3s0: enp3s0 wants an 802.1X sign-in.")
+        );
+        assert!(
+            !out.tooltip.contains("enp4s0"),
+            "an unplugged port is not news"
+        );
+        let calm = render(&s, None, None, Some(&EthernetList::default()));
+        assert!(!calm.class.contains(&"ethernet-problem".to_string()));
     }
 
     #[test]
@@ -240,7 +294,7 @@ mod tests {
             ssid: Some("Garage".into()),
             devices: Some(2),
         };
-        let out = render(&s, None, Some(&h));
+        let out = render(&s, None, Some(&h), None);
         assert_eq!(out.text, "Home + Hotspot");
         assert!(out.class.contains(&"hotspot".to_string()));
         assert!(out.tooltip.ends_with("Hotspot Garage: 2 devices"));
@@ -253,7 +307,7 @@ mod tests {
             Connectivity::Full,
             Some(("<b>&Evil", LinkKind::Wifi)),
         );
-        let out = render(&s, None, None);
+        let out = render(&s, None, None, None);
         assert_eq!(out.text, "&lt;b&gt;&amp;Evil");
         assert!(!out.tooltip.contains('<'));
     }

@@ -5,7 +5,7 @@ use std::io::Write as _;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use nexus_ipc::{Connection, Event, Hotspot, Op, Status, VpnList};
+use nexus_ipc::{Connection, EthernetList, Event, Hotspot, Op, Status, VpnList};
 
 use crate::cli::{EXIT_DAEMON_ERROR, unreachable};
 use crate::waybar::{self, Output};
@@ -19,17 +19,23 @@ struct Picture {
     status: Option<Status>,
     vpns: Option<VpnList>,
     hotspot: Option<Hotspot>,
+    ethernet: Option<EthernetList>,
 }
 
 impl Picture {
     fn output(&self) -> Output {
         match &self.status {
-            Some(status) => waybar::render(status, self.vpns.as_ref(), self.hotspot.as_ref()),
+            Some(status) => waybar::render(
+                status,
+                self.vpns.as_ref(),
+                self.hotspot.as_ref(),
+                self.ethernet.as_ref(),
+            ),
             None => waybar::unavailable(),
         }
     }
 
-    /// Reads all three from the Daemon.
+    /// Reads all four from the Daemon.
     fn fetch(conn: &mut Connection) -> std::io::Result<Result<Self, nexus_ipc::Failure>> {
         let status = match conn.status()? {
             Ok(s) => s,
@@ -44,10 +50,15 @@ impl Picture {
             .call(Op::Hotspot)?
             .ok()
             .and_then(|v| serde_json::from_value(v).ok());
+        let ethernet = conn
+            .call(Op::EthernetList)?
+            .ok()
+            .and_then(|v| serde_json::from_value(v).ok());
         Ok(Ok(Self {
             status: Some(status),
             vpns,
             hotspot,
+            ethernet,
         }))
     }
 
@@ -57,6 +68,7 @@ impl Picture {
             Event::StatusChanged { status } => self.status = Some(status),
             Event::VpnsChanged { vpns } => self.vpns = Some(vpns),
             Event::HotspotChanged { hotspot } => self.hotspot = Some(hotspot),
+            Event::EthernetChanged { ethernet } => self.ethernet = Some(ethernet),
             _ => return false,
         }
         true
