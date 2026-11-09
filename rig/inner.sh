@@ -90,9 +90,14 @@ chmod 0644 "$pki"/*
 
 dnsmasq_args=(--keep-in-foreground --conf-file=/dev/null --port=0 --bind-interfaces
     --dhcp-leasefile="$bus_dir/leases" --pid-file="$bus_dir/dnsmasq.pid" --dhcp-authoritative)
+# The connectivity check target: an address on the AP namespace's loopback,
+# reachable through whichever AP a station joins (see rig/portal.py).
+in_ap ip addr add 10.99.99.1/32 dev lo
+portal_net=""
 i=0
 for conf in "${confs[@]}"; do
     i=$((i + 1))
+    [[ "$(basename "$conf")" == portal.conf ]] && portal_net="10.99.$i."
     iface="${ap_ifaces[$((i - 1))]}"
     in_ap ip addr add "10.99.$i.1/24" dev "$iface"
     sed -e "s/@IFACE@/$iface/" -e "s|@PKI@|$pki|g" "$conf" >"$bus_dir/$(basename "$conf")"
@@ -100,6 +105,9 @@ for conf in "${confs[@]}"; do
     dnsmasq_args+=(--interface="$iface" "--dhcp-range=10.99.$i.10,10.99.$i.50,12h")
 done
 in_ap dnsmasq "${dnsmasq_args[@]}" >"$bus_dir/dnsmasq.log" 2>&1 &
+[[ -n "$portal_net" ]] || die "no portal.conf among the access points"
+command -v python3 >/dev/null || die "python3 is needed for the portal server"
+in_ap python3 "$here/portal.py" "$portal_net" >"$bus_dir/portal.log" 2>&1 &
 
 # ---- station side: wpa_supplicant + NetworkManager -----------------------
 cat >/etc/NetworkManager/NetworkManager.conf <<EOF
@@ -110,6 +118,10 @@ dns=none
 rc-manager=unmanaged
 no-auto-default=*
 auth-polkit=false
+[connectivity]
+uri=http://10.99.99.1/check.txt
+response=NEXUS-ONLINE
+interval=5
 [device]
 wifi.backend=wpa_supplicant
 wifi.scan-rand-mac-address=no

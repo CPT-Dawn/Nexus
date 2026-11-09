@@ -45,7 +45,7 @@ completions for bash, zsh and fish and the man pages are installed with the
 package. Anything the CLI does not cover, a program can do over the daemon's
 socket: [docs/ipc.md](docs/ipc.md) documents the JSON-lines protocol with
 `socat` and `jq` examples, and the `nexus-ipc` crate
-([README](crates/nexus-ipc/README.md)) is the Rust client.
+([README](crates/nexus-ipc/README.md)) is the Rust library for writing your own Front end.
 
 ## Permissions
 

@@ -113,6 +113,9 @@ detect_partial() { # prints reasons, one per line
 
 backup_state() {
   say "== Backing up current state to $BACKUP"
+  # No "units" file yet means an earlier backup was interrupted. Start it over:
+  # copying into half-written directories would nest copies inside them.
+  run rm -rf "${BACKUP:?}/files" "${BACKUP:?}/absent"
   run mkdir -p "$BACKUP/files"
   local p units_tmp=""
   for p in "${TRACKED[@]}"; do
@@ -137,9 +140,63 @@ backup_state() {
   fi
 }
 
+# Every value of a (possibly repeated, possibly space-separated) networkd key,
+# one token per line. A trailing "#server-name" (DNS=) is dropped.
+network_values() { # file key
+  sed -n "s/^[[:space:]]*$2=//p" "$1" | tr -s ' \t\r' '\n' | sed 's/#.*$//' | sed '/^$/d'
+}
+
+# Print the [ipv4]/[ipv6] sections for one .network file (stdin: none).
+# Static Address= lines become addressN= (the first Gateway of the family goes on
+# address1), DNS= servers go to the section of their family as "dns=a;b;".
+wired_ip_sections() { # file
+  local f=$1 dhcp v token n
+  local -a a4=() a6=() g4=() g6=() d4=() d6=()
+  while read -r token; do
+    [ -n "$token" ] || continue
+    case $token in *:*) a6+=("$token") ;; *) a4+=("$token") ;; esac
+  done < <(network_values "$f" Address)
+  while read -r token; do
+    [ -n "$token" ] || continue
+    case $token in *:*) g6+=("$token") ;; *) g4+=("$token") ;; esac
+  done < <(network_values "$f" Gateway)
+  while read -r token; do
+    [ -n "$token" ] || continue
+    case $token in *:*) d6+=("$token") ;; *) d4+=("$token") ;; esac
+  done < <(network_values "$f" DNS)
+  dhcp=$(sed -n 's/^[[:space:]]*DHCP=//p' "$f" | head -n1)
+  [ ${#a4[@]} -gt 0 ] || case $dhcp in yes | ipv4 | "") ;; *) say "  note: $f has DHCP=$dhcp; using DHCP4 in NM" >&2 ;; esac
+
+  printf '[ipv4]\n'
+  if [ ${#a4[@]} -gt 0 ]; then
+    printf 'method=manual\n'
+    n=0
+    for v in "${a4[@]}"; do
+      n=$((n + 1))
+      printf 'address%d=%s%s\n' "$n" "$v" "$([ $n = 1 ] && [ ${#g4[@]} -gt 0 ] && echo ",${g4[0]}")"
+    done
+  else
+    printf 'method=auto\n'
+  fi
+  if [ ${#d4[@]} -gt 0 ]; then printf 'dns=%s;\n' "$(IFS=';'; echo "${d4[*]}")"; fi
+
+  printf '\n[ipv6]\n'
+  if [ ${#a6[@]} -gt 0 ]; then
+    printf 'method=manual\n'
+    n=0
+    for v in "${a6[@]}"; do
+      n=$((n + 1))
+      printf 'address%d=%s%s\n' "$n" "$v" "$([ $n = 1 ] && [ ${#g6[@]} -gt 0 ] && echo ",${g6[0]}")"
+    done
+  else
+    printf 'method=auto\n'
+  fi
+  if [ ${#d6[@]} -gt 0 ]; then printf 'dns=%s;\n' "$(IFS=';'; echo "${d6[*]}")"; fi
+}
+
 # Translate the networkd .network files that match a named interface into NM profiles.
 write_wired_profiles() {
-  local dir=$ROOT/etc/systemd/network f name slug iface dhcp addr gw dns
+  local dir=$ROOT/etc/systemd/network f name slug iface
   [ -d "$dir" ] || return 0
   for f in "$dir"/*.network; do
     [ -f "$f" ] || continue
@@ -149,20 +206,9 @@ write_wired_profiles() {
     slug=${name//\*/any}
     iface="interface-name=$name"
     case $name in *\**) iface='' ;; esac
-    dhcp=$(sed -n 's/^DHCP=//p' "$f" | head -n1)
-    addr=$(sed -n 's/^Address=//p' "$f" | head -n1)
-    gw=$(sed -n 's/^Gateway=//p' "$f" | head -n1)
-    dns=$(sed -n 's/^DNS=//p' "$f" | head -n1)
     {
       printf '[connection]\nid=nexus-wired-%s\ntype=ethernet\n%sautoconnect=true\n\n' "$slug" "${iface:+$iface$'\n'}"
-      if [ -n "$addr" ]; then
-        printf '[ipv4]\nmethod=manual\naddress1=%s%s\n' "$addr" "${gw:+,$gw}"
-        [ -n "$dns" ] && printf 'dns=%s;\n' "$dns"
-      else
-        case $dhcp in yes | ipv4 | "") ;; *) say "  note: $f has DHCP=$dhcp; using DHCP4 in NM" ;; esac
-        printf '[ipv4]\nmethod=auto\n'
-      fi
-      printf '\n[ipv6]\nmethod=auto\n'
+      wired_ip_sections "$f"
     } | write_file "$NM_CONN_DIR/nexus-wired-$slug.nmconnection" 600
   done
 }

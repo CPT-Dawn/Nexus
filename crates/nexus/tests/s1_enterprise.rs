@@ -4,14 +4,10 @@
 use std::io::Write as _;
 use std::process::Stdio;
 
-use nexus_testkit::{Ap, DeviceId, World};
+use nexus_testkit::{Ap, DeviceId, World, network_id as id};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 fn world() -> (World, DeviceId) {
     let world = World::start(NEXUS);

@@ -59,7 +59,7 @@ Run: `cargo test --workspace`.
 
 ## Real mode: hwsim + hostapd + real NetworkManager
 
-`crates/nexus/tests/real_mode.rs` runs the S1 wire and CLI against real NetworkManager (status, wifi list/scan, join open/WPA2/SAE, wrong password, Forget). It skips in a plain `cargo test`. The rig runs it:
+`crates/nexus/tests/real_mode.rs` runs the S1 wire and CLI against real NetworkManager (status, wifi list/scan, join open/WPA2/SAE, wrong password, Forget, a simulated Portal). It skips in a plain `cargo test`. The rig runs it:
 
 ```
 rig/run.sh [test-name-filter]      # as your user; builds, then uses sudo
@@ -75,6 +75,8 @@ How it stays off your network:
 - If NetworkManager runs on the host, the rig stops unless `NEXUS_RIG_ALLOW_HOST_NM=1`: for a few milliseconds the new radios exist in the host namespace before they are moved and the host's NM may glimpse them (it has no Profile for them).
 - Teardown kills the pid namespace's init (everything inside dies), removes the radios and temp files.
 - On failure the tail of every rig log (`dbus`, `hostapd-*`, `dnsmasq`, `wpa_supplicant`, `networkmanager`) is printed.
+
+The Portal: `NexusPortal` is an open AP whose subnet `rig/portal.py` (in the AP namespace) redirects to `/login`. NetworkManager's connectivity check (`rig/inner.sh` writes `[connectivity]`, interval 5 s) fetches `http://10.99.99.1/check.txt`, an address on the AP namespace's loopback every AP reaches; other APs get the expected answer. `a_portal_is_detected_and_signing_in_clears_it` joins it, waits for `connectivity: portal`, fetches `/login` and waits for `full`.
 
 Add an AP: drop a hostapd config in `rig/aps.d/<name>.conf` with `interface=@IFACE@` (the rig substitutes it). One radio and one `10.99.N.0/24` DHCP subnet per file, in alphabetical order. Then add its SSID and password as constants in `real_mode.rs`. Sketches:
 - OWE: `wpa=2`, `wpa_key_mgmt=OWE`, `rsn_pairwise=CCMP`, `ieee80211w=2`.

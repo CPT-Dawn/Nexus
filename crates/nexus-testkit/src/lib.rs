@@ -30,3 +30,25 @@ pub use fake_secret_service::FakeSecretService;
 pub use fake_systemd::{FakeSystemd, Unit};
 pub use real::RealWorld;
 pub use world::{PATIENCE, Wire, World, WorldBuilder};
+
+/// The wire id of the Wi-Fi Network named `ssid`, as the Daemon computes it.
+#[must_use]
+pub fn network_id(ssid: &str) -> String {
+    nexus_ipc::network_id(ssid.as_bytes())
+}
+
+/// Polls `cond` every 20 ms until it holds; panics after 10 s naming `what`.
+/// For state that settles on its own task, where there is no event to wait for.
+///
+/// # Panics
+/// When `cond` still does not hold after 10 s.
+pub fn eventually(what: &str, cond: impl Fn() -> bool) {
+    let start = std::time::Instant::now();
+    while !cond() {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "never happened: {what}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}

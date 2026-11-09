@@ -249,6 +249,46 @@ t_real_root_revert_dry_run() {
   [ $rc = 0 ] && grep -q '^+ rm -rf /etc/iwd$' <<<"$out" && grep -q '== Done' <<<"$out"
 }
 
+# Static networkd config: every Address=/DNS= line counts, "DNS=a b" is two
+# servers, IPv6 values belong under [ipv6], and the Gateway goes on address1.
+t_static_wired_translation() {
+  setup
+  local ok=1 prof
+  printf '%s\n' '[Match]' 'Name=enp5s0' '[Network]' 'DHCP=no' \
+    'Address=192.168.1.10/24' 'Address=192.168.1.11/24' 'Address=fd00::10/64' \
+    'Gateway=192.168.1.1' 'Gateway=fd00::1' \
+    'DNS=1.1.1.1 9.9.9.9' 'DNS=2606:4700:4700::1111#cloudflare-dns.com' \
+    >"$NEXUS_SWITCH_ROOT/etc/systemd/network/30-static.network"
+  "$SCRIPT" --yes >/dev/null 2>&1 || ok=0
+  prof=$NEXUS_SWITCH_ROOT/etc/NetworkManager/system-connections/nexus-wired-enp5s0.nmconnection
+  [ "$(sed -n '/^\[ipv4\]/,/^\[ipv6\]/p' "$prof")" = "$(printf '%s\n' '[ipv4]' 'method=manual' \
+    'address1=192.168.1.10/24,192.168.1.1' 'address2=192.168.1.11/24' 'dns=1.1.1.1;9.9.9.9;' '' '[ipv6]')" ] || ok=0
+  [ "$(sed -n '/^\[ipv6\]/,$p' "$prof")" = "$(printf '%s\n' '[ipv6]' 'method=manual' \
+    'address1=fd00::10/64,fd00::1' 'dns=2606:4700:4700::1111;')" ] || ok=0
+  [ "$(stat -c %a "$prof")" = 600 ] || ok=0
+  teardown
+  [ $ok = 1 ]
+}
+
+# A backup interrupted before it finished is redone from scratch on the next run:
+# no copies nested inside half-written directories, and revert restores the original.
+t_interrupted_backup_reruns_cleanly() {
+  setup
+  local ok=1 b
+  before=$(snapshot)
+  b=$NEXUS_SWITCH_ROOT/var/lib/nexus-switch
+  mkdir -p "$b/files/etc/iwd"
+  echo stale >"$b/files/etc/iwd/main.conf"
+  "$SCRIPT" --yes >/dev/null 2>&1 || ok=0
+  [ ! -e "$b/files/etc/iwd/iwd" ] || ok=0
+  [ ! -e "$b/files/etc/systemd/network/network" ] || ok=0
+  grep -q '^EnableNetworkConfiguration=true' "$b/files/etc/iwd/main.conf" || ok=0
+  "$SCRIPT" --revert --yes >/dev/null 2>&1 || ok=0
+  grep -q '^EnableNetworkConfiguration=true' "$NEXUS_SWITCH_ROOT/etc/iwd/main.conf" || ok=0
+  teardown
+  [ $ok = 1 ]
+}
+
 check "dry-run prints every step and changes nothing" t_dry_run_changes_nothing
 check "switch then revert restores previous state exactly" t_switch_then_revert_restores
 check "refuses partially configured state without confirmation" t_refuses_partial_state_without_confirmation
@@ -258,5 +298,7 @@ check "resume finishes an interrupted switch" t_resume_finishes_an_interrupted_s
 check "resume without a backup fails" t_resume_without_backup_fails
 check "refuses to touch the real system unless root" t_real_root_needs_root
 check "revert dry-run works on the real root" t_real_root_revert_dry_run
+check "static wired config keeps every address and DNS server" t_static_wired_translation
+check "an interrupted backup reruns without nesting copies" t_interrupted_backup_reruns_cleanly
 echo "$((total - fails))/$total passed"
 [ $fails = 0 ]

@@ -7,7 +7,10 @@ arch=('x86_64' 'aarch64')
 url='https://github.com/CPT-Dawn/Nexus'
 license=('MIT')
 depends=('glibc' 'gcc-libs' 'networkmanager')
-optdepends=('polkit: authorise Wi-Fi and connection changes (see /usr/share/doc/nexus/POLKIT.md)')
+optdepends=('polkit: authorise Wi-Fi and Profile changes (see /usr/share/doc/nexus/POLKIT.md)'
+            'iw: count the stations joined to a Hotspot'
+            'xdg-utils: open a Portal login page in the browser (xdg-open)'
+            'xdg-terminal-exec: open a terminal from notification actions (else $TERMINAL is used)')
 provides=('nexus' "nexus-nm=$pkgver")
 conflicts=('nexus' 'nexus-nm')
 source_x86_64=("nexus-$pkgver-x86_64.tar.gz::https://github.com/CPT-Dawn/Nexus/releases/download/v$pkgver/nexus-$pkgver-x86_64-linux.tar.gz")
