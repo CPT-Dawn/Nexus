@@ -93,6 +93,11 @@ pub struct ProfileSettings {
     pub metered: bool,
     /// Higher joins first when several saved Networks are in range.
     pub priority: i32,
+    /// The Profile's secret lives in the Secret Service keyring and the
+    /// Daemon serves it to NetworkManager, instead of NetworkManager's own
+    /// system store (the default).
+    #[serde(default)]
+    pub keyring: bool,
 }
 
 /// Which saved Profile a profile op means: a Wi-Fi Network's (by

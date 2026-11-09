@@ -87,6 +87,10 @@ _Avoid_: client, UI
 A request from the Backend for something only the user knows, such as a Wi-Fi password or a VPN one-time code, answered through a Front end.
 _Avoid_: password dialog, auth request
 
+**Keyring**:
+The user's Secret Service (gnome-keyring, KWallet, KeePassXC) as an opt-in home for one Profile's Wi-Fi password. A Profile "kept in the keyring" has its password marked agent-owned, so NetworkManager never stores it and asks the Daemon, which answers from the keyring. The system store (NetworkManager's own) stays the default.
+_Avoid_: wallet, vault, password manager
+
 **Reveal**:
 Reading a stored secret back out of the Backend, such as a saved Wi-Fi password, so it can be shown or turned into a QR code. Always an explicit act of the user, and the Backend must authorize it.
 _Avoid_: unlock, decrypt, export
@@ -98,3 +102,11 @@ _Avoid_: diagnostics, troubleshooter, health check
 **Verb**:
 One thing the TUI can do, named in plain English ("Forget network") with its key. The single table of Verbs drives the command palette and the `?` help, so a key is documented and findable by being listed once.
 _Avoid_: command, action, menu item
+
+**Effect**:
+A short animation the TUI plays because something happened: a tab glides in, a joined Network blooms, the focal element pulses while connecting, an error toast shakes once, a toast slides in. Every Effect starts from an event and ends by itself; nothing animates on its own, so an idle TUI draws no frames.
+_Avoid_: animation, transition, ambient motion
+
+**Reduced motion**:
+The mode (`NEXUS_REDUCE_MOTION=1` or `REDUCE_MOTION=1`) in which nothing moves: tabs change at once, toasts appear in place, no pulse, no shake. The colour changes that say what happened stay. Terminals with 16 colours or none play no Effects at all.
+_Avoid_: no-animation mode, calm mode

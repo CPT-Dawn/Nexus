@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use crate::{Bus, FakeBluez, FakeNm, FakeNotifications, FakeSystemd};
+use crate::{Bus, FakeBluez, FakeNm, FakeNotifications, FakeSecretService, FakeSystemd};
 
 /// How long to wait for the Daemon's socket, and for any single reply.
 pub const PATIENCE: Duration = Duration::from_secs(10);
@@ -21,6 +21,7 @@ pub struct WorldBuilder {
     nm_running: bool,
     start_daemon: bool,
     notifications: bool,
+    keyring: bool,
     env: Vec<(String, String)>,
     bluez: Option<bool>,
 }
@@ -53,6 +54,14 @@ impl WorldBuilder {
         self
     }
 
+    /// Whether a Secret Service (keyring) runs on the private session bus
+    /// (default no: then no keyring answers and the Daemon must cope). Reach
+    /// it with [`World::keyring`].
+    pub fn keyring(mut self, yes: bool) -> Self {
+        self.keyring = yes;
+        self
+    }
+
     /// An extra environment variable for everything the world starts, e.g.
     /// `TERMINAL`.
     pub fn env(mut self, key: &str, value: &str) -> Self {
@@ -72,11 +81,15 @@ impl WorldBuilder {
         }
         let systemd = FakeSystemd::start(&nm_bus.address);
         let bluez = self.bluez.map(|on| FakeBluez::start(&nm_bus.address, on));
-        let session = self
-            .notifications
-            .then(|| Bus::start(tmp.path(), "session-bus"));
+        let session =
+            (self.notifications || self.keyring).then(|| Bus::start(tmp.path(), "session-bus"));
+        let keyring = session
+            .as_ref()
+            .filter(|_| self.keyring)
+            .map(|b| FakeSecretService::start(&b.address));
         let notifications = session
             .as_ref()
+            .filter(|_| self.notifications)
             .map(|b| FakeNotifications::start(&b.address));
         let mut world = World {
             bin: self.bin,
@@ -86,6 +99,7 @@ impl WorldBuilder {
             nm_bus,
             session,
             notifications,
+            keyring,
             env: self.env,
             daemon: None,
             kill_group: false,
@@ -108,6 +122,8 @@ pub struct World {
     bluez: Option<FakeBluez>,
     /// The fake notification server, when the builder asked for one.
     pub notifications: Option<FakeNotifications>,
+    /// The fake Secret Service, when the builder asked for one.
+    pub keyring: Option<FakeSecretService>,
     bin: PathBuf,
     nm_bus: Bus,
     session: Option<Bus>,
@@ -125,6 +141,7 @@ impl World {
             nm_running: true,
             start_daemon: true,
             notifications: false,
+            keyring: false,
             env: Vec::new(),
             bluez: None,
         }

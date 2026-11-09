@@ -4,11 +4,11 @@ expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  * Online
 + Connections ---------------++ Status ------------------------------------------------------------+
-| > * Wi-Fi                  ||   ##    ####    ##      ######  ####    ######                     |
-|     Home-5G                || ##  ##  ##  ##  ##        ##    ##  ##  ##                         |
-|   o Ethernet               || ##  ##  ##  ##  ##        ##    ##  ##  ####                       |
-|     Not connected          || ##  ##  ##  ##  ##        ##    ##  ##  ##                         |
-|   o VPN                    ||   ##    ##  ##  ######  ######  ##  ##  ######                     |
+| > * Wi-Fi                  ||   ####    ##    ##  ##        ######    ##    ##  ########         |
+|     Home-5G                || ##    ##  ####  ##  ##          ##      ####  ##  ##               |
+|   o Ethernet               || ##    ##  ########  ##          ##      ########  ######           |
+|     Not connected          || ##    ##  ##  ####  ##          ##      ##  ####  ##               |
+|   o VPN                    ||   ####    ##    ##  ########  ######    ##    ##  ########         |
 |     Not connected          ||                                                                    |
 |   o Hotspot                || You're online via Wi-Fi (Home-5G). Everything looks healthy.       |
 |     Not started            || Internet: full  |  Backend: networkmanager 1.58.1                  |

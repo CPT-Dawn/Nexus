@@ -4,6 +4,7 @@ mod config;
 mod daemon;
 mod doctor;
 mod ethernet_view;
+mod keyring;
 mod profile_cli;
 mod secrets;
 mod tether_view;

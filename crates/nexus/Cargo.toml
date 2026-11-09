@@ -35,6 +35,8 @@ zeroize = "1.9.1"
 qrcode = { version = "0.14", default-features = false }
 x25519-dalek = { version = "3.0.0", default-features = false, features = ["static_secrets", "zeroize"] }
 base64 = "0.23.1"
+oo7 = { version = "0.7.0", default-features = false, features = ["tokio", "native_crypto"] }
+tachyonfx = { version = "0.25.2", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 insta = "1"

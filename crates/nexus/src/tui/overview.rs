@@ -114,6 +114,11 @@ pub fn traffic_shown(look: &Look, status: &Status, width: u16, height: u16) -> b
     a.mode != Mode::TooSmall && plan(status, &a, look).traffic.height >= MIN_BLOCK
 }
 
+/// Where the hero sits (the focal element that pulses while connecting).
+pub fn hero_rect(status: &Status, a: &Areas, look: &Look) -> Rect {
+    plan(status, a, look).hero
+}
+
 pub fn draw(f: &mut Frame, app: &App, status: &Status, a: &Areas, look: &Look, sym: &Sym) {
     let p = plan(status, a, look);
     cards_panel(f, app, p.cards, look, sym, p.roomy);

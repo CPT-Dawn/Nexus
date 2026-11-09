@@ -20,10 +20,15 @@ use zbus::{Connection, OwnedObjectPath, OwnedVariant, Variant};
 
 use super::{Settings, SettingsConnectionProxy, WirelessProxy};
 use super::{active_ssid, profiles, radios, variant};
+use crate::keyring::Keyring;
 use crate::text::{self, Failure};
 
 /// `NM_SETTINGS_UPDATE2_FLAG_TO_DISK`.
 const TO_DISK: u32 = 0x1;
+const SECURITY: &str = "802-11-wireless-security";
+/// `NM_SETTING_SECRET_FLAG_AGENT_OWNED`: NetworkManager does not store the
+/// secret; an agent (Nexus, out of the keyring) supplies it on demand.
+const AGENT_OWNED: u32 = 0x1;
 
 #[zbus::proxy(
     interface = "org.freedesktop.NetworkManager.Settings.Connection",
@@ -76,6 +81,13 @@ fn text(section: &Section, key: &str) -> Option<String> {
 
 fn int(section: &Section, key: &str) -> Option<i32> {
     section.get(key)?.try_clone().ok()?.try_into().ok()
+}
+
+fn flags(section: &Section, key: &str) -> u32 {
+    section
+        .get(key)
+        .and_then(|v| v.try_clone().ok()?.try_into().ok())
+        .unwrap_or(0)
 }
 
 fn strings(section: &Section, key: &str) -> Vec<String> {
@@ -154,6 +166,7 @@ pub(super) fn read_settings(all: &Settings) -> ProfileSettings {
         // 1 = yes, 3 = guessed yes.
         metered: matches!(int(connection, "metered"), Some(1 | 3)),
         priority: int(connection, "autoconnect-priority").unwrap_or(0),
+        keyring: flags(get(SECURITY), "psk-flags") & AGENT_OWNED != 0,
     }
 }
 
@@ -252,6 +265,49 @@ pub(super) fn apply_settings(all: &mut Settings, new: &ProfileSettings) {
     }
     if before.priority != new.priority {
         connection.insert("autoconnect-priority".into(), variant(new.priority));
+    }
+}
+
+/// Which way a Profile's secret moved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Moved {
+    IntoKeyring,
+    OutOfKeyring,
+}
+
+/// Moves the Profile's Wi-Fi secret between NetworkManager's system store and
+/// the keyring, in `all` (what `Update2` is about to write). The keyring is
+/// checked and written first and the Profile only changes after that, so a
+/// keyring that is not there leaves the Profile exactly as it was.
+async fn move_secret(
+    all: &mut Settings,
+    uuid: &str,
+    ssid: &str,
+    into_keyring: bool,
+) -> Result<Moved, Failure> {
+    let security = all.entry(SECURITY.to_owned()).or_default();
+    if into_keyring {
+        let psk = text(security, "psk").ok_or_else(|| text::no_password_to_keep(ssid))?;
+        let secret = zeroize::Zeroizing::new(psk);
+        Keyring
+            .store(uuid, ssid, &secret)
+            .await
+            .map_err(|e| text::keyring_unavailable(ssid, &e.0))?;
+        security.remove("psk");
+        security.insert("psk-flags".into(), variant(AGENT_OWNED));
+        Ok(Moved::IntoKeyring)
+    } else {
+        let kept = Keyring
+            .lookup(uuid)
+            .await
+            .map_err(|e| text::keyring_unavailable(ssid, &e.0))?;
+        // Nothing kept (someone emptied the keyring): NetworkManager will ask
+        // for the password at the next join.
+        if let Some(secret) = kept {
+            security.insert("psk".into(), variant(secret.as_str()));
+        }
+        security.insert("psk-flags".into(), variant(0u32));
+        Ok(Moved::OutOfKeyring)
     }
 }
 
@@ -387,7 +443,19 @@ pub async fn update(
             all.entry(setting).or_default().extend(values);
         }
     }
-    let mac_changes = read_settings(&all).mac != new.mac;
+    let was = read_settings(&all);
+    let mac_changes = was.mac != new.mac;
+    let moved = if was.keyring == new.keyring {
+        None
+    } else if matches!(key, ProfileKey::Uuid(_)) {
+        // The keyring keeps Wi-Fi passwords; a wired Profile has none to move.
+        return Ok(Err(text::keyring_not_for_wired()));
+    } else {
+        match move_secret(&mut all, &t.uuid, &name, new.keyring).await {
+            Ok(moved) => Some(moved),
+            Err(f) => return Ok(Err(f)),
+        }
+    };
     apply_settings(&mut all, new);
 
     let nm = manager(conn).await?;
@@ -405,6 +473,9 @@ pub async fn update(
     if let Err(e) = write.update2(all, TO_DISK, args).await {
         if let Some(cp) = &checkpoint {
             let _ = nm.checkpoint_destroy(cp).await; // nothing changed
+        }
+        if moved == Some(Moved::IntoKeyring) {
+            let _ = Keyring.remove(&t.uuid).await; // nobody will ask for it
         }
         return Ok(Err(match e {
             zbus::Error::MethodError(ref n, _, _) if n.as_str().ends_with("VersionIdMismatch") => {
@@ -427,6 +498,11 @@ pub async fn update(
         if let Err(e) = reactivate.await {
             tracing::debug!("cannot re-activate {name} after a MAC change: {e}");
         }
+    }
+    if moved == Some(Moved::OutOfKeyring)
+        && let Err(e) = Keyring.remove(&t.uuid).await
+    {
+        tracing::warn!("cannot clear the keyring entry of {name}: {e}");
     }
     let version = write.version_id().await?;
     Ok(Ok(Changed {
@@ -501,6 +577,7 @@ mod tests {
             mac: MacMode::EveryTime,
             metered: true,
             priority: -5,
+            keyring: false,
         };
         apply_settings(&mut all, &new);
         assert_eq!(read_settings(&all), new);

@@ -478,3 +478,18 @@ fn the_cli_connects_and_disconnects() {
     let out = world.run_nexus(&["ethernet", "disconnect"]);
     assert_eq!(out.status.code(), Some(11), "not connected");
 }
+
+#[test]
+fn the_keyring_switch_is_refused_cleanly_on_a_wired_profile() {
+    let (world, _) = world();
+    world.nm.add_ethernet_profile(OFFICE, "Office", "enp3s0");
+    let view = get(&world);
+    assert_eq!(view["ok"]["settings"]["keyring"], false, "{view}");
+    let mut settings = view["ok"]["settings"].clone();
+    settings["keyring"] = json!(true);
+    let resp = world.wire().call(json!({
+        "op": "profile_update", "profile": OFFICE,
+        "version": view["ok"]["version"], "settings": settings,
+    }));
+    assert_eq!(resp["err"]["code"], "invalid_settings", "{resp}");
+}

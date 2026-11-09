@@ -36,6 +36,7 @@ pub enum Row {
     Mac,
     Metered,
     Priority,
+    Keyring,
 }
 
 impl Row {
@@ -51,6 +52,7 @@ impl Row {
             Row::Mac => "MAC address",
             Row::Metered => "Metered",
             Row::Priority => "Priority",
+            Row::Keyring => "Keyring",
         }
     }
 
@@ -131,6 +133,7 @@ pub struct Editor {
     mac: MacMode,
     metered: bool,
     priority: String,
+    keyring: bool,
     /// The Daemon's last complaint (a conflict, say), shown in the form.
     pub message: Option<String>,
 }
@@ -154,6 +157,7 @@ impl Editor {
             mac: MacMode::Permanent,
             metered: false,
             priority: "0".into(),
+            keyring: false,
             message: None,
         }
     }
@@ -196,6 +200,7 @@ impl Editor {
                 self.dns = s.dns.join(", ");
                 self.mac = s.mac;
                 self.metered = s.metered;
+                self.keyring = s.keyring;
                 self.priority = s.priority.to_string();
                 self.view = Some(view);
                 self.phase = Phase::Editing;
@@ -214,7 +219,13 @@ impl Editor {
         if self.ipv6 == Ipv6Method::Manual {
             rows.extend([Row::Ipv6Address, Row::Ipv6Gateway]);
         }
-        rows.extend([Row::Dns, Row::Mac, Row::Metered, Row::Priority]);
+        rows.extend([
+            Row::Dns,
+            Row::Mac,
+            Row::Metered,
+            Row::Priority,
+            Row::Keyring,
+        ]);
         rows
     }
 
@@ -266,6 +277,13 @@ impl Editor {
                     "no"
                 }
             }
+            Row::Keyring => {
+                if self.keyring {
+                    "yes, in your keyring"
+                } else {
+                    "no, system store"
+                }
+            }
             _ => "",
         }
     }
@@ -292,6 +310,7 @@ impl Editor {
         s.ipv6.method = self.ipv6;
         s.mac = self.mac;
         s.metered = self.metered;
+        s.keyring = self.keyring;
         if self.ipv4 == Ipv4Method::Manual {
             match profile::parse_addresses(&self.ipv4_address, false) {
                 Ok(a) => s.ipv4.addresses = a,
@@ -538,6 +557,7 @@ impl Editor {
                 );
             }
             Row::Metered => self.metered = !self.metered,
+            Row::Keyring => self.keyring = !self.keyring,
             _ => return Action::Idle,
         }
         Action::Redraw
@@ -630,10 +650,10 @@ mod tests {
     #[test]
     fn static_ipv4_rows_appear_and_are_checked_only_then() {
         let mut e = loaded();
-        assert_eq!(e.rows().len(), 6);
+        assert_eq!(e.rows().len(), 7);
         assert!(e.build().is_ok());
         e.key(key(KeyCode::Char(' '))); // IPv4 -> static
-        assert_eq!(e.rows().len(), 8);
+        assert_eq!(e.rows().len(), 9);
         let problems = e.problems();
         assert_eq!(problems[0].0, Row::Ipv4Address, "{problems:?}");
         e.key(key(KeyCode::Char(' '))); // static -> automatic again
@@ -655,7 +675,7 @@ mod tests {
     #[test]
     fn a_priority_that_is_not_a_number_is_a_complaint() {
         let mut e = loaded();
-        for _ in 0..6 {
+        for _ in 0..5 {
             e.key(key(KeyCode::Tab));
         }
         assert_eq!(e.focused(), Row::Priority);

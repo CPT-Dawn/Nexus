@@ -40,6 +40,7 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::Unplugged => 27,
         ErrorCode::UnknownPort => 28,
         ErrorCode::MissingPlugin => 24,
+        ErrorCode::KeyringUnavailable => 25,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -603,6 +604,7 @@ mod tests {
             ErrorCode::InvalidSettings,
             ErrorCode::Conflict,
             ErrorCode::NothingPending,
+            ErrorCode::KeyringUnavailable,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

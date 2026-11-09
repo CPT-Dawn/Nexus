@@ -75,6 +75,10 @@ pub struct SetArgs {
     /// Autoconnect priority, -999 to 999: higher joins first.
     #[arg(long, allow_hyphen_values = true)]
     priority: Option<i32>,
+    /// Keep this Profile's password in your Secret Service keyring instead of
+    /// NetworkManager's system store (the default).
+    #[arg(long, value_enum)]
+    keyring: Option<YesNo>,
     /// For a Profile in use: seconds to wait for confirmation before the
     /// change rolls back (default 15).
     #[arg(long)]
@@ -146,6 +150,7 @@ pub fn show(ssid: &str, json: bool) -> ExitCode {
     println!("  MAC       {}", mac_words(s.mac));
     println!("  Metered   {}", if s.metered { "yes" } else { "no" });
     println!("  Priority  {}", s.priority);
+    println!("  Keyring   {}", if s.keyring { "yes" } else { "no" });
     ExitCode::SUCCESS
 }
 
@@ -236,6 +241,11 @@ fn edit(s: &mut ProfileSettings, a: &SetArgs) -> Result<(), String> {
     }
     if let Some(p) = a.priority {
         s.priority = p;
+    }
+    match a.keyring {
+        Some(YesNo::Yes) => s.keyring = true,
+        Some(YesNo::No) => s.keyring = false,
+        None => {}
     }
     Ok(())
 }

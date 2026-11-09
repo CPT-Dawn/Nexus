@@ -391,6 +391,9 @@ pub enum ErrorCode {
     /// A plugin VPN's NetworkManager plugin is not installed; the message
     /// names the package.
     MissingPlugin,
+    /// No Secret Service (keyring) answers, or it is locked or refused: a
+    /// Profile's secrets cannot be moved into or out of it.
+    KeyringUnavailable,
     #[serde(other)]
     Unknown,
 }

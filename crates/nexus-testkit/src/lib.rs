@@ -13,6 +13,7 @@ mod bus;
 mod fake_bluez;
 mod fake_nm;
 mod fake_notifications;
+mod fake_secret_service;
 mod fake_systemd;
 mod real;
 pub mod scenarios;
@@ -25,6 +26,7 @@ pub use fake_nm::{
     SCAN_RATE_LIMIT_MS, boottime_ms,
 };
 pub use fake_notifications::{FakeNotifications, Notified};
+pub use fake_secret_service::FakeSecretService;
 pub use fake_systemd::{FakeSystemd, Unit};
 pub use real::RealWorld;
 pub use world::{PATIENCE, Wire, World, WorldBuilder};

@@ -4,13 +4,13 @@ expression: styled_of(&rig.buffer(STANDARD))
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
 ╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
-│ ▸ ● Wi-Fi                  ││     ░░    ░░░░    ░░      ░░░░░░  ░░░░    ░░░░░░                   │
-│     Home-5G                ││   ░░██░░░░████░░░░██░░  ░░██████░░████░░░░██████░░                 │
-│   ○ Ethernet               ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░██░░░░                   │
-│     Not connected          ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░████░░                   │
-│   ○ VPN                    ││ ░░██░░██░░██░░██░░██░░░░  ░░██░░░░██░░██░░██░░░░                   │
-│     Not connected          ││   ░░██░░░░██░░██░░██████░░██████░░██░░██░░██████░░                 │
-│   ○ Hotspot                ││     ░░    ░░  ░░  ░░░░░░  ░░░░░░  ░░  ░░  ░░░░░░                   │
+│ ▸ ● Wi-Fi                  ││     ░░░░    ░░    ░░  ░░        ░░░░░░    ░░    ░░  ░░░░░░░░       │
+│     Home-5G                ││   ░░████░░░░██░░░░██░░██░░    ░░██████░░░░██░░░░██░░████████░░     │
+│   ○ Ethernet               ││ ░░██░░░░██░░████░░██░░██░░      ░░██░░  ░░████░░██░░██░░░░░░       │
+│     Not connected          ││ ░░██░░░░██░░████████░░██░░      ░░██░░  ░░████████░░██████░░       │
+│   ○ VPN                    ││ ░░██░░░░██░░██░░████░░██░░░░░░  ░░██░░  ░░██░░████░░██░░░░░░       │
+│     Not connected          ││   ░░████░░░░██░░░░██░░████████░░██████░░░░██░░░░██░░████████░░     │
+│   ○ Hotspot                ││     ░░░░    ░░    ░░  ░░░░░░░░  ░░░░░░    ░░    ░░  ░░░░░░░░       │
 │     Not started            ││                                                                    │
 │                            ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │
 │                            ││ Internet: full  |  Backend: networkmanager 1.58.1                  │
@@ -31,12 +31,13 @@ expression: styled_of(&rig.buffer(STANDARD))
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
  j/k move  enter open  h/l tab  : palette  ? help  q quit
 
- 1330 cells  fg=- bg=- mods=[]
-  209 cells  fg=idx116 bg=- mods=[]
+ 1272 cells  fg=- bg=- mods=[]
+   38 cells  fg=idx115 bg=- mods=[]
+  171 cells  fg=idx116 bg=- mods=[]
     7 cells  fg=idx116 bg=- mods=[bold]
   157 cells  fg=idx145 bg=- mods=[]
-  211 cells  fg=idx149 bg=- mods=[]
-  172 cells  fg=idx149 bg=- mods=[dim]
+  239 cells  fg=idx149 bg=- mods=[]
+  202 cells  fg=idx149 bg=- mods=[dim]
   426 cells  fg=idx237 bg=- mods=[]
    58 cells  fg=idx242 bg=- mods=[]
   100 cells  fg=idx254 bg=- mods=[]
