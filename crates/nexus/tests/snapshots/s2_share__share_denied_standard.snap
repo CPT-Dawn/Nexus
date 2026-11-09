@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_share.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Wi-Fi ─────────────────────╮╭ Parents House ─────────────────────────────────────────────────────╮
+│     Home-5G    ▂▄▆█ wpa2   ││ Saved, out of range                                                │
+│     Work-Secu… ▂▄▆█ wpa3   ││                                                                    │
+│     Cafe Guest ▂▄▆█ open   ││ Autoconnect   on                                                   │
+│     Neighbour… ▂▄▆█ wpa2   ││                                                                    │
+│     A very lo… ▂▄▆█ wpa2   ││ Nexus joins it again when it is back in range.                     │
+│     Rooftop-6E ▂▄▆█ wpa2   ││                                                                    │
+│   ── Saved, out of range   ││                                                                    │
+│ ▸   Parents House     auto ││                                                                    │
+│     Hotel Lobby  ╭ Share Parents House ───────────────────────────────────────╮                  │
+│                  │ NetworkManager did not authorize showing the password of   │                  │
+│                  │ Parents House. Approve the authorization request and try   │                  │
+│                  │ again.                                                     │                  │
+│                  │                                                            │                  │
+│                  │ enter try again   esc close                                │                  │
+│                  ╰────────────────────────────────────────────────────────────╯                  │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ enter try again  esc close

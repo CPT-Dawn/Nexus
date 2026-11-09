@@ -12,6 +12,7 @@ mod doctor_view;
 mod graph;
 mod layout;
 mod overview;
+mod share;
 mod theme;
 mod view;
 mod wifi;

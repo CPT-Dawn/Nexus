@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_share.rs
+expression: frame
+---
+ Nexus  Wi-Fi ▾  2/6                              ● Offline
+╭ Wi-Fi ───────────────────────────────────────────────────╮
+│     Home-5G                             ▂▄▆█ wpa2     5G │
+│     Work-Secure                         ▂▄▆█ wpa3     5G │
+│     Cafe Guest                          ▂▄▆█ open   2.4G │
+╭ Share Parents House ─────────────────────────────────────╮
+│ The QR code needs a window of at least 37 by 22 cells.   │
+│ Make the window bigger, or use `nexus wifi share`.       │
+│                                                          │
+│ Password  •••••••••••••••••                              │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ p show password  esc close
