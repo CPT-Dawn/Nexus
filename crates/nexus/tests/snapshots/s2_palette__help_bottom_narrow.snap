@@ -15,7 +15,7 @@ expression: bottom
 │  Settings: Enter      Change the selected setting        █
 │  Settings: r          Put the default back               █
 │  u                    Wi-Fi, Hotspot: undo the toast     █
-│                                                          █
+│                                                          │
 │  Login page won't show? A browser with secure DNS (DNS   │
 │  over HTTPS) hides the Portal by skipping the network's  │
 │  resolver. Turn it off until you have signed in, or      │

@@ -12,7 +12,8 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use nexus_ipc::{
-    ErrorCode, Event, Hotspot, Op, Portal, Request, Response, Status, Tethers, VpnList, WifiList,
+    ErrorCode, EthernetList, Event, Hotspot, Op, Portal, Request, Response, Status, Tethers,
+    VpnList, WifiList,
 };
 
 use crate::backend::BackendError;
@@ -132,6 +133,7 @@ struct Seen {
     wifi: Option<WifiList>,
     vpns: Option<VpnList>,
     tethers: Option<Tethers>,
+    ethernet: Option<EthernetList>,
     hotspot: Option<Hotspot>,
     portal: Option<Portal>,
 }
@@ -157,6 +159,7 @@ async fn sync<B: Backend>(
     push: Push,
 ) {
     sync_tethers(backend, events, seen, push).await;
+    sync_ethernet(backend, events, seen, push).await;
     sync_hotspot(backend, events, seen, push).await;
     match backend.status().await {
         Ok(status) => {
@@ -252,6 +255,31 @@ async fn sync_tethers<B: Backend>(
         });
     }
     seen.tethers = Some(tethers);
+}
+
+/// Pushes `ethernet_changed` when a port's cable, Link or trouble differs
+/// from what subscribers were last told. A Backend that is gone reads as no
+/// ports, like the Wi-Fi list.
+async fn sync_ethernet<B: Backend>(
+    backend: &B,
+    events: &broadcast::Sender<Event>,
+    seen: &mut Seen,
+    push: Push,
+) {
+    let list = match backend.ethernet_list().await {
+        Ok(l) => l,
+        Err(BackendError::Unavailable) => EthernetList::default(),
+        Err(e) => {
+            tracing::debug!("ethernet unavailable: {e}");
+            return;
+        }
+    };
+    if push == Push::All || (push == Push::Changes && seen.ethernet.as_ref() != Some(&list)) {
+        let _ = events.send(Event::EthernetChanged {
+            ethernet: list.clone(),
+        });
+    }
+    seen.ethernet = Some(list);
 }
 
 /// Whether two pictures say the same about the running Hotspot. Whether the
@@ -362,6 +390,8 @@ async fn watch_backend<B: Backend>(
         status,
         wifi,
         tethers,
+        // What a Front end reads on connecting; only changes from it are pushed.
+        ethernet: backend.ethernet_list().await.ok(),
         hotspot,
         portal,
         vpns,
@@ -501,6 +531,14 @@ async fn answer<B: Backend>(
                 notifier.wrong_password(&f.message);
             }
             backend_reply(req.id, result)
+        }
+        Op::EthernetList => backend_reply(req.id, backend.ethernet_list().await),
+        Op::EthernetConnect { port } => backend_reply(req.id, backend.ethernet_connect(port).await),
+        Op::EthernetJoinEap { port, eap } => {
+            backend_reply(req.id, backend.ethernet_join_eap(port, eap).await)
+        }
+        Op::EthernetDisconnect { port } => {
+            backend_reply(req.id, backend.ethernet_disconnect(port).await)
         }
         Op::Tethers => backend_reply(req.id, backend.tethers().await),
         Op::TetherConnect { phone } => backend_reply(req.id, backend.tether_connect(phone).await),

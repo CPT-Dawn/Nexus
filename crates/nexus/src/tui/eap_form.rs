@@ -76,8 +76,11 @@ impl Row {
 
 /// The guided form for an enterprise sign-in.
 pub struct EapForm {
-    /// The Wi-Fi `network` id the Front end joins when it is submitted.
+    /// The Wi-Fi `network` id the Front end joins when it is submitted, or the
+    /// port id when `wired`.
     pub network: String,
+    /// The form signs in to an Ethernet port, not a Wi-Fi Network.
+    pub wired: bool,
     /// What the form is for, shown in its title.
     pub name: String,
     method: EapMethod,
@@ -115,6 +118,7 @@ impl EapForm {
         let method = EapMethod::Peap;
         EapForm {
             network,
+            wired: false,
             name,
             method,
             phase2: method.inner().first().copied(),
@@ -132,6 +136,13 @@ impl EapForm {
             reveal: false,
             banner: None,
         }
+    }
+
+    /// A form that signs in to the Ethernet port `port`.
+    pub fn wired(port: String) -> EapForm {
+        let mut form = EapForm::new(port.clone(), port);
+        form.wired = true;
+        form
     }
 
     /// The form again after a failed join, with everything the person typed.

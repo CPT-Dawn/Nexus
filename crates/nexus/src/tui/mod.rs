@@ -11,6 +11,8 @@ mod client;
 mod doctor_view;
 mod eap_form;
 mod eap_ui;
+mod ethernet;
+mod ethernet_ui;
 mod fx;
 mod graph;
 mod hits;

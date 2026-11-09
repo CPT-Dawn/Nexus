@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_ethernet.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Ethernet ▾  3/6                           ● Offline
+    ╭ enp3s0 ──────────────────────────────────────────────╮
+    │ ! Cable in, not working                              │
+    │                                                      │
+    │ The cable is plugged in, but the network gave enp3s0 │
+    │ no address (DHCP got no answer). Check the router or │
+    │ switch, or set an address by hand in the Profile     │
+    │ settings. An office or campus port may also need a   │
+    │ sign-in (802.1X).                                    │
+    │                                                      │
+    │ Speed     1 Gbps                                     │
+    │ MAC       52:54:00:00:00:00                          │
+    │ Profile   Office wall socket                         │
+    │                                                      │
+    │ Enter tries again. s signs in (802.1X). e changes    │
+    │ the Profile settings.                                │
+    │                                                      │
+    │                                                      │
+    ╰──────────────────────────────────────────────────────╯
+ esc back  enter connect  s sign in  e settings  ? help

@@ -10,7 +10,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use nexus_ipc::{
-    ErrorCode, Event, Op, PendingChange, ProfileApplied, Request, Response, Settled, profile,
+    ErrorCode, Event, Op, PendingChange, ProfileApplied, ProfileKey, Request, Response, Settled,
+    profile,
 };
 use tokio::sync::{Mutex, broadcast};
 
@@ -78,9 +79,13 @@ fn done(id: u64) -> Response {
 pub async fn answer<B: Backend>(backend: &Arc<B>, gate: &Arc<Gate>, req: Request) -> Response {
     let id = req.id;
     match req.op {
-        Op::ProfileGet { network } => backend_reply(id, backend.profile_get(network).await),
+        Op::ProfileGet { network, profile } => backend_reply(
+            id,
+            backend.profile_get(ProfileKey::of(network, profile)).await,
+        ),
         Op::ProfileUpdate {
             network,
+            profile,
             version,
             settings,
             rollback_secs,
@@ -96,7 +101,16 @@ pub async fn answer<B: Backend>(backend: &Arc<B>, gate: &Arc<Gate>, req: Request
                 .filter(|s| *s > 0)
                 .unwrap_or(ROLLBACK_SECS)
                 .min(ROLLBACK_MAX);
-            update(backend, gate, id, network, version, settings, secs).await
+            update(
+                backend,
+                gate,
+                id,
+                ProfileKey::of(network, profile),
+                version,
+                settings,
+                secs,
+            )
+            .await
         }
         Op::ProfileConfirm { pending } => settle(backend, gate, id, pending, true).await,
         Op::ProfileRevert { pending } => settle(backend, gate, id, pending, false).await,
@@ -108,7 +122,7 @@ async fn update<B: Backend>(
     backend: &Arc<B>,
     gate: &Arc<Gate>,
     id: u64,
-    network: String,
+    key: ProfileKey,
     version: u64,
     settings: nexus_ipc::ProfileSettings,
     secs: u32,
@@ -118,10 +132,7 @@ async fn update<B: Backend>(
     if let Some(waiting) = open.as_ref() {
         return failure(id, text::change_waiting(&waiting.ssid));
     }
-    let changed = match backend
-        .profile_update(network, version, settings, secs)
-        .await
-    {
+    let changed = match backend.profile_update(key, version, settings, secs).await {
         Ok(c) => c,
         Err(e) => return backend_reply::<()>(id, Err(e)),
     };

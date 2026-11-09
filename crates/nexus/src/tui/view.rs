@@ -13,6 +13,7 @@ use super::app::{App, Conn, Layer, Tab};
 use super::caps::Glyphs;
 use super::doctor_view;
 use super::eap_ui;
+use super::ethernet_ui;
 use super::hits::{Hit, hint_key};
 use super::hotspot_ui;
 use super::layout::{self, Areas, Mode};
@@ -357,6 +358,9 @@ fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::Settings {
         return settings_ui::master(f, app, area, look, sym);
     }
+    if app.tab() == Tab::Ethernet {
+        return ethernet_ui::master(f, app, area, look, sym);
+    }
     if app.tab().rows() > 0 {
         overview::cards_panel(f, app, area, look, sym, true);
         return;
@@ -382,6 +386,9 @@ fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     }
     if app.tab() == Tab::Settings && app.conn() == Conn::Up {
         return settings_ui::detail(f, app, area, look, sym);
+    }
+    if app.tab() == Tab::Ethernet && app.conn() == Conn::Up {
+        return ethernet_ui::detail(f, app, area, look, sym);
     }
     let title = match app.tab() {
         Tab::Overview => "Status",
