@@ -90,7 +90,7 @@ auth-polkit=false
 wifi.backend=wpa_supplicant
 wifi.scan-rand-mac-address=no
 [logging]
-level=${NEXUS_RIG_NM_LOG:-DEBUG}
+level=${NEXUS_RIG_NM_LOG:-INFO}
 EOF
 # NetworkManager leaves a device unmanaged until udev has initialised it, and
 # the host's udev never saw this namespace's devices: run a private udevd.
