@@ -26,6 +26,19 @@ case $verb in
     for a in "$@"; do
       case $a in --now) now=1 ;; -*) ;; *) units+=("$a") ;; esac
     done
+    stops=0
+    if [ $now = 1 ] || [ "$verb" = stop ]; then
+      case $verb in disable | stop) stops=1 ;; esac
+    fi
+    if [ $stops = 1 ] && printf '%s\n' "${units[@]}" | grep -qx 'systemd-networkd'; then
+      for trig in systemd-networkd.socket systemd-networkd-varlink.socket systemd-networkd-varlink-metrics.socket systemd-networkd-resolve-hook.socket; do
+        if [ "$(cat "$STUB_STATE/$trig.active" 2>/dev/null)" = active ] && ! printf '%s\n' "${units[@]}" | grep -qx "$trig"; then
+          for u in "${units[@]}"; do [ "$verb" = disable ] && echo disabled >"$STUB_STATE/$u.enabled"; done
+          echo "Job for $trig canceled." >&2
+          exit 1
+        fi
+      done
+    fi
     for u in "${units[@]}"; do
       case $verb in
         enable) echo enabled >"$STUB_STATE/$u.enabled" ;;
@@ -66,6 +79,10 @@ setup() {
   mkdir -p "$STUB_STATE"
   echo enabled >"$STUB_STATE/systemd-networkd.enabled"
   echo active >"$STUB_STATE/systemd-networkd.active"
+  for trig in systemd-networkd.socket systemd-networkd-varlink.socket systemd-networkd-varlink-metrics.socket systemd-networkd-resolve-hook.socket; do
+    echo enabled >"$STUB_STATE/$trig.enabled"
+    echo active >"$STUB_STATE/$trig.active"
+  done
   echo enabled >"$STUB_STATE/systemd-resolved.enabled"
   echo active >"$STUB_STATE/systemd-resolved.active"
   echo disabled >"$STUB_STATE/iwd.enabled"
@@ -107,7 +124,8 @@ t_dry_run_changes_nothing() {
   [ "$before" = "$after" ] || ok=0
   grep -q 'pacman -S' <<<"$out" || ok=0
   grep -q 'wifi.backend=iwd' <<<"$out" || ok=0
-  grep -q 'disable --now systemd-networkd' <<<"$out" || ok=0
+  grep -q 'stop systemd-networkd.socket systemd-networkd-varlink.socket' <<<"$out" || ok=0
+  grep -q 'EnableNetworkConfiguration=false' <<<"$out" || ok=0
   grep -q 'enable --now NetworkManager' <<<"$out" || ok=0
   if grep -qE '^(pacman -S|systemctl (enable|disable|start|stop))' "$STUB_LOG"; then ok=0; fi
   teardown
@@ -127,6 +145,9 @@ t_switch_then_revert_restores() {
   [ "$(cat "$STUB_STATE/systemd-networkd.active")" = inactive ] || ok=0
   [ -f "$NEXUS_SWITCH_ROOT/etc/systemd/network/20-wired.network" ] || ok=0
   grep -q 'interface-name=enp110s0' "$NEXUS_SWITCH_ROOT"/etc/NetworkManager/system-connections/*.nmconnection || ok=0
+  grep -q '^EnableNetworkConfiguration=false' "$NEXUS_SWITCH_ROOT/etc/iwd/main.conf" || ok=0
+  [ "$(cat "$STUB_STATE/systemd-networkd-varlink.socket.active")" = inactive ] || ok=0
+  [ "$(cat "$STUB_STATE/NetworkManager.active")" = active ] || ok=0
   "$SCRIPT" --revert --yes >/dev/null 2>&1 || ok=0
   [ "$before" = "$(snapshot)" ] || ok=0
   [ "$(cat "$STUB_STATE/NetworkManager.enabled")" = disabled ] || ok=0
@@ -167,6 +188,42 @@ t_second_switch_refused() {
   [ $ok = 1 ]
 }
 
+# A switch interrupted after the backup (the 2026-11-10 failure: networkd's
+# varlink sockets cancelled the stop job) can be finished with --resume.
+t_resume_finishes_an_interrupted_switch() {
+  setup
+  local ok=1
+  mkdir -p "$T/realbin"
+  cp "$T/bin/systemctl" "$T/realbin/systemctl"
+  cat >"$T/bin/systemctl" <<S
+#!/usr/bin/env bash
+case "\$*" in *NetworkManager*) [ "\$1" = enable ] && exit 1 ;; esac
+exec "$T/realbin/systemctl" "\$@"
+S
+  "$SCRIPT" --yes >/dev/null 2>&1 && ok=0
+  cp "$T/realbin/systemctl" "$T/bin/systemctl"
+  [ "$(cat "$STUB_STATE/NetworkManager.enabled" 2>/dev/null)" = enabled ] && ok=0
+  "$SCRIPT" --resume --yes >/dev/null 2>&1 || ok=0
+  [ "$(cat "$STUB_STATE/NetworkManager.enabled")" = enabled ] || ok=0
+  [ "$(cat "$STUB_STATE/NetworkManager.active")" = active ] || ok=0
+  [ "$(cat "$STUB_STATE/systemd-networkd.active")" = inactive ] || ok=0
+  grep -q '^EnableNetworkConfiguration=false' "$NEXUS_SWITCH_ROOT/etc/iwd/main.conf" || ok=0
+  "$SCRIPT" --revert --yes >/dev/null 2>&1 || ok=0
+  grep -q '^EnableNetworkConfiguration=true' "$NEXUS_SWITCH_ROOT/etc/iwd/main.conf" || ok=0
+  [ "$(cat "$STUB_STATE/systemd-networkd.active")" = active ] || ok=0
+  teardown
+  [ $ok = 1 ]
+}
+
+t_resume_without_backup_fails() {
+  setup
+  local rc
+  "$SCRIPT" --resume --yes >/dev/null 2>&1
+  rc=$?
+  teardown
+  [ $rc != 0 ]
+}
+
 t_real_root_needs_root() {
   [ "$(id -u)" = 0 ] && return 0
   setup
@@ -183,6 +240,8 @@ check "switch then revert restores previous state exactly" t_switch_then_revert_
 check "refuses partially configured state without confirmation" t_refuses_partial_state_without_confirmation
 check "revert without a backup fails" t_revert_without_backup_fails
 check "second switch refused without confirmation" t_second_switch_refused
+check "resume finishes an interrupted switch" t_resume_finishes_an_interrupted_switch
+check "resume without a backup fails" t_resume_without_backup_fails
 check "refuses to touch the real system unless root" t_real_root_needs_root
 echo "$((total - fails))/$total passed"
 [ $fails = 0 ]

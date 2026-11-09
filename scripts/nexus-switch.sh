@@ -5,8 +5,9 @@
 #   sudo scripts/nexus-switch.sh --dry-run    # print every step, change nothing
 #   sudo scripts/nexus-switch.sh              # switch (backs up first)
 #   sudo scripts/nexus-switch.sh --revert     # restore the backed-up state
+#   sudo scripts/nexus-switch.sh --resume     # finish a switch that stopped half way
 #
-# Options: --dry-run  --revert  --yes (skip confirmation)  -h/--help
+# Options: --dry-run  --revert  --resume  --yes (skip confirmation)  -h/--help
 # Test hooks: NEXUS_SWITCH_ROOT (prefix for every config path; also lifts the
 # root requirement), NEXUS_SWITCH_BACKUP (backup dir). systemctl and pacman are
 # looked up on PATH, so tests substitute stubs.
@@ -16,6 +17,7 @@ ROOT=${NEXUS_SWITCH_ROOT:-}
 BACKUP=${NEXUS_SWITCH_BACKUP:-$ROOT/var/lib/nexus-switch}
 DRY=0
 REVERT=0
+RESUME=0
 YES=0
 
 # Paths (relative to ROOT) that a switch may change; backed up and restored whole.
@@ -27,11 +29,23 @@ TRACKED=(
   etc/iwd
   etc/NetworkManager
 )
+# Everything that can start networkd again. They are stopped in one transaction:
+# stopping the service alone lets a trigger socket restart it, and systemd then
+# cancels the stop job ("Job for systemd-networkd.socket canceled").
+NETWORKD_UNITS=(
+  systemd-networkd.socket
+  systemd-networkd-varlink.socket
+  systemd-networkd-varlink-metrics.socket
+  systemd-networkd-resolve-hook.socket
+  systemd-networkd-wait-online.service
+  systemd-networkd
+)
 # Units whose enabled/active state is recorded and restored.
-UNITS=(systemd-networkd systemd-networkd.socket systemd-resolved iwd NetworkManager)
+UNITS=("${NETWORKD_UNITS[@]}" systemd-resolved iwd NetworkManager)
 
 NM_CONF=$ROOT/etc/NetworkManager/conf.d/10-nexus-iwd.conf
 NM_CONN_DIR=$ROOT/etc/NetworkManager/system-connections
+IWD_CONF=$ROOT/etc/iwd/main.conf
 
 say() { printf '%s\n' "$*"; }
 die() {
@@ -153,18 +167,38 @@ write_wired_profiles() {
   done
 }
 
+# NetworkManager does IP configuration itself; iwd's own DHCP must be off or
+# both run on the same link. /etc/iwd is backed up, so --revert restores it.
+iwd_hand_over_ip() {
+  local content=
+  [ -f "$IWD_CONF" ] && content=$(cat "$IWD_CONF")
+  if grep -q '^EnableNetworkConfiguration=' <<<"$content"; then
+    content=$(sed 's/^EnableNetworkConfiguration=.*/EnableNetworkConfiguration=false/' <<<"$content")
+  elif grep -q '^\[General\]' <<<"$content"; then
+    content=$(sed 's/^\[General\]$/[General]\nEnableNetworkConfiguration=false/' <<<"$content")
+  else
+    content=$(printf '%s\n\n[General]\nEnableNetworkConfiguration=false' "$content")
+  fi
+  write_file "$IWD_CONF" 644 <<<"$content"
+}
+
 do_switch() {
   local reasons
-  if [ -e "$BACKUP/units" ]; then
-    die "already switched (backup exists at $BACKUP). Run with --revert first, or remove the backup if you know what you are doing."
+  if [ "$RESUME" = 1 ]; then
+    [ -e "$BACKUP/units" ] || die "no backup found at $BACKUP; nothing to resume. Run without --resume."
+    say "== Resuming a switch (backup at $BACKUP is kept as it is)"
+  else
+    if [ -e "$BACKUP/units" ]; then
+      die "already switched (backup exists at $BACKUP). Finish an interrupted switch with --resume, undo with --revert."
+    fi
+    reasons=$(detect_partial)
+    if [ -n "$reasons" ]; then
+      say "WARNING: partially configured state detected:"
+      printf '%s\n' "$reasons" | sed 's/^/  - /'
+      confirm "Machine looks partially configured."
+    fi
+    backup_state
   fi
-  reasons=$(detect_partial)
-  if [ -n "$reasons" ]; then
-    say "WARNING: partially configured state detected:"
-    printf '%s\n' "$reasons" | sed 's/^/  - /'
-    confirm "Machine looks partially configured."
-  fi
-  backup_state
   say "== Installing packages"
   run pacman -S --needed --noconfirm networkmanager iwd
   say "== Configuring NetworkManager (iwd backend, resolved for DNS)"
@@ -177,8 +211,11 @@ wifi.backend=iwd
 EOF
   say "== Preserving the wired setup as NetworkManager profiles"
   write_wired_profiles
+  say "== Handing IP configuration from iwd to NetworkManager"
+  iwd_hand_over_ip
   say "== Switching services (wired connectivity drops briefly)"
-  run systemctl disable --now systemd-networkd.socket systemd-networkd
+  run systemctl disable "${NETWORKD_UNITS[@]}"
+  run systemctl stop "${NETWORKD_UNITS[@]}"
   run systemctl enable --now systemd-resolved
   run systemctl enable --now iwd
   run systemctl enable --now NetworkManager
@@ -221,6 +258,7 @@ while [ $# -gt 0 ]; do
   case $1 in
     --dry-run) DRY=1 ;;
     --revert) REVERT=1 ;;
+    --resume) RESUME=1 ;;
     --yes | -y) YES=1 ;;
     -h | --help) usage; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
