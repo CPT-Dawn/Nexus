@@ -428,12 +428,12 @@ const REASON_NEW_ACTIVATION: u32 = 60;
 
 type Settings = HashMap<String, HashMap<String, OwnedVariant>>;
 
-fn variant<'a>(v: impl Into<zbus::Variant<'a>>) -> OwnedVariant {
+pub(super) fn variant<'a>(v: impl Into<zbus::Variant<'a>>) -> OwnedVariant {
     OwnedVariant::try_from(v.into()).expect("plain values have no file descriptors")
 }
 
 /// A random (version 4) UUID for a new Profile.
-fn new_uuid() -> String {
+pub(super) fn new_uuid() -> String {
     let mut b = [0u8; 16];
     // Blocking on the entropy pool only happens before it is seeded at boot.
     let _ = rustix::rand::getrandom(&mut b, rustix::rand::GetRandomFlags::empty());

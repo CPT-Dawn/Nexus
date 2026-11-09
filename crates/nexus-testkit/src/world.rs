@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use crate::{Bus, FakeNm, FakeSystemd};
+use crate::{Bus, FakeBluez, FakeNm, FakeSystemd};
 
 /// How long to wait for the Daemon's socket, and for any single reply.
 pub const PATIENCE: Duration = Duration::from_secs(10);
@@ -20,9 +20,17 @@ pub struct WorldBuilder {
     bin: PathBuf,
     nm_running: bool,
     start_daemon: bool,
+    bluez: Option<bool>,
 }
 
 impl WorldBuilder {
+    /// Starts a fake BlueZ with one adapter, powered or not (default: no
+    /// Bluetooth service at all). Reach it with [`World::bluez`].
+    pub fn bluez(mut self, powered: bool) -> Self {
+        self.bluez = Some(powered);
+        self
+    }
+
     /// Whether the fake NetworkManager owns its name at start (default yes).
     pub fn nm_running(mut self, yes: bool) -> Self {
         self.nm_running = yes;
@@ -47,9 +55,11 @@ impl WorldBuilder {
             nm.stop();
         }
         let systemd = FakeSystemd::start(&nm_bus.address);
+        let bluez = self.bluez.map(|on| FakeBluez::start(&nm_bus.address, on));
         let mut world = World {
             bin: self.bin,
             nm,
+            bluez,
             systemd,
             nm_bus,
             daemon: None,
@@ -70,6 +80,7 @@ pub struct World {
     pub nm: FakeNm,
     /// The fake systemd (units start absent).
     pub systemd: FakeSystemd,
+    bluez: Option<FakeBluez>,
     bin: PathBuf,
     nm_bus: Bus,
     daemon: Option<Child>,
@@ -84,7 +95,15 @@ impl World {
             bin: bin.into(),
             nm_running: true,
             start_daemon: true,
+            bluez: None,
         }
+    }
+
+    /// The fake BlueZ; the world must have been built with `.bluez(..)`.
+    pub fn bluez(&mut self) -> &mut FakeBluez {
+        self.bluez
+            .as_mut()
+            .expect("build the world with WorldBuilder::bluez to get a fake BlueZ")
     }
 
     /// Fake NetworkManager running, Daemon started and accepting connections.

@@ -26,6 +26,10 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::PasswordRequired => 10,
         ErrorCode::NotConnected => 11,
         ErrorCode::HardBlocked => 12,
+        // 13 is `nexus doctor` finding a problem.
+        ErrorCode::BluetoothOff => 14,
+        ErrorCode::NoPhone => 15,
+        ErrorCode::UnknownPhone => 16,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -310,6 +314,42 @@ pub fn wifi_forget(ssid: &str, json: bool) -> ExitCode {
     )
 }
 
+/// `nexus tether list [--json]`.
+pub fn tether_list(json: bool) -> ExitCode {
+    wifi_call(Op::Tethers, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::Tethers>(value) {
+            Ok(t) => print!("{}", crate::tether_view::table(&t)),
+            Err(e) => eprintln!("nexus: undecodable list: {e}"),
+        }
+    })
+}
+
+/// `nexus tether connect [phone]`.
+pub fn tether_connect(phone: Option<String>, json: bool) -> ExitCode {
+    wifi_call(Op::TetherConnect { phone }, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(t) = serde_json::from_value::<nexus_ipc::Tethered>(value) {
+            println!("{}", crate::text::tethered(&t.phone));
+        }
+    })
+}
+
+/// `nexus tether disconnect`.
+pub fn tether_disconnect(json: bool) -> ExitCode {
+    wifi_call(Op::TetherDisconnect, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(t) = serde_json::from_value::<nexus_ipc::Untethered>(value) {
+            println!("{}", crate::text::untethered(&t.phone));
+        }
+    })
+}
+
 fn wifi_call(op: Op, show: impl FnOnce(Value)) -> ExitCode {
     let mut conn = match Connection::connect() {
         Ok(c) => c,
@@ -404,6 +444,9 @@ mod tests {
             ErrorCode::PasswordRequired,
             ErrorCode::NotConnected,
             ErrorCode::HardBlocked,
+            ErrorCode::BluetoothOff,
+            ErrorCode::NoPhone,
+            ErrorCode::UnknownPhone,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

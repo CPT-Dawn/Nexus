@@ -7,7 +7,7 @@ mod traffic;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use nexus_ipc::{ErrorCode, Event, Op, Request, Response, Status, WifiList};
+use nexus_ipc::{ErrorCode, Event, Op, Request, Response, Status, Tethers, WifiList};
 
 use crate::backend::BackendError;
 use tokio::sync::broadcast;
@@ -55,7 +55,11 @@ async fn serve() -> std::io::Result<()> {
     // The baseline is read before the socket exists, so anything a client
     // can see happening is a change from it (and gets an activity entry).
     let baseline = tokio::time::timeout(BASELINE_WAIT, async {
-        (backend.wifi_list().await.ok(), backend.status().await.ok())
+        (
+            backend.wifi_list().await.ok(),
+            backend.status().await.ok(),
+            backend.tethers().await.ok(),
+        )
     })
     .await
     .unwrap_or_default();
@@ -104,6 +108,7 @@ async fn serve() -> std::io::Result<()> {
 struct Seen {
     status: Option<Status>,
     wifi: Option<WifiList>,
+    tethers: Option<Tethers>,
 }
 
 /// How [`sync`] treats what it reads.
@@ -125,6 +130,7 @@ async fn sync<B: Backend>(
     seen: &mut Seen,
     push: Push,
 ) {
+    sync_tethers(backend, events, seen, push).await;
     match backend.status().await {
         Ok(status) => {
             // The log entry goes out first, so a Front end that shows the new
@@ -158,6 +164,30 @@ async fn sync<B: Backend>(
     seen.wifi = Some(list);
 }
 
+/// Pushes `tethers_changed` when Bluetooth or a phone's Link differs from
+/// what subscribers were last told.
+async fn sync_tethers<B: Backend>(
+    backend: &B,
+    events: &broadcast::Sender<Event>,
+    seen: &mut Seen,
+    push: Push,
+) {
+    let tethers = match backend.tethers().await {
+        Ok(t) => t,
+        Err(BackendError::Unavailable) => Tethers::default(),
+        Err(e) => {
+            tracing::debug!("tethers unavailable: {e}");
+            return;
+        }
+    };
+    if push == Push::All || (push == Push::Changes && seen.tethers.as_ref() != Some(&tethers)) {
+        let _ = events.send(Event::TethersChanged {
+            tethers: tethers.clone(),
+        });
+    }
+    seen.tethers = Some(tethers);
+}
+
 /// How long startup waits for the Backend's first answers before listening.
 const BASELINE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -189,9 +219,13 @@ async fn watch_backend<B: Backend>(
     backend: Arc<B>,
     events: broadcast::Sender<Event>,
     live: Arc<Live>,
-    (wifi, status): (Option<WifiList>, Option<Status>),
+    (wifi, status, tethers): (Option<WifiList>, Option<Status>, Option<Tethers>),
 ) {
-    let mut seen = Seen { status, wifi };
+    let mut seen = Seen {
+        status,
+        wifi,
+        tethers,
+    };
     loop {
         let push = tokio::select! {
             () = backend.changed() => Push::Changes,
@@ -259,6 +293,9 @@ async fn answer<B: Backend>(
         Op::WifiJoin { network, password } => {
             backend_reply(req.id, backend.wifi_join(network, password).await)
         }
+        Op::Tethers => backend_reply(req.id, backend.tethers().await),
+        Op::TetherConnect { phone } => backend_reply(req.id, backend.tether_connect(phone).await),
+        Op::TetherDisconnect => backend_reply(req.id, backend.tether_disconnect().await),
         Op::WifiPower { on } => backend_reply(req.id, backend.wifi_power(on).await),
         Op::Airplane { on } => backend_reply(req.id, backend.airplane(on).await),
         Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),

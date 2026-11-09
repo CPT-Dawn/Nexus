@@ -314,6 +314,97 @@ pub fn forgot(ssid: &str) -> String {
     format!("Forgot {ssid}.")
 }
 
+// Bluetooth Tethering.
+
+pub fn bluetooth_off() -> Failure {
+    fail(
+        ErrorCode::BluetoothOff,
+        "Bluetooth is off. Turn it on (`bluetoothctl power on`, or `rfkill unblock bluetooth`) and try again.",
+    )
+}
+
+pub fn bluetooth_absent() -> Failure {
+    fail(
+        ErrorCode::BluetoothOff,
+        "This machine has no Bluetooth adapter, or the Bluetooth service is not running \
+         (`systemctl start bluetooth`).",
+    )
+}
+
+pub fn no_phone() -> Failure {
+    fail(
+        ErrorCode::NoPhone,
+        "No paired phone offers network access. Pair your phone (`bluetoothctl`), switch on \
+         Bluetooth tethering in its settings, and try again.",
+    )
+}
+
+pub fn unknown_phone(who: &str, paired: &[String]) -> Failure {
+    fail(
+        ErrorCode::UnknownPhone,
+        format!(
+            "No paired phone is called {who}. Paired: {}.",
+            paired.join(", ")
+        ),
+    )
+}
+
+pub fn which_phone(paired: &[String]) -> Failure {
+    fail(
+        ErrorCode::UnknownPhone,
+        format!(
+            "Several phones are paired ({}). Say which one to tether through.",
+            paired.join(", ")
+        ),
+    )
+}
+
+/// A Tethering Link that died on the way up.
+pub fn tether_failure(phone: &str, died_in: u32, reason: u32) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!(
+            "Could not tether through {phone} (stopped while {}: {}). Check that Bluetooth \
+             tethering is switched on in the phone's settings.",
+            device_state(died_in),
+            device_reason(reason).to_lowercase()
+        ),
+    )
+}
+
+pub fn tether_refused(phone: &str, why: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("NetworkManager would not tether through {phone}: {why}"),
+    )
+}
+
+pub fn tether_timed_out(phone: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("Tethering through {phone} took too long, so Nexus gave up."),
+    )
+}
+
+pub fn tether_interrupted(phone: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("NetworkManager restarted while tethering through {phone}. Try again."),
+    )
+}
+
+pub fn not_tethered() -> Failure {
+    fail(ErrorCode::NotConnected, "Not tethered to any phone.")
+}
+
+pub fn tethered(phone: &str) -> String {
+    format!("Tethered through {phone}.")
+}
+
+pub fn untethered(phone: &str) -> String {
+    format!("Dropped the tether to {phone}.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

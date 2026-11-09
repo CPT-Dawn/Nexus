@@ -73,6 +73,20 @@ pub enum Op {
     /// `WifiNetwork.id`. Result: [`AutoconnectSet`]; `unknown_network` when
     /// nothing is saved for it.
     WifiAutoconnect { network: String, enabled: bool },
+    /// Paired phones that offer network access over Bluetooth, and whether
+    /// Bluetooth is on. Result: [`Tethers`].
+    Tethers,
+    /// Tether through a phone, waiting until the Link is up or has failed.
+    /// `phone` is its Bluetooth address or name; it may be left out when only
+    /// one phone is paired. Result: [`Tethered`]; `bluetooth_off`, `no_phone`,
+    /// `unknown_phone` or `join_failed` on failure.
+    TetherConnect {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phone: Option<String>,
+    },
+    /// Drop the Tethering Link, keeping the phone paired. Result:
+    /// [`Untethered`]; `not_connected` when nothing is tethered.
+    TetherDisconnect,
     /// Answer an open Secret prompt (`prompt` is the id from its `secret_prompt_opened`
     /// event). The only request besides `wifi_join` that carries a secret.
     /// Result `{}`; `unknown_prompt` when it is closed already.
@@ -223,6 +237,12 @@ pub enum ErrorCode {
     UnknownFinding,
     /// A fix command failed or was not authorized.
     FixFailed,
+    /// Bluetooth is switched off, or this machine has none.
+    BluetoothOff,
+    /// No paired phone offers network access.
+    NoPhone,
+    /// No paired phone matches the name given, or several do and none was named.
+    UnknownPhone,
     #[serde(other)]
     Unknown,
 }
@@ -294,6 +314,11 @@ pub enum Event {
     /// to run). Carries all of them.
     DoctorFindings {
         findings: Vec<Finding>,
+    },
+    /// The Tethering picture changed (Bluetooth switched, a phone paired,
+    /// tethered or dropped). Carries the whole new picture.
+    TethersChanged {
+        tethers: Tethers,
     },
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]
@@ -702,6 +727,56 @@ pub struct AutoconnectSet {
     pub enabled: bool,
 }
 
+/// Whether Bluetooth can carry a Tethering Link right now.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Bluetooth {
+    /// An adapter is powered.
+    On,
+    /// Every adapter is switched off (software or rfkill).
+    Off,
+    /// No adapter, or the Bluetooth service is not running.
+    #[default]
+    Absent,
+}
+
+/// A paired phone that offers network access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Phone {
+    /// Its Bluetooth address, upper case (`AA:BB:CC:DD:EE:FF`).
+    pub id: String,
+    pub name: String,
+    /// The Tethering Link is up.
+    pub connected: bool,
+    /// The Link is being brought up.
+    #[serde(default)]
+    pub connecting: bool,
+    /// A Profile is saved for it, so the next connect needs no setup.
+    #[serde(default)]
+    pub saved: bool,
+}
+
+/// The `tethers` result.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Tethers {
+    pub bluetooth: Bluetooth,
+    /// Paired phones that offer network access, by name.
+    pub phones: Vec<Phone>,
+}
+
+/// The `tether_connect` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Tethered {
+    pub phone: String,
+    pub id: String,
+}
+
+/// The `tether_disconnect` result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Untethered {
+    pub phone: String,
+}
+
 /// Encodes a value as one line, newline included.
 pub fn encode<T: Serialize>(value: &T) -> String {
     let mut line = serde_json::to_string(value).expect("wire types always serialize");
@@ -851,6 +926,11 @@ impl Connection {
     /// Convenience for the `wifi_scan` op.
     pub fn wifi_scan(&mut self) -> io::Result<Result<ScanOutcome, Failure>> {
         Ok(self.call(Op::WifiScan)?.and_then(decode))
+    }
+
+    /// Convenience for the `tethers` op.
+    pub fn tethers(&mut self) -> io::Result<Result<Tethers, Failure>> {
+        Ok(self.call(Op::Tethers)?.and_then(decode))
     }
 
     /// Convenience for the `traffic` op.

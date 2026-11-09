@@ -37,6 +37,8 @@ use zbus::object_server::SignalEmitter;
 use zbus::{Connection, connection, interface};
 use zbus::{OwnedVariant, Variant};
 
+mod bt;
+
 const MANAGER_PATH: &str = "/org/freedesktop/NetworkManager";
 const ACTIVE_PATH: &str = "/org/freedesktop/NetworkManager/ActiveConnection/1";
 const NAME: &str = "org.freedesktop.NetworkManager";
@@ -137,6 +139,8 @@ struct DeviceModel {
     /// `NMDeviceState`.
     state: u32,
     active_ap: Option<u32>,
+    /// Set for a paired phone (a Bluetooth Device).
+    bt: Option<bt::BtModel>,
 }
 
 #[derive(Debug)]
@@ -149,6 +153,8 @@ struct ProfileModel {
     persisted: bool,
     /// Its secrets came from the secret agent, so deleting it tells the agent.
     agent_secrets: bool,
+    /// Set for a Bluetooth Profile: the phone's address as six bytes.
+    bdaddr: Option<Vec<u8>>,
 }
 
 /// `NMState`.
@@ -223,6 +229,8 @@ struct Model {
     psks: HashMap<Vec<u8>, String>,
     /// Joins that die on purpose: `(NMDeviceState died in, reason)`.
     join_failures: HashMap<Vec<u8>, (u32, u32)>,
+    /// Tethering Links that die on purpose, by phone address.
+    bt_failures: HashMap<String, (u32, u32)>,
     /// `RequestScan` calls NetworkManager accepted.
     scan_requests: u32,
     /// Refuse every `RequestScan`, whatever `LastScan` says.
@@ -340,6 +348,15 @@ impl Manager {
         OwnedObjectPath,
         HashMap<String, OwnedVariant>,
     )> {
+        if connection.contains_key("bluetooth") {
+            let persist_disk = options
+                .get("persist")
+                .and_then(|v| v.try_clone().ok()?.try_into().ok())
+                .is_some_and(|p: String| p == "disk");
+            let dev = device_index(device.as_str())?;
+            let path = bt::add_and_activate(conn, &self.0, connection, dev, persist_disk).await?;
+            return Ok((opath(&path), opath(ACTIVE_PATH), HashMap::new()));
+        }
         let text = |section: &str, key: &str| -> Option<String> {
             connection
                 .get(section)?
@@ -369,6 +386,7 @@ impl Manager {
                 autoconnect: true,
                 persisted: persist.as_deref() == Some("disk"),
                 agent_secrets: needs_agent,
+                bdaddr: None,
             }));
             m.profiles.len() - 1
         };
@@ -404,16 +422,20 @@ impl Manager {
             .next()
             .and_then(|n| n.parse().ok())
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs("bad connection path".into()))?;
-        let ssid = self
+        let (ssid, is_bt) = self
             .0
             .lock()
             .unwrap()
             .profiles
             .get(n)
             .and_then(|p| p.as_ref())
-            .map(|p| p.ssid.clone())
+            .map(|p| (p.ssid.clone(), p.bdaddr.is_some()))
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no such connection".into()))?;
         let dev = device_index(device.as_str())?;
+        if is_bt {
+            bt::start(conn, &self.0, dev);
+            return Ok(opath(ACTIVE_PATH));
+        }
         // A saved profile brings its own (right) secrets.
         let task = tokio::spawn(activate(
             conn.clone(),
@@ -527,7 +549,12 @@ impl Device {
 
     #[zbus(property)]
     fn device_type(&self) -> u32 {
-        2 // NM_DEVICE_TYPE_WIFI
+        // NM_DEVICE_TYPE_BT or NM_DEVICE_TYPE_WIFI
+        if self.0.lock().unwrap().devices[self.1].bt.is_some() {
+            5
+        } else {
+            2
+        }
     }
 
     #[zbus(property)]
@@ -973,6 +1000,16 @@ impl Profile {
         connection.insert("uuid".to_owned(), v(Variant::from(p.uuid.clone())));
         connection.insert("type".to_owned(), v(Variant::from("802-11-wireless")));
         connection.insert("autoconnect".to_owned(), v(Variant::from(p.autoconnect)));
+        if let Some(addr) = &p.bdaddr {
+            connection.insert("type".to_owned(), v(Variant::from("bluetooth")));
+            let mut bluetooth = HashMap::new();
+            bluetooth.insert("bdaddr".to_owned(), v(Variant::from(addr.clone())));
+            bluetooth.insert("type".to_owned(), v(Variant::from("panu")));
+            return HashMap::from([
+                ("connection".to_owned(), connection),
+                ("bluetooth".to_owned(), bluetooth),
+            ]);
+        }
         let mut wireless = HashMap::new();
         wireless.insert("ssid".to_owned(), v(Variant::from(p.ssid.clone())));
         HashMap::from([
@@ -1020,12 +1057,17 @@ impl Profile {
             let mut m = self.0.lock().unwrap();
             let gone = m.profiles[self.1].take();
             let told_agent = gone.as_ref().is_some_and(|p| p.agent_secrets);
+            let bdaddr = gone.as_ref().and_then(|p| p.bdaddr.clone());
             let ssid = gone.map(|p| p.ssid).unwrap_or_default();
             let in_use = (0..m.devices.len())
-                .filter(|d| {
-                    m.devices[*d]
+                .filter(|d| match (&bdaddr, &m.devices[*d].bt) {
+                    (Some(addr), Some(b)) => {
+                        *addr == bt::bdaddr(&b.address) && m.devices[*d].state >= 40
+                    }
+                    (Some(_), None) | (None, Some(_)) => false,
+                    (None, None) => m.devices[*d]
                         .active_ap
-                        .is_some_and(|ap| m.aps[&ap].ssid == ssid)
+                        .is_some_and(|ap| m.aps[&ap].ssid == ssid),
                 })
                 .collect();
             (in_use, told_agent)
@@ -1088,6 +1130,7 @@ impl FakeNm {
             profiles: Vec::new(),
             psks: HashMap::new(),
             join_failures: HashMap::new(),
+            bt_failures: HashMap::new(),
             scan_requests: 0,
             refuse_scans: false,
             statistics_reads: 0,
@@ -1246,10 +1289,14 @@ impl FakeNm {
                 .serve_at(IP4_PATH, Ip4Config(model.clone()))
                 .serve_at(IP6_PATH, Ip6Config);
             for n in 0..devices {
-                b = b
-                    .serve_at(device_path(n), Device(model.clone(), n))
-                    .serve_at(device_path(n), Statistics(model.clone(), n))
-                    .serve_at(device_path(n), Wireless(model.clone(), n));
+                b = b.serve_at(device_path(n), Device(model.clone(), n));
+                if model.lock().unwrap().devices[n].bt.is_some() {
+                    b = b.serve_at(device_path(n), bt::Bluetooth(model.clone(), n));
+                } else {
+                    b = b
+                        .serve_at(device_path(n), Statistics(model.clone(), n))
+                        .serve_at(device_path(n), Wireless(model.clone(), n));
+                }
             }
             for id in aps {
                 b = b.serve_at(ap_path(id), AccessPoint(model.clone(), id));
@@ -1327,6 +1374,7 @@ impl FakeNm {
                 tx_bytes: 0,
                 state: 30, // NM_DEVICE_STATE_DISCONNECTED
                 active_ap: None,
+                bt: None,
             });
             m.devices.len() - 1
         };
@@ -1471,6 +1519,7 @@ impl FakeNm {
                 autoconnect,
                 persisted: true,
                 agent_secrets: false,
+                bdaddr: None,
             }));
             m.profiles.len() - 1
         };
