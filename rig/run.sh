@@ -31,7 +31,7 @@ if [[ "${NEXUS_RIG_ALLOW_HOST_NM:-0}" != 1 ]] && command -v systemctl >/dev/null
 fi
 
 # Build the tests as the calling user, then do the privileged part.
-log="$(cd "$repo" && cargo test -p nexus --test real_mode --no-run --locked 2>&1)" || { echo "$log" >&2; die "build failed"; }
+log="$(cd "$repo" && CARGO_TERM_COLOR=never cargo test -p nexus --test real_mode --no-run --locked 2>&1)" || { echo "$log" >&2; die "build failed"; }
 testbin="$(sed -n 's/.*Executable .*(\(.*\)).*/\1/p' <<<"$log" | tail -n1)"
 [[ -n "$testbin" ]] || die "could not find the test binary"
 testbin="$(cd "$repo" && realpath "$testbin")"
