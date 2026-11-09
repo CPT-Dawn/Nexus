@@ -27,6 +27,14 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
 
+  switch-script:
+    name: switch script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: shellcheck scripts/nexus-switch.sh scripts/test-nexus-switch.sh
+      - run: scripts/test-nexus-switch.sh
+
   clippy:
     name: clippy
     runs-on: ubuntu-latest

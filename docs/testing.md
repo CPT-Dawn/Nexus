@@ -94,3 +94,9 @@ Add an AP: drop a hostapd config in `rig/aps.d/<name>.conf` with `interface=@IFA
 - CI: `.github/workflows/bench.yml` runs that command on every push and PR touching `crates/**`, and writes the numbers to the job summary.
 - Reference numbers (dev laptop, release): Daemon 7.3 MiB, TUI first frame ~1 ms, idle CPU Daemon 0.000% / TUI 0.07%.
 - To budget a new thing: add a test there; use `World::daemon_pid()` for the Daemon and `Tui::start(&world, &[markers])` + `wait_for` for the TUI.
+
+## Desktop notifications (ticket #13)
+
+- S1 (`crates/nexus/tests/s1_notifications.rs`): `World::builder(bin).notifications(true)` also starts a second private `dbus-daemon` as the session bus with a fake `org.freedesktop.Notifications` on it (default: the session bus points at nothing and the Daemon copes). Read it through `world.notifications`: `notified(n)` (1-based, waits), `count()`, `all()`, `closed()`, `wait_closed(id)`; act as the server with `invoke(id, "enter")` (click an action) and `dismiss(id, reason)` (it timed out).
+- The Daemon coalesces bursts, so a test that goes online and offline right after lets a Front end read the `activity` events in between (`front_end(&world)` then `next_event("activity")`), or the two changes merge into nothing. A subscribed Front end also means "someone is looking": no Secret prompt notification is sent while any connection is subscribed.
+- The terminal launcher is never mocked in code: `world.install_tool("xdg-terminal-exec", "printf '%s\n' \"$@\" >> log")` shadows the real one on the Daemon's `PATH`. `WorldBuilder::env("TERMINAL", ..)` sets a variable for the Daemon. The choice between `xdg-terminal-exec` and `$TERMINAL -e` is unit-tested in `daemon/notify.rs`.
