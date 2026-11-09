@@ -16,11 +16,11 @@ use crate::cli::{EXIT_DAEMON_ERROR, exit_code, unreachable};
 use crate::text;
 
 /// No launcher on the PATH, and none named in the config.
-pub const EXIT_NO_LAUNCHER: u8 = 49;
+pub const EXIT_NO_LAUNCHER: u8 = 29;
 /// The launcher was found but would not run.
-pub const EXIT_LAUNCHER_FAILED: u8 = 50;
+pub const EXIT_LAUNCHER_FAILED: u8 = 30;
 /// `[menu] launcher` names something Nexus does not know how to drive.
-pub const EXIT_UNKNOWN_LAUNCHER: u8 = 51;
+pub const EXIT_UNKNOWN_LAUNCHER: u8 = 31;
 
 /// The launchers Nexus can drive, in the order it looks for them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

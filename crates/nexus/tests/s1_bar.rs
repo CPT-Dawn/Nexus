@@ -320,7 +320,7 @@ fn detection_prefers_fuzzel_then_walker_then_rofi_then_tofi() {
 }
 
 #[test]
-fn no_launcher_exits_49_and_a_strange_one_in_the_config_exits_51() {
+fn no_launcher_exits_29_and_a_strange_one_in_the_config_exits_31() {
     let (world, _) = menu_world();
     let out = world
         .nexus()
@@ -328,9 +328,9 @@ fn no_launcher_exits_49_and_a_strange_one_in_the_config_exits_51() {
         .arg("menu")
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(49), "{out:?}");
+    assert_eq!(out.status.code(), Some(29), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("no launcher found"));
     configure(&world, "[menu]\nlauncher = \"dmenu\"\n");
     let out = world.run_nexus(&["menu"]);
-    assert_eq!(out.status.code(), Some(51), "{out:?}");
+    assert_eq!(out.status.code(), Some(31), "{out:?}");
 }

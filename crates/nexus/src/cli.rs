@@ -37,11 +37,12 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::UnknownVpn => 21,
         ErrorCode::InvalidConfig => 22,
         ErrorCode::VpnFailed => 23,
-        ErrorCode::Unplugged => 27,
-        ErrorCode::UnknownPort => 28,
         ErrorCode::MissingPlugin => 24,
         ErrorCode::KeyringUnavailable => 25,
         ErrorCode::HotspotUnsupported => 26,
+        ErrorCode::Unplugged => 27,
+        ErrorCode::UnknownPort => 28,
+        // 29-31 are `nexus menu`'s launcher failures (`menu.rs`).
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -699,10 +700,16 @@ mod tests {
             ErrorCode::Conflict,
             ErrorCode::NothingPending,
             ErrorCode::KeyringUnavailable,
+            ErrorCode::RevealDenied,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);
         codes.push(EXIT_DAEMON_ERROR);
+        codes.extend([
+            crate::menu::EXIT_NO_LAUNCHER,
+            crate::menu::EXIT_LAUNCHER_FAILED,
+            crate::menu::EXIT_UNKNOWN_LAUNCHER,
+        ]);
         let n = codes.len();
         codes.sort_unstable();
         codes.dedup();
