@@ -5,17 +5,15 @@
 
 use std::time::{Duration, Instant};
 
-use nexus_testkit::{ActiveConnection, Ap, DeviceId, NmConnectivity, NmState, Wire, World};
+use nexus_testkit::{
+    ActiveConnection, Ap, DeviceId, NmConnectivity, NmState, Wire, World, network_id as id,
+};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
 const ACTIVATED: u32 = 2;
 const CONF: &str = "[Interface]\nPrivateKey = dwdtCnMYpX08FsFyUbJmRd9ML4frwJkqsXf7pR25LCo=\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\nAllowedIPs = 0.0.0.0/0\nEndpoint = vpn.example.net:51820\n";
 const QUIET: &str = "[notifications]\njoined = false\nlost = false\n";
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 fn world(config: &str) -> (World, DeviceId) {
     let mut world = World::builder(NEXUS)

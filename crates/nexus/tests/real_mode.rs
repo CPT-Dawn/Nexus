@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use nexus_testkit::{RealWorld, Wire};
+use nexus_testkit::{RealWorld, Wire, network_id as id};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
@@ -16,10 +16,6 @@ const WPA2_PSK: &str = "correct-horse-2";
 const SAE: &str = "NexusSae";
 const SAE_PSK: &str = "correct-horse-3";
 const PORTAL: &str = "NexusPortal";
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 /// Retries `f` until it returns `Some`, for up to 30 s (NetworkManager scans
 /// on its own schedule).

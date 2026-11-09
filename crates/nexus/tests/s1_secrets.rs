@@ -4,14 +4,10 @@
 
 use std::thread::JoinHandle;
 
-use nexus_testkit::{Ap, DeviceId, Wire, World};
+use nexus_testkit::{Ap, DeviceId, Wire, World, eventually, network_id as id};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 fn world() -> (World, DeviceId) {
     let world = World::start(NEXUS);
@@ -67,17 +63,6 @@ fn a_prompt_opens_for_the_front_end_and_the_answer_joins_the_network() {
 }
 
 /// Polls (no sleeping to a guess) until `cond` holds.
-fn eventually(what: &str, cond: impl Fn() -> bool) {
-    let start = std::time::Instant::now();
-    while !cond() {
-        assert!(
-            start.elapsed() < std::time::Duration::from_secs(10),
-            "never happened: {what}"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
-}
-
 /// A world whose Daemon starts with this `config.toml` already in place.
 fn world_with_config(config: &str) -> (World, DeviceId) {
     let mut world = World::builder(NEXUS).daemon(false).start();

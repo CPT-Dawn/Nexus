@@ -1,16 +1,12 @@
 //! Seam S1 for resilience and radio control: a real Daemon over `nexus-ipc`,
 //! a fake NetworkManager (and fake logind) on a private bus.
 
-use std::time::{Duration, Instant};
-
-use nexus_testkit::{ActiveConnection, Ap, DeviceId, NmState, Wire, World};
+use nexus_testkit::{
+    ActiveConnection, Ap, DeviceId, NmState, Wire, World, eventually, network_id as id,
+};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 fn front_end(world: &World) -> Wire {
     let mut wire = world.wire();
@@ -55,17 +51,6 @@ fn wait_for_all(fe: &mut Wire, wants: &[(&str, &dyn Test)]) {
                 done[n] = true;
             }
         }
-    }
-}
-
-fn eventually(what: &str, cond: impl Fn() -> bool) {
-    let start = Instant::now();
-    while !cond() {
-        assert!(
-            start.elapsed() < Duration::from_secs(10),
-            "never happened: {what}"
-        );
-        std::thread::sleep(Duration::from_millis(20));
     }
 }
 
