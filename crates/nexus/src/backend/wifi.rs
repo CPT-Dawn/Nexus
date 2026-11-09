@@ -10,8 +10,8 @@
 use std::collections::{HashMap, HashSet};
 
 use nexus_ipc::{
-    Band, Disconnected, Forgotten, Joined, SavedWifi, ScanOutcome, Secret, Security, WifiDevice,
-    WifiList, WifiNetwork,
+    AutoconnectSet, Band, Disconnected, Forgotten, Joined, SavedWifi, ScanOutcome, Secret,
+    Security, WifiDevice, WifiList, WifiNetwork,
 };
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
@@ -100,6 +100,8 @@ trait Settings {
 )]
 trait SettingsConnection {
     fn get_settings(&self) -> zbus::Result<HashMap<String, HashMap<String, OwnedVariant>>>;
+    fn get_secrets(&self, setting: &str) -> zbus::Result<Settings>;
+    fn update(&self, settings: Settings) -> zbus::Result<()>;
     fn save(&self) -> zbus::Result<()>;
     fn delete(&self) -> zbus::Result<()>;
 }
@@ -325,9 +327,11 @@ fn assemble(
             .or_insert((ap, 1));
     }
     // One Profile per SSID is enough to mark a row; the first one wins.
-    let mut profile_of: HashMap<&[u8], &str> = HashMap::new();
+    let mut profile_of: HashMap<&[u8], (&str, bool)> = HashMap::new();
     for p in &profiles {
-        profile_of.entry(&p.ssid).or_insert(&p.uuid);
+        profile_of
+            .entry(&p.ssid)
+            .or_insert((&p.uuid, p.autoconnect));
     }
     let mut networks: Vec<WifiNetwork> = by_ssid
         .into_iter()
@@ -340,7 +344,10 @@ fn assemble(
             access_points,
             joined: joined.contains(&ssid),
             device: best.device,
-            profile: profile_of.get(ssid.as_slice()).map(|u| (*u).to_owned()),
+            profile: profile_of
+                .get(ssid.as_slice())
+                .map(|(u, _)| (*u).to_owned()),
+            autoconnect: profile_of.get(ssid.as_slice()).map(|(_, a)| *a),
         })
         .collect();
     networks.sort_by(|a, b| {
@@ -695,6 +702,44 @@ pub async fn forget(conn: &Connection, network: &str) -> zbus::Result<Result<For
         Err(text::unknown_network(&name))
     } else {
         Ok(Forgotten { ssid: name })
+    })
+}
+
+/// Turns automatic joining on or off for every Profile saved for a Network.
+/// `Update` replaces a Profile's settings whole, so this reads them (and the
+/// Wi-Fi secrets, best effort) back, flips `connection.autoconnect` and
+/// writes them again.
+pub async fn set_autoconnect(
+    conn: &Connection,
+    network: &str,
+    enabled: bool,
+) -> zbus::Result<Result<AutoconnectSet, Failure>> {
+    let Some(ssid) = nexus_ipc::parse_network_id(network) else {
+        return Ok(Err(text::bad_network_id()));
+    };
+    let name = String::from_utf8_lossy(&ssid).into_owned();
+    let mut changed = 0;
+    for p in profiles(conn).await?.into_iter().filter(|p| p.ssid == ssid) {
+        let proxy = no_cache!(SettingsConnectionProxy, conn, p.path.as_str());
+        let mut all = proxy.get_settings().await?;
+        if let Ok(secrets) = proxy.get_secrets("802-11-wireless-security").await {
+            for (setting, values) in secrets {
+                all.entry(setting).or_default().extend(values);
+            }
+        }
+        all.entry("connection".to_owned())
+            .or_default()
+            .insert("autoconnect".to_owned(), variant(enabled));
+        proxy.update(all).await?;
+        changed += 1;
+    }
+    Ok(if changed == 0 {
+        Err(text::unknown_network(&name))
+    } else {
+        Ok(AutoconnectSet {
+            ssid: name,
+            enabled,
+        })
     })
 }
 

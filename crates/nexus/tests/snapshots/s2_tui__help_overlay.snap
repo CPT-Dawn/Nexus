@@ -7,24 +7,24 @@ expression: rig.text(STANDARD)
 │ ▸ ● Wi-Fi                  ││     ░░    ░░░░    ░░      ░░░░░░  ░░░░    ░░░░░░                   │
 │     Home-5G                ││   ░░██░░░░████░░░░██░░  ░░██████░░████░░░░██████░░                 │
 │   ○ Ethernet               ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░██░░░░                   │
-│     Not connected          ││ ░░██░░██░░██░░██░░██░░    ░░██░░░░██░░██░░████░░                   │
-│   ○ VPN                    ││ ░░██░░██░░██░░██░░██░░░░  ░░██░░░░██░░██░░██░░░░                   │
-│     Not connected          ││   ░░██░░░░██░░██░░██████░░██████░░██░░██░░██████░░                 │
-│   ○ Hotspot        ╭ All keys ──────────────────────────────────────────────╮░                   │
-│     Not started    │  j / k, Down / Up     Move in the list                 │                    │
-│                    │  g / G                Jump to top / bottom             │ooks healthy.       │
-│                    │  h / l, Left / Right  Previous / next tab              │.1                  │
-│                    │  Tab / Shift-Tab      Next / previous tab              │────────────────────╯
-│                    │  1 - 6                Jump to a tab                    │────────────────────╮
-│                    │  Enter                Open the selected card's tab     │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  Esc                  Back out; never quits            │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    │  ?                    Show or hide this help           │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  q, Ctrl-C            Quit                             │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    ╰────────────────────────────────────────────────────────╯────────────────────╯
-│                            │╭ Recent activity ───────────────────────────────────────────────────╮
-│                            ││ ● Joined Home-5G (Wi-Fi)                                           │
-│                            ││                                                                    │
-│                            ││                                                                    │
+│     Not connected  ╭ All keys ──────────────────────────────────────────────╮░                   │
+│   ○ VPN            │  j / k, Down / Up     Move in the list                 │░                   │
+│     Not connected  │  g / G                Jump to top / bottom             │█░░                 │
+│   ○ Hotspot        │  h / l, Left / Right  Previous / next tab              │░                   │
+│     Not started    │  Tab / Shift-Tab      Next / previous tab              │                    │
+│                    │  1 - 6                Jump to a tab                    │ooks healthy.       │
+│                    │  Enter                Open the selected card's tab     │.1                  │
+│                    │  d                    Details sheet (small windows)    │────────────────────╯
+│                    │  Wi-Fi: Enter         Join the selected Network        │────────────────────╮
+│                    │  Wi-Fi: r             Rescan                           │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  Wi-Fi: x             Disconnect                       │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  Wi-Fi: f             Forget (asks first)              │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  Wi-Fi: a             Toggle autoconnect               │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  Wi-Fi: u             Undo the toast's action          │────────────────────╯
+│                    │  Esc                  Back out; never quits            │────────────────────╮
+│                    │  ?                    Show or hide this help           │                    │
+│                    │  q, Ctrl-C            Quit                             │                    │
+│                    ╰────────────────────────────────────────────────────────╯                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

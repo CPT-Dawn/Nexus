@@ -1,0 +1,38 @@
+---
+source: crates/nexus/tests/s2_wifi.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Wi-Fi ─────────────────────╮╭ Neighbour-2G ──────────────────────────────────────────────────────╮
+│   ● Home-5G    ▂▄▆█ wpa2   ││ Not saved                                                          │
+│     Work-Secu… ▂▄▆█ wpa3   ││                                                                    │
+│     Cafe Guest ▂▄▆█ open   ││ Signal         36%  ▂▄▆█                                           │
+│ ▸   Neighbour… ▂▄▆█ wpa2   ││ Security      WPA2 personal                                        │
+│     A very lo… ▂▄▆█ wpa2   ││ Band          2.4 GHz                                              │
+│     Rooftop-6E ▂▄▆█ wpa2   ││ Access points 1                                                    │
+│   ── Saved, out of range   ││ Adapter       wlan0                                                │
+│     Parents House     auto ││                                                                    │
+│     Hotel Lobby     manual ││ Press enter to join. You will be asked for the password.           │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter join  r scan  h/l tab  ? help  q quit
+
+ 2508 cells  fg=- bg=- mods=[]
+  155 cells  fg=- bg=- mods=[bold]
+    2 cells  fg=- bg=- mods=[dim,reversed]
+  104 cells  fg=- bg=- mods=[dim]
+   31 cells  fg=- bg=- mods=[reversed]

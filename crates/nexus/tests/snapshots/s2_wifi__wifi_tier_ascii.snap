@@ -1,0 +1,46 @@
+---
+source: crates/nexus/tests/s2_wifi.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 * Offline
++ Wi-Fi ---------------------++ Neighbour-2G ------------------------------------------------------+
+|   * Home-5G    #### wpa2   || Not saved                                                          |
+|     Work-Secu~ ###. wpa3   ||                                                                    |
+|     Cafe Guest ###. open   || Signal         36%  ##..                                           |
+| >   Neighbour~ ##.. wpa2   || Security      WPA2 personal                                        |
+|     A very lo~ #... wpa2   || Band          2.4 GHz                                              |
+|     Rooftop-6E #... wpa2   || Access points 1                                                    |
+|   -- Saved, out of range   || Adapter       wlan0                                                |
+|     Parents House     auto ||                                                                    |
+|     Hotel Lobby     manual || Press enter to join. You will be asked for the password.           |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
+|                            ||                                                                    |
++----------------------------++--------------------------------------------------------------------+
+ j/k move  enter join  r scan  h/l tab  ? help  q quit
+
+ 2062 cells  fg=- bg=- mods=[]
+  115 cells  fg=idx116 bg=- mods=[]
+    7 cells  fg=idx116 bg=- mods=[bold]
+  220 cells  fg=idx145 bg=- mods=[]
+    9 cells  fg=idx145 bg=- mods=[bold]
+   11 cells  fg=idx149 bg=- mods=[]
+    2 cells  fg=idx179 bg=- mods=[]
+    3 cells  fg=idx210 bg=- mods=[bold]
+  174 cells  fg=idx237 bg=- mods=[]
+  104 cells  fg=idx242 bg=- mods=[]
+   39 cells  fg=idx254 bg=- mods=[]
+   21 cells  fg=idx254 bg=- mods=[bold]
+   33 cells  fg=idx254 bg=idx235 mods=[bold]

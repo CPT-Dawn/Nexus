@@ -13,6 +13,8 @@ mod layout;
 mod overview;
 mod theme;
 mod view;
+mod wifi;
+mod wifi_ui;
 mod words;
 
 use std::io;
@@ -27,6 +29,7 @@ use ratatui::buffer::Buffer;
 pub use app::{App, Conn, Layer, Msg, Tab};
 pub use caps::{Caps, ColorTier, Glyphs};
 pub use client::Client;
+pub use wifi::{PasswordField, Toast};
 
 /// Draws `app` into a fresh buffer of the given size (what a snapshot sees).
 pub fn render(app: &App, width: u16, height: u16) -> Buffer {
@@ -98,6 +101,7 @@ pub fn run(ascii: bool, nerd: bool) -> io::Result<()> {
     let mut terminal = ratatui::try_init()?;
     let size = terminal.size()?;
     app.update(Msg::Resize(size.width, size.height));
+    app.attach(socket.clone(), tx.clone());
     let client = Client::spawn(socket, tx.clone());
     spawn_input(tx);
     // Poll traffic exactly while the graphs are on screen (ADR-0003).

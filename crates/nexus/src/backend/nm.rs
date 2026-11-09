@@ -12,8 +12,8 @@ use std::time::Duration;
 use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
 use nexus_ipc::{
-    BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind, Radio, Radios,
-    ScanOutcome, Secret, State, Status, WifiList,
+    AutoconnectSet, BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind,
+    Radio, Radios, ScanOutcome, Secret, State, Status, WifiList,
 };
 use std::pin::Pin;
 
@@ -346,6 +346,16 @@ impl Backend for NetworkManager {
 
     async fn wifi_forget(&self, network: String) -> Result<Forgotten, BackendError> {
         self.with_bus(|c| async move { super::wifi::forget(&c, &network).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_autoconnect(
+        &self,
+        network: String,
+        enabled: bool,
+    ) -> Result<AutoconnectSet, BackendError> {
+        self.with_bus(|c| async move { super::wifi::set_autoconnect(&c, &network, enabled).await })
             .await?
             .map_err(BackendError::Refused)
     }
