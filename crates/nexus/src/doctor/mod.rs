@@ -80,11 +80,15 @@ async fn check<B: Backend>(backend: &B, settings: &Settings) -> Vec<Finding> {
         status.state,
         State::Unavailable | State::Unknown | State::Local | State::Site | State::Online
     ) && status.connectivity != Connectivity::Portal;
-    let gateway = match &nm {
-        Some(nm) => nm.gateway4.clone(),
-        None => std::fs::read_to_string(ROUTE_TABLE)
-            .ok()
-            .and_then(|t| host::default_gateway(&t)),
+    let gateway = match gateway_setting(settings).as_str() {
+        "off" => None,
+        "auto" => match &nm {
+            Some(nm) => nm.gateway4.clone(),
+            None => std::fs::read_to_string(ROUTE_TABLE)
+                .ok()
+                .and_then(|t| host::default_gateway(&t)),
+        },
+        pinned => Some(pinned.to_owned()),
     };
     let target = (probe && !check_off)
         .then(|| host::url_host(&url).map(str::to_owned))
@@ -125,6 +129,15 @@ async fn check<B: Backend>(backend: &B, settings: &Settings) -> Vec<Finding> {
         gateway,
         distro: distro(),
     })
+}
+
+/// `doctor.gateway` of the live config.
+fn gateway_setting(settings: &Settings) -> String {
+    settings
+        .get(Some("doctor.gateway"))
+        .ok()
+        .and_then(|v| v["value"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| "auto".into())
 }
 
 /// `(enabled, url)` of the connectivity check in the live config.

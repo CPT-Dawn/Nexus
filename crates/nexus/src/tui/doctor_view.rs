@@ -23,6 +23,12 @@ fn severity_style(look: &Look, severity: Severity) -> Style {
     }
 }
 
+/// Finding text for the screen: the backticks that mark commands and names
+/// in `nexus doctor` output are noise here.
+fn plain(text: &str) -> String {
+    text.replace('`', "")
+}
+
 /// `text` cut to `width` columns, ending in `...` when it had to be.
 fn fit(text: &str, width: usize) -> String {
     if text.chars().count() <= width {
@@ -64,9 +70,9 @@ pub fn setup(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     };
     lines.push(Line::from(vec![
         Span::styled(format!("{} ", sym.dot()), look.err()),
-        Span::styled(main.title.clone(), look.err().bold()),
+        Span::styled(plain(&main.title), look.err().bold()),
     ]));
-    lines.push(Line::styled(main.cause.clone(), look.text()));
+    lines.push(Line::styled(plain(&main.cause), look.text()));
     for other in trouble.iter().filter(|f| f.id != main.id) {
         // Titles only: the cause is one `nexus doctor` away, and the
         // commands are what this screen is for.
@@ -78,12 +84,12 @@ pub fn setup(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
                 format!("{} ", sym.dot()),
                 severity_style(look, other.severity),
             ),
-            Span::styled(other.title.clone(), look.muted()),
+            Span::styled(plain(&other.title), look.muted()),
         ]));
     }
     if let Some(fix) = &main.fix {
         lines.push(Line::default());
-        lines.push(Line::styled(fix.text.clone(), look.text()));
+        lines.push(Line::styled(plain(&fix.text), look.text()));
         for command in &fix.commands {
             lines.push(Line::from(vec![
                 Span::styled("  $ ", look.dim()),
@@ -133,7 +139,10 @@ pub fn panel(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
                 severity_style(look, finding.severity),
             ),
             Span::styled(
-                fit(&finding.title, (inner.width as usize).saturating_sub(2)),
+                fit(
+                    &plain(&finding.title),
+                    (inner.width as usize).saturating_sub(2),
+                ),
                 look.text(),
             ),
         ]));
@@ -143,7 +152,10 @@ pub fn panel(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
                 .as_ref()
                 .map_or(finding.cause.as_str(), |fix| fix.text.as_str());
             let room = (inner.width as usize).saturating_sub(2);
-            lines.push(Line::styled(format!("  {}", fit(hint, room)), look.muted()));
+            lines.push(Line::styled(
+                format!("  {}", fit(&plain(hint), room)),
+                look.muted(),
+            ));
         }
     }
     if let Some(status) = fix_status(app, look) {
@@ -159,7 +171,7 @@ pub fn confirm(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     };
     let Some(fix) = &finding.fix else { return };
     let mut lines = vec![
-        Line::styled(finding.title.clone(), look.title()),
+        Line::styled(plain(&finding.title), look.title()),
         Line::default(),
         Line::styled("These commands will run:", look.text()),
     ];

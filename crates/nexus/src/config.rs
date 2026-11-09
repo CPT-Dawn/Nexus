@@ -19,6 +19,24 @@ pub struct Config {
     pub connectivity: ConnectivityCheck,
     pub menu: Menu,
     pub prompts: Prompts,
+    pub doctor: DoctorConfig,
+}
+
+/// What the Doctor probes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DoctorConfig {
+    /// The gateway whose answer is tested: `auto` (the primary Link's, else
+    /// the default route), `off`, or an IPv4/IPv6 address.
+    pub gateway: String,
+}
+
+impl Default for DoctorConfig {
+    fn default() -> Self {
+        Self {
+            gateway: "auto".into(),
+        }
+    }
 }
 
 /// Secret prompts (password questions from the Backend).
@@ -58,6 +76,7 @@ impl Default for Config {
             connectivity: ConnectivityCheck::default(),
             menu: Menu::default(),
             prompts: Prompts::default(),
+            doctor: DoctorConfig::default(),
         }
     }
 }
@@ -85,6 +104,12 @@ pub fn parse(text: &str) -> Result<Config, String> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(format!(
             "connectivity.url must start with http:// or https://, got `{url}`"
+        ));
+    }
+    let gateway = &config.doctor.gateway;
+    if !matches!(gateway.as_str(), "auto" | "off") && gateway.parse::<std::net::IpAddr>().is_err() {
+        return Err(format!(
+            "doctor.gateway must be `auto`, `off` or an IP address, got `{gateway}`"
         ));
     }
     let secs = config.prompts.timeout_secs;

@@ -368,7 +368,7 @@ fn first_run_rig() -> Rig {
         .nm_running(false)
         .daemon(false)
         .start();
-    world.write_config("[connectivity]\nenabled = false\n");
+    world.write_config("[connectivity]\nenabled = false\n[doctor]\ngateway = \"off\"\n");
     world.start_daemon();
     world
         .systemd
@@ -401,6 +401,7 @@ fn first_run_without_networkmanager_shows_the_exact_commands() {
             )
         };
         assert!(frame.contains(first) && frame.contains(last), "{frame}");
+        assert!(!frame.contains('`'), "no raw backticks on screen:\n{frame}");
         insta::assert_snapshot!(format!("first_run_{name}"), frame);
     }
     rig.size(STANDARD);

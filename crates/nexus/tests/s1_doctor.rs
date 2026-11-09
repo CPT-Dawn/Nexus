@@ -10,7 +10,8 @@ const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
 const NO_SUCH_HOST: &str = "http://nexus-doctor.invalid/";
 
 const LOCAL_CHECK: &str = "[connectivity]\nurl = \"http://localhost/check\"\n";
-const NO_CHECK: &str = "[connectivity]\nenabled = false\n";
+/// No outside contact and no probe of the host this test runs on.
+const NO_CHECK: &str = "[connectivity]\nenabled = false\n[doctor]\ngateway = \"off\"\n";
 
 /// A world whose Daemon started with `config` in place (the config is
 /// reloaded lazily, so it has to exist before the Daemon does).
@@ -293,6 +294,36 @@ fn missing_ipv6_is_information_not_trouble() {
     let all = findings(&world);
     assert_eq!(find(&all, "ipv6")["severity"], "info");
     assert_eq!(trouble(&all), Vec::<&str>::new());
+}
+
+#[test]
+fn the_gateway_to_probe_can_be_pinned_or_switched_off_in_config() {
+    // Without NetworkManager the Doctor would read the host's route table;
+    // config says which gateway to test instead.
+    let alive = world_with(
+        "[connectivity]\nenabled = false\n[doctor]\ngateway = \"127.0.0.1\"\n",
+        false,
+    );
+    let all = findings(&alive);
+    assert_eq!(find(&all, "gateway")["severity"], "ok", "{all:#?}");
+
+    let dead = world_with(
+        "[connectivity]\nenabled = false\n[doctor]\ngateway = \"192.0.2.1\"\n",
+        false,
+    );
+    assert_eq!(find(&findings(&dead), "gateway")["severity"], "problem");
+
+    let off = world_with(NO_CHECK, false);
+    assert!(!has(&findings(&off), "gateway"));
+}
+
+#[test]
+fn a_gateway_that_is_not_an_address_is_refused_by_config() {
+    let world = World::start(NEXUS);
+    let resp = world
+        .wire()
+        .call(json!({"op": "config_set", "key": "doctor.gateway", "value": "the router"}));
+    assert!(resp.get("err").is_some(), "{resp}");
 }
 
 #[test]
