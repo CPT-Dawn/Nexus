@@ -56,7 +56,9 @@ impl Marks {
 
     /// The default for a Network nobody marked.
     pub fn default_for(security: Security) -> Trust {
-        if security == Security::Open {
+        // OWE encrypts the air but does not say who is on the other end: like
+        // an Open Network, it starts Untrusted.
+        if matches!(security, Security::Open | Security::Owe) {
             Trust::Untrusted
         } else {
             Trust::Trusted
@@ -232,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn unmarked_open_networks_are_untrusted_and_the_rest_trusted() {
+    fn unmarked_open_and_owe_networks_are_untrusted_and_the_rest_trusted() {
         let marks = Marks::default();
         assert_eq!(
             marks.trust_of(&net("a", Security::Open, false)),
@@ -244,7 +246,7 @@ mod tests {
         );
         assert_eq!(
             marks.trust_of(&net("c", Security::Owe, false)),
-            Trust::Trusted
+            Trust::Untrusted
         );
     }
 

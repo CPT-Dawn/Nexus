@@ -386,7 +386,7 @@ echo '{"v":1,"id":1,"on":true,"op":"wifi_power"}' | socat -t1 - UNIX-CONNECT:"$S
 
 #### `airplane`
 
-Airplane mode: every radio the Backend controls off (`on`) or back on. Result: `Radios`. `hard_blocked` when a hardware switch prevents it.
+Airplane mode: every radio the Backend controls off (`on`) or back on: Wi-Fi, mobile broadband and Bluetooth. Bluetooth is powered off through BlueZ and, on leaving, back to what it was before. Result: `Radios`. `hard_blocked` when a hardware switch prevents it.
 
 Command line: `nexus airplane on|off`.
 

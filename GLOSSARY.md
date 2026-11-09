@@ -38,7 +38,7 @@ Deleting a Profile, so Nexus no longer joins its Network automatically.
 _Avoid_: delete connection, remove
 
 **Trust**:
-The user's judgement of a Network, either Trusted or Untrusted, which decides policies such as bringing up a VPN on join. Unknown open Networks start Untrusted; secured ones start Trusted. A mark made by the user (`trust_set`, `nexus trust set`, `t` in the Wi-Fi tab) beats the default and is kept in the Daemon's state file. Joining an Untrusted Network runs the Trust policy once per join, after any Portal login: bring up the configured VPN (`[trust] auto_vpn`) and optionally mark the Network's Profile metered (`[trust] metered`), then say what was done.
+The user's judgement of a Network, either Trusted or Untrusted, which decides policies such as bringing up a VPN on join. Unknown open Networks (OWE included, which encrypts but does not authenticate) start Untrusted; secured ones start Trusted. A mark made by the user (`trust_set`, `nexus trust set`, `t` in the Wi-Fi tab) beats the default and is kept in the Daemon's state file. Joining an Untrusted Network runs the Trust policy once per join, after any Portal login: bring up the configured VPN (`[trust] auto_vpn`) and optionally mark the Network's Profile metered (`[trust] metered`), then say what was done.
 _Avoid_: security level, zone, public/private
 
 **Portal**:
