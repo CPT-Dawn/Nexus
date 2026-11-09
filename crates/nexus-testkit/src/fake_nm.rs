@@ -240,10 +240,15 @@ struct Model {
     request_new: bool,
     /// The `GetSecrets` request waiting on the agent: `(connection path, setting)`.
     pending_secrets: Option<(String, String)>,
-    /// `WirelessEnabled`: false is a soft block.
-    wireless_enabled: bool,
-    /// `WirelessHardwareEnabled`: false is a hardware kill switch.
-    wireless_hw_enabled: bool,
+    /// The software Wi-Fi switch (`WirelessEnabled` as set by clients).
+    wifi_soft: bool,
+    /// A hardware switch holds the Wi-Fi radio off.
+    wifi_hard_blocked: bool,
+    wwan_soft: bool,
+    /// Activations in flight; a stopped NetworkManager takes them with it.
+    tasks: Vec<tokio::task::AbortHandle>,
+    /// The state before [`FakeNm::sleep`], restored by [`FakeNm::resume`].
+    before_sleep: NmState,
     /// `ConnectivityCheckEnabled`.
     check_enabled: bool,
     /// The primary connection's IPv4 gateway; `None` means no `Ip4Config`.
@@ -282,14 +287,32 @@ impl Manager {
         self.0.lock().unwrap().version.clone()
     }
 
+    /// Like NetworkManager: on only if the software switch is on and no
+    /// hardware switch holds the radio.
     #[zbus(property)]
     fn wireless_enabled(&self) -> bool {
-        self.0.lock().unwrap().wireless_enabled
+        let m = self.0.lock().unwrap();
+        m.wifi_soft && !m.wifi_hard_blocked
+    }
+
+    #[zbus(property)]
+    fn set_wireless_enabled(&mut self, on: bool) {
+        self.0.lock().unwrap().wifi_soft = on;
     }
 
     #[zbus(property)]
     fn wireless_hardware_enabled(&self) -> bool {
-        self.0.lock().unwrap().wireless_hw_enabled
+        !self.0.lock().unwrap().wifi_hard_blocked
+    }
+
+    #[zbus(property)]
+    fn wwan_enabled(&self) -> bool {
+        self.0.lock().unwrap().wwan_soft
+    }
+
+    #[zbus(property)]
+    fn set_wwan_enabled(&mut self, on: bool) {
+        self.0.lock().unwrap().wwan_soft = on;
     }
 
     #[zbus(property)]
@@ -356,7 +379,7 @@ impl Manager {
             settings: clone_settings(&connection),
             path: profile_path(n),
         });
-        tokio::spawn(activate(
+        let task = tokio::spawn(activate(
             conn.clone(),
             self.0.clone(),
             dev,
@@ -364,6 +387,7 @@ impl Manager {
             Some(given),
             ask,
         ));
+        self.0.lock().unwrap().tasks.push(task.abort_handle());
         Ok((opath(&profile_path(n)), opath(ACTIVE_PATH), HashMap::new()))
     }
 
@@ -391,7 +415,7 @@ impl Manager {
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs("no such connection".into()))?;
         let dev = device_index(device.as_str())?;
         // A saved profile brings its own (right) secrets.
-        tokio::spawn(activate(
+        let task = tokio::spawn(activate(
             conn.clone(),
             self.0.clone(),
             dev,
@@ -399,8 +423,13 @@ impl Manager {
             None,
             None,
         ));
+        self.0.lock().unwrap().tasks.push(task.abort_handle());
         Ok(opath(ACTIVE_PATH))
     }
+
+    #[zbus(signal)]
+    async fn device_added(emitter: &SignalEmitter<'_>, device: OwnedObjectPath)
+    -> zbus::Result<()>;
 
     #[zbus(signal, name = "StateChanged")]
     async fn nm_state_changed(emitter: &SignalEmitter<'_>, state: u32) -> zbus::Result<()>;
@@ -1004,6 +1033,18 @@ pub struct FakeNm {
     address: String,
     model: Shared,
     conn: Option<Connection>,
+    logind: Option<Connection>,
+}
+
+const LOGIND_NAME: &str = "org.freedesktop.login1";
+const LOGIND_PATH: &str = "/org/freedesktop/login1";
+
+struct Logind;
+
+#[interface(name = "org.freedesktop.login1.Manager")]
+impl Logind {
+    #[zbus(signal)]
+    async fn prepare_for_sleep(emitter: &SignalEmitter<'_>, start: bool) -> zbus::Result<()>;
 }
 
 impl FakeNm {
@@ -1033,8 +1074,11 @@ impl FakeNm {
             agent_calls: Vec::new(),
             request_new: true,
             pending_secrets: None,
-            wireless_enabled: true,
-            wireless_hw_enabled: true,
+            wifi_soft: true,
+            wifi_hard_blocked: false,
+            wwan_soft: true,
+            tasks: Vec::new(),
+            before_sleep: NmState::Disconnected,
             check_enabled: true,
             gateway4: None,
             ipv6: false,
@@ -1044,9 +1088,75 @@ impl FakeNm {
             address: address.to_owned(),
             model,
             conn: None,
+            logind: None,
         };
         nm.restart();
+        nm.start_logind();
         nm
+    }
+
+    /// The fake `org.freedesktop.login1`, which only announces sleeping and
+    /// waking. It stays up when NetworkManager goes away.
+    fn start_logind(&mut self) {
+        let address = self.address.clone();
+        let conn = self.rt.block_on(async move {
+            connection::Builder::address(address.as_str())
+                .serve_at(LOGIND_PATH, Logind)
+                .name(LOGIND_NAME)
+                .build()
+                .await
+                .expect("serve fake logind")
+        });
+        self.logind = Some(conn);
+    }
+
+    fn prepare_for_sleep(&self, start: bool) {
+        let Some(conn) = &self.logind else { return };
+        let conn = conn.clone();
+        self.rt.block_on(async move {
+            if let Ok(iface) = conn
+                .object_server()
+                .interface::<_, Logind>(LOGIND_PATH)
+                .await
+            {
+                let _ = Logind::prepare_for_sleep(iface.signal_emitter(), start).await;
+            }
+        });
+    }
+
+    /// The machine suspends: logind announces it, NetworkManager goes ASLEEP.
+    pub fn sleep(&self) {
+        let state = self.model.lock().unwrap().state;
+        if state != NmState::Asleep {
+            self.model.lock().unwrap().before_sleep = state;
+        }
+        self.prepare_for_sleep(true);
+        self.set_state(NmState::Asleep);
+    }
+
+    /// The machine wakes: logind announces it first, then NetworkManager
+    /// returns to the state it slept in.
+    pub fn resume(&self) {
+        self.prepare_for_sleep(false);
+        let back = self.model.lock().unwrap().before_sleep;
+        self.set_state(back);
+    }
+
+    /// Whether Wi-Fi is on, as NetworkManager's `WirelessEnabled` reads.
+    pub fn wifi_enabled(&self) -> bool {
+        let m = self.model.lock().unwrap();
+        m.wifi_soft && !m.wifi_hard_blocked
+    }
+
+    pub fn wwan_enabled(&self) -> bool {
+        self.model.lock().unwrap().wwan_soft
+    }
+
+    /// Flips a hardware kill switch on the Wi-Fi radio.
+    pub fn set_wifi_hardware_blocked(&self, blocked: bool) {
+        self.model.lock().unwrap().wifi_hard_blocked = blocked;
+        self.notify(|m, e| Box::pin(async move { m.wireless_enabled_changed(e).await }));
+        self.notify(|m, e| Box::pin(async move { m.wireless_hardware_enabled_changed(e).await }));
     }
 
     /// Whether the fake currently owns the NetworkManager name.
@@ -1056,13 +1166,37 @@ impl FakeNm {
 
     /// NetworkManager going away: the name is released.
     pub fn stop(&mut self) {
+        self.forget_activations();
         self.conn = None;
+    }
+
+    /// A NetworkManager that goes away forgets its joins in flight: their
+    /// tasks end and their Devices fall back to rest.
+    fn forget_activations(&self) {
+        let mut m = self.model.lock().unwrap();
+        for task in m.tasks.drain(..) {
+            task.abort();
+        }
+        m.pending_secrets = None;
+        // Profiles only in memory die with NetworkManager.
+        for p in &mut m.profiles {
+            if p.as_ref().is_some_and(|p| !p.persisted) {
+                *p = None;
+            }
+        }
+        for d in &mut m.devices {
+            if (40..100).contains(&d.state) {
+                d.state = 30;
+                d.active_ap = None;
+            }
+        }
     }
 
     /// NetworkManager (re)appearing with its current model. Objects are
     /// served before the name is requested, so a client that watches the name
     /// never sees a half-built tree.
     pub fn restart(&mut self) {
+        self.forget_activations();
         self.conn = None;
         // Agents have to register again with a new NetworkManager.
         self.model.lock().unwrap().agent = None;
@@ -1140,8 +1274,8 @@ impl FakeNm {
     /// switch (`WirelessEnabled`), `hard` the hardware one (`WirelessHardwareEnabled`).
     pub fn set_radio(&self, soft: bool, hard: bool) {
         let mut m = self.model.lock().unwrap();
-        m.wireless_enabled = soft;
-        m.wireless_hw_enabled = hard;
+        m.wifi_soft = soft;
+        m.wifi_hard_blocked = !hard;
     }
 
     /// `ConnectivityCheckEnabled`.
@@ -1180,6 +1314,9 @@ impl FakeNm {
             let _ = os.at(device_path(n), Device(model.clone(), n)).await;
             let _ = os.at(device_path(n), Statistics(model.clone(), n)).await;
             let _ = os.at(device_path(n), Wireless(model, n)).await;
+            if let Ok(i) = os.interface::<_, Manager>(MANAGER_PATH).await {
+                let _ = Manager::device_added(i.signal_emitter(), opath(&device_path(n))).await;
+            }
         });
         DeviceId(n)
     }

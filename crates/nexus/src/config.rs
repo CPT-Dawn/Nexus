@@ -326,6 +326,9 @@ pub async fn watch(settings: std::sync::Arc<Settings>) {
     }
 }
 
+/// How long the directory must stay quiet before the file is re-read.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(150);
+
 async fn watch_inner(settings: &Settings) -> io::Result<()> {
     use rustix::fs::inotify::{self, CreateFlags, WatchFlags};
     use std::mem::MaybeUninit;
@@ -342,6 +345,7 @@ async fn watch_inner(settings: &Settings) -> io::Result<()> {
             | WatchFlags::MOVED_TO
             | WatchFlags::MOVED_FROM
             | WatchFlags::CREATE
+            | WatchFlags::MODIFY
             | WatchFlags::DELETE,
     )?;
     // tokio deprecates the safe constructor; `register` is `unsafe`, which this
@@ -350,19 +354,27 @@ async fn watch_inner(settings: &Settings) -> io::Result<()> {
     let fd = tokio::io::unix::AsyncFd::new(fd)?;
     let mut buf = [MaybeUninit::<u8>::uninit(); 4096];
     loop {
-        let mut guard = fd.readable().await?;
-        // Drain what is queued; the reload compares file contents, so the
-        // individual events do not matter.
-        let mut reader = inotify::Reader::new(fd.get_ref(), &mut buf);
-        loop {
-            match reader.next() {
-                Ok(_) => {}
-                Err(rustix::io::Errno::AGAIN) => {
-                    guard.clear_ready();
-                    break;
+        // Wait for a change, then for the directory to go quiet: an editor
+        // that writes in place leaves a truncated or half-written file until
+        // it finishes, and reading that would report a bogus parse warning.
+        let mut changed = true;
+        while changed {
+            let mut guard = fd.readable().await?;
+            // Drain what is queued; the reload compares file contents, so the
+            // individual events do not matter.
+            let mut reader = inotify::Reader::new(fd.get_ref(), &mut buf);
+            loop {
+                match reader.next() {
+                    Ok(_) => {}
+                    Err(rustix::io::Errno::AGAIN) => {
+                        guard.clear_ready();
+                        break;
+                    }
+                    Err(e) => return Err(e.into()),
                 }
-                Err(e) => return Err(e.into()),
             }
+            drop(guard);
+            changed = tokio::time::timeout(SETTLE, fd.readable()).await.is_ok();
         }
         settings.reload();
     }

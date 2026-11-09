@@ -90,6 +90,12 @@ pub enum Op {
         #[serde(default)]
         confirm: bool,
     },
+    /// Switch Wi-Fi on or off. Result: [`Radios`]. `hard_blocked` while a
+    /// hardware switch holds the radio off.
+    WifiPower { on: bool },
+    /// Airplane mode: every radio the Backend controls off (`on`) or back on.
+    /// Result: [`Radios`]. `hard_blocked` when a hardware switch prevents it.
+    Airplane { on: bool },
     /// Start receiving event lines on this connection. Answered with
     /// `{"ok": {}}`; events follow, interleaved with later responses.
     Subscribe,
@@ -203,6 +209,8 @@ pub enum ErrorCode {
     UnknownNetwork,
     /// There is no Wi-Fi Link to disconnect.
     NotConnected,
+    /// A hardware switch (not software) holds the radio off.
+    HardBlocked,
     /// No Secret prompt with that id is open (it was answered, cancelled or expired).
     UnknownPrompt,
     /// A fix needs `confirm: true` and did not get it.
@@ -440,6 +448,53 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link: Option<Link>,
     pub backend: BackendInfo,
+    /// Radio switches. Absent from older daemons: reads as "all on".
+    #[serde(default)]
+    pub radios: Radios,
+}
+
+/// The state of one radio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Radio {
+    /// On, and not blocked by anything.
+    pub enabled: bool,
+    /// A hardware switch (not software) holds it off: asking to turn it on cannot help.
+    pub hardware_blocked: bool,
+}
+
+/// All radio switches, the `wifi_power` and `airplane` result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Radios {
+    pub wifi: Radio,
+    /// Every radio the Backend controls is off.
+    pub airplane: bool,
+}
+
+impl Default for Radios {
+    fn default() -> Self {
+        Self {
+            wifi: Radio {
+                enabled: true,
+                hardware_blocked: false,
+            },
+            airplane: false,
+        }
+    }
+}
+
+impl Radios {
+    /// A phrase about a radio that is off, or `None` when all is well.
+    pub fn human(&self) -> Option<&'static str> {
+        if self.wifi.hardware_blocked {
+            Some("Wi-Fi is blocked by a hardware switch")
+        } else if self.airplane {
+            Some("airplane mode is on")
+        } else if !self.wifi.enabled {
+            Some("Wi-Fi is off")
+        } else {
+            None
+        }
+    }
 }
 
 impl Status {
@@ -453,6 +508,7 @@ impl Status {
                 name: "networkmanager".into(),
                 version: None,
             },
+            radios: Radios::default(),
         }
     }
 
@@ -467,6 +523,14 @@ impl Status {
             Some(l) => format!("{prefix}{}", l.name),
             None => String::new(),
         };
+        let base = self.human_state(link, how);
+        match self.radios.human() {
+            Some(radio) if self.state != State::Unavailable => format!("{base}; {radio}"),
+            _ => base,
+        }
+    }
+
+    fn human_state(&self, link: impl Fn(&str) -> String, how: &str) -> String {
         match self.state {
             State::Unavailable => "NetworkManager is not running".into(),
             State::Asleep => "networking is switched off".into(),

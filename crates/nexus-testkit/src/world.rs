@@ -115,6 +115,12 @@ impl World {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     }
 
+    /// The process id of the Daemon this world started, if one runs. With
+    /// socket activation under a wrapper it is the wrapper's, not the Daemon's.
+    pub fn daemon_pid(&self) -> Option<u32> {
+        self.daemon.as_ref().map(Child::id)
+    }
+
     pub fn runtime_dir(&self) -> PathBuf {
         self.tmp.path().join("run")
     }
@@ -133,6 +139,21 @@ impl World {
         let path = self.config_path();
         std::fs::create_dir_all(path.parent().unwrap()).expect("mkdir config dir");
         std::fs::write(path, text).expect("write config");
+    }
+
+    /// Writes the config file in place but in two pieces, `pause` apart, the
+    /// way a slow editor or a big save looks from the outside: the file
+    /// exists with only its first half until the second arrives.
+    pub fn write_config_in_pieces(&self, first: &str, second: &str, pause: std::time::Duration) {
+        use std::io::Write;
+        let path = self.config_path();
+        std::fs::create_dir_all(path.parent().unwrap()).expect("mkdir config dir");
+        let mut file = std::fs::File::create(path).expect("create config");
+        file.write_all(first.as_bytes()).expect("write first half");
+        file.flush().expect("flush");
+        std::thread::sleep(pause);
+        file.write_all(second.as_bytes())
+            .expect("write second half");
     }
 
     pub fn daemon_log(&self) -> String {

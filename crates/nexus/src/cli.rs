@@ -25,6 +25,7 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::UnknownNetwork => 9,
         ErrorCode::PasswordRequired => 10,
         ErrorCode::NotConnected => 11,
+        ErrorCode::HardBlocked => 12,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -271,6 +272,17 @@ fn read_masked(message: &str) -> Option<Secret> {
     (!text.is_empty()).then(|| Secret::new(text))
 }
 
+/// `nexus wifi on|off` and `nexus airplane on|off`.
+pub fn radio(op: Op, json: bool) -> ExitCode {
+    wifi_call(op, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(r) = serde_json::from_value::<nexus_ipc::Radios>(value) {
+            println!("{}", crate::text::radios(&r));
+        }
+    })
+}
+
 /// `nexus wifi disconnect`.
 pub fn wifi_disconnect(json: bool) -> ExitCode {
     wifi_call(Op::WifiDisconnect, |value| {
@@ -391,6 +403,7 @@ mod tests {
             ErrorCode::UnknownNetwork,
             ErrorCode::PasswordRequired,
             ErrorCode::NotConnected,
+            ErrorCode::HardBlocked,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

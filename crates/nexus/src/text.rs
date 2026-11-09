@@ -269,6 +269,34 @@ pub fn not_connected() -> Failure {
     )
 }
 
+pub fn wifi_hard_blocked() -> Failure {
+    fail(
+        ErrorCode::HardBlocked,
+        "Wi-Fi is blocked by a hardware switch (a key, slider or BIOS setting). \
+         Flip it off and Nexus will pick it up; software cannot turn it on.",
+    )
+}
+
+/// A join that NetworkManager's restart cut short.
+pub fn join_interrupted(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::JoinFailed,
+        format!("NetworkManager restarted while joining {ssid}. Nothing was saved; try again."),
+    )
+}
+
+/// `nexus wifi on|off` and `nexus airplane on|off` outcomes.
+pub fn radios(r: &nexus_ipc::Radios) -> String {
+    r.human().map_or_else(
+        || "Wi-Fi is on.".to_owned(),
+        |what| {
+            let mut s = what.to_owned();
+            s.replace_range(..1, &s[..1].to_uppercase());
+            format!("{s}.")
+        },
+    )
+}
+
 pub fn bad_network_id() -> Failure {
     fail(ErrorCode::BadRequest, "`network` is not a network id")
 }

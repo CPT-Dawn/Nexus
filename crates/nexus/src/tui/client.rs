@@ -16,9 +16,10 @@ use super::app::Msg;
 /// First retry delay after losing the Daemon; doubles up to [`RETRY_MAX`].
 const RETRY_MIN: Duration = Duration::from_millis(100);
 const RETRY_MAX: Duration = Duration::from_secs(2);
-/// Until the Daemon pushes `status_changed` for every Backend change, the
-/// client re-reads the status this often. An unchanged status costs no frame.
-const POLL: Duration = Duration::from_secs(1);
+/// How often the idle link thread wakes to see whether the UI has gone. It
+/// re-reads no status (the Daemon pushes `status_changed`); it takes a traffic
+/// sample each time, while the graphs are visible.
+const WAKE: Duration = Duration::from_secs(1);
 
 /// Handle to the connection thread; dropping it stops the thread at its
 /// next wake-up.
@@ -203,13 +204,12 @@ fn session(
             .entries,
     ))?;
     while !stop.load(Ordering::SeqCst) {
-        match conn.next_event(POLL)? {
+        match conn.next_event(WAKE)? {
             Some(Event::StatusChanged { status }) => push(status)?,
             Some(Event::Activity { entry }) => send(Msg::Happened(entry))?,
             Some(Event::DoctorFindings { findings }) => send(Msg::Findings(findings))?,
             Some(_) => {}
             None => {
-                push(conn.status()?.map_err(|f| refused("status", f))?)?;
                 // A refusal (say NetworkManager vanished) just skips a sample.
                 if traffic.load(Ordering::SeqCst)
                     && let Ok(t) = conn.traffic()?
