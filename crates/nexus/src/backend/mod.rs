@@ -32,6 +32,23 @@ pub struct Counters {
     pub tx_bytes: u64,
 }
 
+/// What the Doctor asks of the Backend, read fresh on each call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetFacts {
+    /// The Backend's own version, when it says.
+    pub version: Option<String>,
+    /// The software radio switch for Wi-Fi.
+    pub wireless_enabled: bool,
+    /// The hardware radio switch for Wi-Fi.
+    pub wireless_hw_enabled: bool,
+    /// Whether the Backend probes internet reachability.
+    pub connectivity_check: bool,
+    /// The primary Link's IPv4 gateway.
+    pub gateway4: Option<String>,
+    /// Whether the primary Link has an IPv6 address.
+    pub ipv6: bool,
+}
+
 /// Why a Backend call failed. For `status`, "not running" is a [`Status`]
 /// instead; the other calls have nothing to show without the Backend.
 #[derive(Debug)]
@@ -73,6 +90,9 @@ pub trait Backend: Send + Sync + 'static {
     /// Refreshes the Wi-Fi list, reusing recent results instead of
     /// re-requesting inside the Backend's rate limit.
     fn wifi_scan(&self) -> impl Future<Output = Result<ScanOutcome, BackendError>> + Send;
+
+    /// What the Doctor needs to know about the Backend and the primary Link.
+    fn net_facts(&self) -> impl Future<Output = Result<NetFacts, BackendError>> + Send;
 
     /// Byte counters of the primary Link's Device, `None` without one.
     fn counters(&self) -> impl Future<Output = Result<Option<Counters>, BackendError>> + Send;

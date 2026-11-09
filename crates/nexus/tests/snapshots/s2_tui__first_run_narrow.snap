@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_tui.rs
+expression: frame
+---
+ Nexus  Overview ▾  1/6                       ● Unavailable
+╭ Set up NetworkManager ───────────────────────────────────╮
+│ ● NetworkManager is not running                          │
+│ Nexus manages networks through NetworkManager and it is  │
+│ not answering on the system bus, although it is          │
+│ installed.                                               │
+│                                                          │
+│ ● systemd-networkd is also managing your network         │
+│                                                          │
+│ Switch off what manages your network now, then start     │
+│ NetworkManager. The steps are in order.                  │
+│   $ sudo systemctl disable --now                         │
+│ systemd-networkd.service                                 │
+│   $ sudo systemctl enable --now NetworkManager.service   │
+│                                                          │
+│ Press f to run these steps for you. Administrator steps  │
+│ ask for your password first.                             │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ f fix  h/l tab  ? help  q quit

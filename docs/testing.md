@@ -77,6 +77,14 @@ Add an AP: drop a hostapd config in `rig/aps.d/<name>.conf` with `interface=@IFA
 - S2: `rig.traffic(rx_bps, tx_bps)` injects a scripted sample so graph snapshots do not depend on a clock; `rig.sync_watch()` does what `nexus` does after each frame (poll traffic only while `App::traffic_visible()`). Tests that need the Daemon's own rates pump until `app.traffic_samples()` / `traffic_now()` show them.
 - Demo: `... --example demo -- target/debug/nexus busy` shows the moving graphs and activity strip.
 
+## The Doctor (ticket #26)
+
+- S1 (`crates/nexus/tests/s1_doctor.rs`): `{"op":"doctor"}` and `{"op":"doctor_fix"}` over the wire, the `nexus doctor [--json]` CLI, and `doctor_findings` events.
+- The Daemon reads services from systemd over the system bus, so the host is a **fake systemd on the private bus**: `world.systemd.set_unit("systemd-networkd.service", Unit::Active)` (`Absent` is the default, `Inactive` means installed but stopped). Radio switches, the gateway and IPv6 come from the fake NM: `nm.set_radio(soft, hard)`, `nm.set_gateway(Some("127.0.0.1"))`, `nm.set_ipv6(true)`, `nm.set_connectivity_check(false)`.
+- DNS resolves the host of `connectivity.url`: use `http://localhost/..` for "works" and `http://x.invalid/` for "never resolves" (`world.write_config`). A world with NM down must set `[connectivity] enabled = false`, or the Doctor looks up the default URL on the real network.
+- Fixes: `world.install_tool("pkexec", "printf '%s|' \"$@\" >> log")` puts a stand-in first on the PATH of the Daemon; assert on the log. `confirm: true` is required on the wire; unprivileged fixes (`nmcli radio wifi on`) must not touch `pkexec`.
+- S2: first-run screen (`first_run_*` snapshots: NM installed but stopped, networkd active), Diagnostics panel (`diagnostics_*`, Portal), and the `f` / `y` / `n` confirmation flow. Findings arrive on a thread, so `pump_until` for them.
+- Never run the pkexec fixes for real on a dev machine; `nexus doctor` (no `--fix`) is read-only and safe anywhere.
 ## S3: Performance budgets (ticket #31)
 
 `crates/nexus/tests/s3_budgets.rs` measures real release processes against the fake NetworkManager: the Daemon after a busy scenario (40 Networks, 200 rounds of every op, a subscriber), and the real `nexus` TUI on a pty (`rustix` openpt, 120x32). Budgets: Daemon peak RSS (`VmHWM`) < 15 MiB, TUI first frame < 50 ms (spawn to the first ` Nexus ` header byte, best of 5), idle CPU over 5 s (sum of `/proc/<pid>/task/*/schedstat`) < 0.1% Daemon, < 0.2% TUI.

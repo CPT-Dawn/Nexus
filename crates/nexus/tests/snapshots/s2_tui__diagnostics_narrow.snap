@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_tui.rs
+expression: frame
+---
+ Nexus  Overview ▾  1/6                            ● Portal
+╭ Status ──────────────────────────────────────────────────╮
+│ ● Portal                                                 │
+│ You're connected via Wi-Fi (CafeGuest), but a sign-in    │
+│ page is required.                                        │
+╰──────────────────────────────────────────────────────────╯
+╭ Traffic ─────────────────────────────────────────────────╮
+│ ↓ 0 B/s          ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│ ↑ 0 B/s          ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+╰──────────────────────────────────────────────────────────╯
+╭ Connections ─────────────────────────────────────────────╮
+│ ▸ ● Wi-Fi    CafeGuest                                   │
+│   ○ Ethernet Not connected                               │
+│   ○ VPN      Not connected                               │
+│   ○ Hotspot  Not started                                 │
+╰──────────────────────────────────────────────────────────╯
+╭ Diagnostics ─────────────────────────────────────────────╮
+│ ● A sign-in page is blocking the internet                │
+╰──────────────────────────────────────────────────────────╯
+ j/k move  enter open  h/l tab  ? help  q quit

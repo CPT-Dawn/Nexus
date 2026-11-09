@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use crate::{Bus, FakeNm};
+use crate::{Bus, FakeNm, FakeSystemd};
 
 /// How long to wait for the Daemon's socket, and for any single reply.
 pub const PATIENCE: Duration = Duration::from_secs(10);
@@ -38,7 +38,7 @@ impl WorldBuilder {
 
     pub fn start(self) -> World {
         let tmp = tempfile::tempdir().expect("tempdir");
-        for dir in ["run", "home"] {
+        for dir in ["run", "home", "bin"] {
             std::fs::create_dir(tmp.path().join(dir)).expect("mkdir");
         }
         let nm_bus = Bus::start(tmp.path(), "system-bus");
@@ -46,9 +46,11 @@ impl WorldBuilder {
         if !self.nm_running {
             nm.stop();
         }
+        let systemd = FakeSystemd::start(&nm_bus.address);
         let mut world = World {
             bin: self.bin,
             nm,
+            systemd,
             nm_bus,
             daemon: None,
             kill_group: false,
@@ -66,6 +68,8 @@ impl WorldBuilder {
 pub struct World {
     /// The fake NetworkManager; script it from the test.
     pub nm: FakeNm,
+    /// The fake systemd (units start absent).
+    pub systemd: FakeSystemd,
     bin: PathBuf,
     nm_bus: Bus,
     daemon: Option<Child>,
@@ -86,6 +90,29 @@ impl World {
     /// Fake NetworkManager running, Daemon started and accepting connections.
     pub fn start(bin: impl Into<PathBuf>) -> World {
         Self::builder(bin).start()
+    }
+
+    /// The world's scratch directory, for tests that need a file of their own.
+    pub fn dir(&self) -> &Path {
+        self.tmp.path()
+    }
+
+    /// Puts an executable `name` (a `/bin/sh` script body) first on the
+    /// `PATH` of everything the world starts, e.g. a stand-in for `pkexec`
+    /// that records its arguments.
+    pub fn install_tool(&self, name: &str, script: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        let path = self.tmp.path().join("bin").join(name);
+        std::fs::write(
+            &path,
+            format!(
+                "#!/bin/sh
+{script}
+"
+            ),
+        )
+        .expect("write tool");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     }
 
     /// The process id of the Daemon this world started, if one runs. With
@@ -138,7 +165,7 @@ impl World {
     pub fn nexus(&self) -> Command {
         let mut cmd = Command::new(&self.bin);
         cmd.env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("PATH", self.path_var())
             .env("HOME", self.tmp.path().join("home"))
             .env("XDG_RUNTIME_DIR", self.runtime_dir())
             .env("DBUS_SYSTEM_BUS_ADDRESS", &self.nm_bus.address)
@@ -154,6 +181,14 @@ impl World {
             cmd.env("RUST_LOG", log);
         }
         cmd
+    }
+
+    fn path_var(&self) -> std::ffi::OsString {
+        let mut dirs = vec![self.tmp.path().join("bin")];
+        dirs.extend(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        ));
+        std::env::join_paths(dirs).expect("PATH entries have no colons")
     }
 
     /// Starts `nexus daemon` in the foreground and waits for its socket.

@@ -42,6 +42,8 @@ const ACTIVE_PATH: &str = "/org/freedesktop/NetworkManager/ActiveConnection/1";
 const NAME: &str = "org.freedesktop.NetworkManager";
 const AGENT_MANAGER_PATH: &str = "/org/freedesktop/NetworkManager/AgentManager";
 const SETTINGS_PATH: &str = "/org/freedesktop/NetworkManager/Settings";
+const IP4_PATH: &str = "/org/freedesktop/NetworkManager/IP4Config/1";
+const IP6_PATH: &str = "/org/freedesktop/NetworkManager/IP6Config/1";
 /// NetworkManager refuses `RequestScan` this soon after the last scan.
 pub const SCAN_RATE_LIMIT_MS: i64 = 10_000;
 
@@ -247,6 +249,12 @@ struct Model {
     tasks: Vec<tokio::task::AbortHandle>,
     /// The state before [`FakeNm::sleep`], restored by [`FakeNm::resume`].
     before_sleep: NmState,
+    /// `ConnectivityCheckEnabled`.
+    check_enabled: bool,
+    /// The primary connection's IPv4 gateway; `None` means no `Ip4Config`.
+    gateway4: Option<String>,
+    /// Whether the primary connection has an IPv6 address.
+    ipv6: bool,
 }
 
 type Shared = Arc<Mutex<Model>>;
@@ -305,6 +313,11 @@ impl Manager {
     #[zbus(property)]
     fn set_wwan_enabled(&mut self, on: bool) {
         self.0.lock().unwrap().wwan_soft = on;
+    }
+
+    #[zbus(property)]
+    fn connectivity_check_enabled(&self) -> bool {
+        self.0.lock().unwrap().check_enabled
     }
 
     fn get_devices(&self) -> Vec<OwnedObjectPath> {
@@ -441,6 +454,18 @@ impl Active {
         2 // NM_ACTIVE_CONNECTION_STATE_ACTIVATED
     }
 
+    #[zbus(property, name = "Ip4Config")]
+    fn ip4_config(&self) -> OwnedObjectPath {
+        let some = self.0.lock().unwrap().gateway4.is_some();
+        opath(if some { IP4_PATH } else { "/" })
+    }
+
+    #[zbus(property, name = "Ip6Config")]
+    fn ip6_config(&self) -> OwnedObjectPath {
+        let some = self.0.lock().unwrap().ipv6;
+        opath(if some { IP6_PATH } else { "/" })
+    }
+
     /// The first Device carries the primary connection.
     #[zbus(property)]
     fn devices(&self) -> Vec<OwnedObjectPath> {
@@ -449,6 +474,30 @@ impl Active {
         } else {
             vec![opath(&device_path(0))]
         }
+    }
+}
+
+struct Ip4Config(Shared);
+
+#[interface(name = "org.freedesktop.NetworkManager.IP4Config")]
+impl Ip4Config {
+    #[zbus(property)]
+    fn gateway(&self) -> String {
+        self.0.lock().unwrap().gateway4.clone().unwrap_or_default()
+    }
+}
+
+struct Ip6Config;
+
+#[interface(name = "org.freedesktop.NetworkManager.IP6Config")]
+impl Ip6Config {
+    #[zbus(property)]
+    fn address_data(&self) -> Vec<HashMap<String, OwnedVariant>> {
+        let v = |x: Variant<'_>| OwnedVariant::try_from(x).expect("plain variant");
+        vec![HashMap::from([
+            ("address".to_owned(), v(Variant::from("2001:db8::2"))),
+            ("prefix".to_owned(), v(Variant::from(64u32))),
+        ])]
     }
 }
 
@@ -1052,6 +1101,9 @@ impl FakeNm {
             wwan_soft: true,
             tasks: Vec::new(),
             before_sleep: NmState::Disconnected,
+            check_enabled: true,
+            gateway4: None,
+            ipv6: false,
         }));
         let mut nm = FakeNm {
             rt,
@@ -1190,7 +1242,9 @@ impl FakeNm {
                 .serve_at(MANAGER_PATH, Manager(model.clone()))
                 .serve_at(ACTIVE_PATH, Active(model.clone()))
                 .serve_at(SETTINGS_PATH, Settings(model.clone()))
-                .serve_at(AGENT_MANAGER_PATH, AgentManager(model.clone()));
+                .serve_at(AGENT_MANAGER_PATH, AgentManager(model.clone()))
+                .serve_at(IP4_PATH, Ip4Config(model.clone()))
+                .serve_at(IP6_PATH, Ip6Config);
             for n in 0..devices {
                 b = b
                     .serve_at(device_path(n), Device(model.clone(), n))
@@ -1236,6 +1290,29 @@ impl FakeNm {
     pub fn set_primary(&self, primary: Option<ActiveConnection>) {
         self.model.lock().unwrap().primary = primary;
         self.notify(|m, e| Box::pin(async move { m.primary_connection_changed(e).await }));
+    }
+
+    /// Radio switches as NetworkManager reports them: `soft` is the software
+    /// switch (`WirelessEnabled`), `hard` the hardware one (`WirelessHardwareEnabled`).
+    pub fn set_radio(&self, soft: bool, hard: bool) {
+        let mut m = self.model.lock().unwrap();
+        m.wifi_soft = soft;
+        m.wifi_hard_blocked = !hard;
+    }
+
+    /// `ConnectivityCheckEnabled`.
+    pub fn set_connectivity_check(&self, enabled: bool) {
+        self.model.lock().unwrap().check_enabled = enabled;
+    }
+
+    /// The primary connection's IPv4 gateway (`None`: it has no `Ip4Config`).
+    pub fn set_gateway(&self, gateway: Option<&str>) {
+        self.model.lock().unwrap().gateway4 = gateway.map(str::to_owned);
+    }
+
+    /// Whether the primary connection has an IPv6 address.
+    pub fn set_ipv6(&self, yes: bool) {
+        self.model.lock().unwrap().ipv6 = yes;
     }
 
     /// Adds a Wi-Fi Device that has never scanned.

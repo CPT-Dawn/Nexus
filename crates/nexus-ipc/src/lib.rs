@@ -13,6 +13,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod doctor;
+pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
+
 /// The protocol version this crate speaks.
 pub const PROTOCOL: u32 = 1;
 /// Versions a daemon built from this crate accepts.
@@ -77,6 +80,20 @@ pub enum Op {
     /// Decline an open Secret prompt. The join waiting on it fails with
     /// `password_required`. Result `{}`; `unknown_prompt` when closed already.
     SecretCancel { prompt: u64 },
+    /// Run the Doctor's checks. Result: [`DoctorReport`], in check order
+    /// (sort by `severity` to lead with the worst). Contacts nothing outside
+    /// beyond the configured connectivity check's host name lookup.
+    Doctor,
+    /// Run the fix of one finding (`finding` is a `Finding.id`) through
+    /// `pkexec` when it needs privileges. Refused with `not_confirmed` unless
+    /// `confirm` is true: a Front end sets it only after the person said yes.
+    /// Result: [`DoctorFixed`]; `unknown_finding` when the check has nothing to
+    /// fix any more; `fix_failed` when a command failed (the message says which).
+    DoctorFix {
+        finding: String,
+        #[serde(default)]
+        confirm: bool,
+    },
     /// Switch Wi-Fi on or off. Result: [`Radios`]. `hard_blocked` while a
     /// hardware switch holds the radio off.
     WifiPower { on: bool },
@@ -200,6 +217,12 @@ pub enum ErrorCode {
     HardBlocked,
     /// No Secret prompt with that id is open (it was answered, cancelled or expired).
     UnknownPrompt,
+    /// A fix needs `confirm: true` and did not get it.
+    NotConfirmed,
+    /// No finding with that id has a fix to run.
+    UnknownFinding,
+    /// A fix command failed or was not authorized.
+    FixFailed,
     #[serde(other)]
     Unknown,
 }
@@ -266,6 +289,11 @@ pub enum Event {
     SecretPromptClosed {
         id: u64,
         reason: PromptClosed,
+    },
+    /// The Doctor's findings changed since it last ran (any Front end asked it
+    /// to run). Carries all of them.
+    DoctorFindings {
+        findings: Vec<Finding>,
     },
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]
@@ -833,6 +861,11 @@ impl Connection {
     /// Convenience for the `activity` op.
     pub fn activity(&mut self) -> io::Result<Result<ActivityLog, Failure>> {
         Ok(self.call(Op::Activity)?.and_then(decode))
+    }
+
+    /// Convenience for the `doctor` op.
+    pub fn doctor(&mut self) -> io::Result<Result<DoctorReport, Failure>> {
+        Ok(self.call(Op::Doctor)?.and_then(decode))
     }
 
     /// Convenience for the `status` op.

@@ -24,7 +24,7 @@ use zbus::fdo::DBusProxy;
 use zbus::names::BusName;
 use zbus::proxy::CacheProperties;
 
-use super::{Backend, BackendError, Capabilities, Counters};
+use super::{Backend, BackendError, Capabilities, Counters, NetFacts};
 use crate::secrets::Broker;
 use crate::text::{self, Failure};
 
@@ -54,6 +54,8 @@ pub(super) trait NetworkManager {
     fn wwan_enabled(&self) -> zbus::Result<bool>;
     #[zbus(property)]
     fn set_wwan_enabled(&self, on: bool) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn connectivity_check_enabled(&self) -> zbus::Result<bool>;
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
     fn activate_connection(
         &self,
@@ -88,6 +90,30 @@ trait ActiveConnection {
     fn kind(&self) -> zbus::Result<String>;
     #[zbus(property)]
     fn devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
+    #[zbus(property, name = "Ip4Config")]
+    fn ip4_config(&self) -> zbus::Result<OwnedObjectPath>;
+    #[zbus(property, name = "Ip6Config")]
+    fn ip6_config(&self) -> zbus::Result<OwnedObjectPath>;
+}
+
+#[zbus::proxy(
+    interface = "org.freedesktop.NetworkManager.IP4Config",
+    default_service = "org.freedesktop.NetworkManager"
+)]
+trait Ip4Config {
+    #[zbus(property)]
+    fn gateway(&self) -> zbus::Result<String>;
+}
+
+#[zbus::proxy(
+    interface = "org.freedesktop.NetworkManager.IP6Config",
+    default_service = "org.freedesktop.NetworkManager"
+)]
+trait Ip6Config {
+    #[zbus(property)]
+    fn address_data(
+        &self,
+    ) -> zbus::Result<Vec<std::collections::HashMap<String, zbus::OwnedVariant>>>;
 }
 
 #[zbus::proxy(
@@ -320,6 +346,10 @@ impl Backend for NetworkManager {
             .await
     }
 
+    async fn net_facts(&self) -> Result<NetFacts, BackendError> {
+        self.with_bus(|c| async move { read_facts(&c).await }).await
+    }
+
     async fn counters(&self) -> Result<Option<Counters>, BackendError> {
         self.with_bus(|c| async move { read_counters(&c).await })
             .await
@@ -491,6 +521,58 @@ impl Backend for NetworkManager {
             }
         }
     }
+}
+
+/// Reads what the Doctor needs. The primary connection's addressing is
+/// best effort: it can vanish between reads, and "no gateway" is an answer.
+async fn read_facts(conn: &Connection) -> zbus::Result<NetFacts> {
+    let nm = NetworkManagerProxy::builder(conn)
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await?;
+    let version = nm.version().await.ok();
+    let wireless_enabled = nm.wireless_enabled().await?;
+    let wireless_hw_enabled = nm.wireless_hardware_enabled().await?;
+    let connectivity_check = nm.connectivity_check_enabled().await?;
+    let mut gateway4 = None;
+    let mut ipv6 = false;
+    let primary = nm.primary_connection().await?;
+    if primary.as_str() != "/"
+        && let Ok(active) = ActiveConnectionProxy::builder(conn)
+            .path(primary.as_str())
+            .cache_properties(CacheProperties::No)
+            .build()
+            .await
+    {
+        if let Ok(path) = active.ip4_config().await
+            && path.as_str() != "/"
+            && let Ok(ip4) = Ip4ConfigProxy::builder(conn)
+                .path(path.as_str())
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await
+        {
+            gateway4 = ip4.gateway().await.ok().filter(|g| !g.is_empty());
+        }
+        if let Ok(path) = active.ip6_config().await
+            && path.as_str() != "/"
+            && let Ok(ip6) = Ip6ConfigProxy::builder(conn)
+                .path(path.as_str())
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await
+        {
+            ipv6 = ip6.address_data().await.is_ok_and(|a| !a.is_empty());
+        }
+    }
+    Ok(NetFacts {
+        version,
+        wireless_enabled,
+        wireless_hw_enabled,
+        connectivity_check,
+        gateway4,
+        ipv6,
+    })
 }
 
 async fn read_counters(conn: &Connection) -> zbus::Result<Option<Counters>> {
