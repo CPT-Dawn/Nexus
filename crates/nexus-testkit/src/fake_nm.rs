@@ -41,6 +41,7 @@ mod bt;
 mod wired;
 
 pub use wired::Lease;
+mod hotspot;
 
 const MANAGER_PATH: &str = "/org/freedesktop/NetworkManager";
 const ACTIVE_PATH: &str = "/org/freedesktop/NetworkManager/ActiveConnection/1";
@@ -151,6 +152,8 @@ struct DeviceModel {
     bt: Option<bt::BtModel>,
     /// Set for an Ethernet port.
     wired: Option<wired::WiredModel>,
+    /// Whether the Wi-Fi card can be an access point (a Hotspot).
+    ap_capable: bool,
 }
 
 #[derive(Debug)]
@@ -171,6 +174,8 @@ struct ProfileModel {
     bdaddr: Option<Vec<u8>>,
     /// An Ethernet Profile (`802-3-ethernet`).
     wired: bool,
+    /// Set for a Hotspot Profile.
+    hotspot: Option<hotspot::HotspotModel>,
     /// Every setting a client wrote with `Update`/`Update2`, merged over the
     /// basics when read back.
     settings: SettingsDict,
@@ -280,6 +285,8 @@ struct Model {
     join_failures: HashMap<Vec<u8>, (u32, u32)>,
     /// Tethering Links that die on purpose, by phone address.
     bt_failures: HashMap<String, (u32, u32)>,
+    /// The next Hotspot dies on its way up.
+    hotspot_fails: bool,
     /// `RequestScan` calls NetworkManager accepted.
     scan_requests: u32,
     /// Refuse every `RequestScan`, whatever `LastScan` says.
@@ -361,15 +368,18 @@ impl Manager {
     #[zbus(property)]
     fn active_connections(&self) -> Vec<OwnedObjectPath> {
         let m = self.0.lock().unwrap();
-        (0..m.profiles.len())
+        let vpns = (0..m.profiles.len())
             .filter(|n| {
                 m.profiles[*n]
                     .as_ref()
                     .and_then(|p| p.vpn.as_ref())
                     .is_some_and(|v| v.active > 0)
             })
-            .map(|n| opath(&vpn_active_path(n)))
-            .collect()
+            .map(|n| opath(&vpn_active_path(n)));
+        let hotspots = hotspot::hotspot_slots(&m)
+            .into_iter()
+            .map(|n| opath(&hotspot::active_path(n)));
+        vpns.chain(hotspots).collect()
     }
 
     async fn deactivate_connection(
@@ -377,6 +387,17 @@ impl Manager {
         active: OwnedObjectPath,
         #[zbus(connection)] conn: &Connection,
     ) -> zbus::fdo::Result<()> {
+        if let Some(n) = hotspot::slot_of(active.as_str()) {
+            let dev = self.0.lock().unwrap().profiles[n]
+                .as_ref()
+                .and_then(|p| p.hotspot.as_ref())
+                .map(|h| h.device);
+            if let Some(dev) = dev {
+                // The Link going down ends the Hotspot.
+                set_device_state(conn, &self.0, dev, 30, 39).await;
+            }
+            return Ok(());
+        }
         let n: usize = active
             .as_str()
             .rsplit('/')
@@ -441,6 +462,16 @@ impl Manager {
         OwnedObjectPath,
         HashMap<String, OwnedVariant>,
     )> {
+        if hotspot::is_hotspot(&connection) {
+            let persist_disk = options
+                .get("persist")
+                .and_then(|v| v.try_clone().ok()?.try_into().ok())
+                .is_some_and(|p: String| p == "disk");
+            let dev = device_index(device.as_str())?;
+            let (profile, active) =
+                hotspot::add_and_activate(conn, &self.0, connection, dev, persist_disk).await?;
+            return Ok((opath(&profile), opath(&active), HashMap::new()));
+        }
         if connection.contains_key("bluetooth") {
             let persist_disk = options
                 .get("persist")
@@ -509,6 +540,7 @@ impl Manager {
                 secret: text("802-11-wireless-security", "key-mgmt")
                     .zip(text("802-11-wireless-security", "psk")),
                 vpn: None,
+                hotspot: None,
             }));
             m.profiles.len() - 1
         };
@@ -1105,6 +1137,9 @@ async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u3
         let _ = i.get().await.state_changed(i.signal_emitter()).await;
         let _ = Device::device_state_changed(i.signal_emitter(), new, old, reason).await;
     }
+    if new == 30 || new == 120 {
+        hotspot::device_dropped(conn, model, dev).await;
+    }
 }
 
 /// A settings value as readable text, for [`FakeNm::eap_setting`].
@@ -1439,6 +1474,11 @@ impl Wireless {
     }
 
     #[zbus(property)]
+    fn wireless_capabilities(&self) -> u32 {
+        hotspot::capabilities(self.0.lock().unwrap().devices[self.1].ap_capable)
+    }
+
+    #[zbus(property)]
     fn last_scan(&self) -> i64 {
         self.0.lock().unwrap().devices[self.1].last_scan
     }
@@ -1586,6 +1626,7 @@ impl Settings {
                 version: 1,
                 bdaddr: None,
                 wired: false,
+                hotspot: None,
                 vpn: Some(VpnModel {
                     kind,
                     settings: clone_settings(&connection),
@@ -1743,6 +1784,9 @@ impl Profile {
         if let Some(vpn) = &p.vpn {
             return vpn_visible(&vpn.settings);
         }
+        if let Some(h) = &p.hotspot {
+            return hotspot::visible(&h.settings);
+        }
         let v = |v: Variant<'_>| OwnedVariant::try_from(v).expect("plain value");
         let mut connection = HashMap::new();
         connection.insert("id".to_owned(), v(Variant::from(p.id.clone())));
@@ -1814,6 +1858,9 @@ impl Profile {
         let p = m.profiles[self.1].as_ref().expect("served profile exists");
         if let Some(vpn) = &p.vpn {
             return Ok(vpn_secrets(&vpn.settings, setting));
+        }
+        if let Some(h) = &p.hotspot {
+            return Ok(hotspot::secrets(&h.settings, setting));
         }
         let mut out = HashMap::new();
         if let Some((_, secret)) = &p.secret
@@ -1891,6 +1938,14 @@ impl Profile {
         #[zbus(connection)] conn: &Connection,
     ) -> zbus::fdo::Result<()> {
         end_vpn(conn, &self.0, self.1).await;
+        let hotspot_dev = self.0.lock().unwrap().profiles[self.1]
+            .as_ref()
+            .and_then(|p| p.hotspot.as_ref())
+            .filter(|h| h.active > 0)
+            .map(|h| h.device);
+        if let Some(dev) = hotspot_dev {
+            set_device_state(conn, &self.0, dev, 30, 38).await; // CONNECTION_REMOVED
+        }
         // Like NetworkManager, deleting a Profile in use drops its Link.
         let (in_use, told_agent): (Vec<usize>, Option<SettingsDict>) = {
             let mut m = self.0.lock().unwrap();
@@ -1981,6 +2036,7 @@ impl FakeNm {
             deny_secret_reads: false,
             join_failures: HashMap::new(),
             bt_failures: HashMap::new(),
+            hotspot_fails: false,
             scan_requests: 0,
             refuse_scans: false,
             statistics_reads: 0,
@@ -2106,6 +2162,9 @@ impl FakeNm {
         for p in m.profiles.iter_mut().flatten() {
             if let Some(v) = p.vpn.as_mut() {
                 v.active = 0;
+            }
+            if let Some(h) = p.hotspot.as_mut() {
+                h.active = 0;
             }
         }
         for d in &mut m.devices {
@@ -2245,6 +2304,7 @@ impl FakeNm {
                 active_ap: None,
                 bt: None,
                 wired: None,
+                ap_capable: true,
             });
             m.devices.len() - 1
         };
@@ -2393,6 +2453,7 @@ impl FakeNm {
                 version: 1,
                 secret: None,
                 vpn: None,
+                hotspot: None,
                 bdaddr: None,
                 wired: false,
             }));
@@ -2558,6 +2619,7 @@ impl FakeNm {
                 version: 1,
                 bdaddr: None,
                 wired: false,
+                hotspot: None,
                 vpn: Some(VpnModel {
                     kind: "vpn".into(),
                     settings,

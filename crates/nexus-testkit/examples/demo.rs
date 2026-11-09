@@ -4,7 +4,7 @@
 //! ```text
 //! cargo build -p nexus
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|vpn]
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|tether|tether-off]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|tether|tether-off|hotspot|hotspot-on|hotspot-nocard]
 //! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|wifi-enterprise|profile|profile-keyring]
 //! ```
 //!
@@ -40,10 +40,19 @@
 //!   the sample `.ovpn` whose path the demo prints on stderr.
 //! - `tether`: Bluetooth on and three paired phones (Pixel 8 with a saved
 //!   Profile, Sam's iPhone, a long-named Galaxy). Press `5` for the Hotspot tab
-//!   (Tethering lives there until the Hotspot arrives); `j`/`k` move, `enter`
+//!   `j`/`k` move, `enter`
 //!   tethers, `x` drops the tether, `u` undoes. `d` opens details when narrow.
 //! - `tether-off`: the same, with Bluetooth switched off, so `enter` shows how
 //!   to turn it on.
+//! - `hotspot`: the Hotspot tab (press `5`) on a machine whose Wi-Fi card can
+//!   host one, above the Tethering phones. `n` starts one with a made-up
+//!   password, `c` opens the form for your own name and password, then `s`
+//!   `enter` reveals the QR code and password (`p` shows the letters; the QR
+//!   needs a window of about 40 by 24 cells), `S` stops it, `esc` closes a layer.
+//! - `hotspot-on`: the same with `Garage Wi-Fi` already up and two devices
+//!   joined (password `open sesame 42`).
+//! - `hotspot-nocard`: a card that cannot be an access point, so the tab
+//!   explains why and `n` says no.
 //! - `profile`: `wifi`, where Parents House (saved, out of range) already has a
 //!   static address, custom DNS, metered and a priority. Press `2`, then `e`
 //!   on Home-5G (in use: Apply starts the 15 s "Keep these settings?"
@@ -89,7 +98,14 @@ fn main() {
     let scenario = args.next().unwrap_or_else(|| "online".into());
     let rest: Vec<String> = args.collect();
 
-    let world = if scenario.starts_with("tether") {
+    let world = if let Some(start) = match scenario.as_str() {
+        "hotspot" => Some(nexus_testkit::scenarios::HotspotStart::Capable),
+        "hotspot-on" => Some(nexus_testkit::scenarios::HotspotStart::Running),
+        "hotspot-nocard" => Some(nexus_testkit::scenarios::HotspotStart::NoCard),
+        _ => None,
+    } {
+        nexus_testkit::scenarios::hotspot_world(&bin, start)
+    } else if scenario.starts_with("tether") {
         nexus_testkit::scenarios::tether_world(&bin, scenario == "tether")
     } else if scenario == "profile-keyring" {
         World::builder(&bin).keyring(true).start()
@@ -100,7 +116,7 @@ fn main() {
     let opened = world.dir().join("opened.log");
     let mut wlan0 = None;
     match scenario.as_str() {
-        "offline" | "tether" | "tether-off" => {}
+        "offline" | "tether" | "tether-off" | "hotspot" | "hotspot-on" | "hotspot-nocard" => {}
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.

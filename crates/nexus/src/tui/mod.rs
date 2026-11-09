@@ -16,6 +16,8 @@ mod ethernet_ui;
 mod fx;
 mod graph;
 mod hits;
+mod hotspot;
+mod hotspot_ui;
 mod layout;
 mod overlays;
 mod overview;

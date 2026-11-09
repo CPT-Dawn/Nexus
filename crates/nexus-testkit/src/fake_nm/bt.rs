@@ -103,6 +103,7 @@ pub(super) async fn add_and_activate(
             bdaddr: Some(addr),
             wired: false,
             vpn: None,
+            hotspot: None,
         }));
         m.profiles.len() - 1
     };
@@ -178,6 +179,7 @@ impl FakeNm {
                 tx_bytes: 0,
                 state: 30,
                 active_ap: None,
+                ap_capable: false,
                 bt: Some(BtModel {
                     address,
                     name: name.into(),

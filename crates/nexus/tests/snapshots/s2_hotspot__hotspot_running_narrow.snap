@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_hotspot.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Hotspot ▾  5/6                            ● Offline
+╭ Hotspot ─────────────────────────────────────────────────╮
+│ ● Garage Wi-Fi                                           │
+│ 2 devices joined                                         │
+│ s QR code   S stop                                       │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+╭ Tethering ───────────────────────────────────────────────╮
+│ ● Bluetooth is on                                        │
+│                                                          │
+│ ▸   Galaxy S24 Ultra of the whole family          paired │
+│     Pixel 8                                        saved │
+│     Sam's iPhone                                  paired │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ s hotspot QR  S stop hotspot  enter tether  d details  : pa

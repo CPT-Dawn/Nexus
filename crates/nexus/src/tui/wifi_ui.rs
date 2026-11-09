@@ -360,6 +360,12 @@ pub(super) fn toast_rect(toast: &super::wifi::Toast, body: Rect) -> Option<Rect>
 /// the list beside them stays whole; `body` is the whole room, for the toast.
 pub(super) fn overlays(f: &mut Frame, app: &App, body: Rect, modal: Rect, look: &Look, sym: &Sym) {
     if app.field().is_none()
+        && let Some(form) = app.hotspot().form.as_ref()
+    {
+        super::hotspot_ui::form_view(f, form, body, look, sym);
+    }
+    if app.field().is_none()
+        && app.hotspot().form.is_none()
         && let Some(share) = app.share()
     {
         super::share::draw(f, share, modal, look, sym);

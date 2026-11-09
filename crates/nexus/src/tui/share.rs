@@ -39,6 +39,8 @@ pub struct Share {
     pub network: String,
     pub ssid: String,
     pub stage: Stage,
+    /// The details are the running Hotspot's, not a saved Network's.
+    pub hotspot: bool,
 }
 
 impl Share {
@@ -47,6 +49,15 @@ impl Share {
             network,
             ssid,
             stage: Stage::Ask,
+            hotspot: false,
+        }
+    }
+
+    /// The share view of the running Hotspot.
+    pub fn ask_hotspot(ssid: String) -> Share {
+        Share {
+            hotspot: true,
+            ..Share::ask(String::new(), ssid)
         }
     }
 
@@ -170,7 +181,11 @@ pub(super) fn draw(f: &mut Frame, share: &Share, body: Rect, look: &Look, sym: &
                     wrap(vec![
                         Line::styled(why, look.warn()),
                         Line::styled(
-                            "Make the window bigger, or use `nexus wifi share`.",
+                            if share.hotspot {
+                                "Make the window bigger, or use `nexus hotspot qr`."
+                            } else {
+                                "Make the window bigger, or use `nexus wifi share`."
+                            },
                             look.muted(),
                         ),
                         Line::default(),

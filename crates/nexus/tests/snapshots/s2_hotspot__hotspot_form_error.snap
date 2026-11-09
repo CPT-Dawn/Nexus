@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_hotspot.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Hotspot ───────────────────╮╭ Galaxy S24 Ultra of the whole family ──────────────────────────────╮
+│ ○ Off                      ││ Paired                                                             │
+│ n start, strong password   ││                                                                    │
+│ c choose name, password    ││ Address     AA:BB:CC:DD:EE:03                                      │
+│                            ││ Bluetooth   on                                                     │
+╰────────────────────────────╯│ Profile     none yet                                               │
+╭ Tethering ─────────────────╮│                                                                    │
+│ ● Bluetooth is on          ││ Press enter to tether. Switch on Bluetooth tethering on the phone  │
+│                ╭ Start a Hotspot ───────────────────────────────────────────────╮                │
+│ ▸   Galaxy S24…│ Name      empty: Nexus-XXXX                                    │                │
+│     Pixel 8    │ Password  •••••_                                               │                │
+│     Sam's iPho…│                                                                │                │
+│                │ A Hotspot password must be 8 to 63 characters long.            │                │
+│                │                                                                │                │
+│                │ tab next   enter start   ctrl-r show password   esc cancel     │                │
+│                │                                                                │                │
+│                ╰────────────────────────────────────────────────────────────────╯                │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ tab next  enter start  ctrl-r show  esc cancel

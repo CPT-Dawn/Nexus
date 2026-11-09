@@ -261,6 +261,7 @@ pub(super) async fn add_and_activate(
             version: 1,
             bdaddr: None,
             vpn: None,
+            hotspot: None,
             wired: true,
         }));
         m.profiles.len() - 1
@@ -416,6 +417,7 @@ impl super::FakeNm {
                 state: 30,
                 active_ap: None,
                 bt: None,
+                ap_capable: false,
                 wired: Some(WiredModel {
                     mac,
                     carrier: true,
@@ -548,6 +550,7 @@ impl super::FakeNm {
             version: 1,
             bdaddr: None,
             vpn: None,
+            hotspot: None,
             wired: true,
         }));
         let n = m.profiles.len() - 1;
