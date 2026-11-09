@@ -662,7 +662,11 @@ impl Backend for NetworkManager {
                 .cache_properties(CacheProperties::No)
                 .build()
                 .await?;
-            Ok(nm.connectivity_check_uri().await.ok().filter(|u| !u.is_empty()))
+            Ok(nm
+                .connectivity_check_uri()
+                .await
+                .ok()
+                .filter(|u| !u.is_empty()))
         })
         .await
     }
@@ -833,7 +837,11 @@ async fn read_facts(conn: &Connection) -> zbus::Result<NetFacts> {
     let wireless_enabled = nm.wireless_enabled().await?;
     let wireless_hw_enabled = nm.wireless_hardware_enabled().await?;
     let connectivity_check = nm.connectivity_check_enabled().await?;
-    let connectivity_uri = nm.connectivity_check_uri().await.ok().filter(|u| !u.is_empty());
+    let connectivity_uri = nm
+        .connectivity_check_uri()
+        .await
+        .ok()
+        .filter(|u| !u.is_empty());
     let mut gateway4 = None;
     let mut ipv6 = false;
     let primary = nm.primary_connection().await?;

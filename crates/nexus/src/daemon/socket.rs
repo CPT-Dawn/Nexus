@@ -140,7 +140,9 @@ where
                                         Ok(()) => {}
                                         Err(mpsc::error::TrySendError::Full(_)) => {
                                             // Not reading: hang up on it.
-                                            tracing::debug!("dropping a subscriber that fell behind");
+                                            tracing::debug!(
+                                                "dropping a subscriber that fell behind"
+                                            );
                                             cut.abort();
                                             return;
                                         }

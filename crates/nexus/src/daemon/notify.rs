@@ -333,10 +333,11 @@ impl Task {
         let Some(portal) = portal.filter(|_| wanted) else {
             return;
         };
+        let (title, body) = crate::text::login_required(&portal.network);
         let id = self
             .show(
-                &format!("Login required for {}", portal.network),
-                "This network wants you to sign in before it gives internet access.",
+                &title,
+                body,
                 URGENCY_CRITICAL,
                 &[OPEN_LOGIN, "Open login page"],
                 0,

@@ -238,7 +238,10 @@ fn airplane_mode_turns_bluetooth_off_and_back_to_what_it_was() {
     world.bluez().set_powered(false);
     wire.call(json!({"op": "airplane", "on": true}));
     wire.call(json!({"op": "airplane", "on": false}));
-    assert!(!world.bluez().powered(), "airplane mode switched Bluetooth on");
+    assert!(
+        !world.bluez().powered(),
+        "airplane mode switched Bluetooth on"
+    );
 }
 
 #[test]

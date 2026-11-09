@@ -211,10 +211,7 @@ pub async fn airplane_adapters(
     was_on
 }
 
-async fn no_cache_adapter(
-    conn: &Connection,
-    path: &str,
-) -> zbus::Result<AdapterProxy<'static>> {
+async fn no_cache_adapter(conn: &Connection, path: &str) -> zbus::Result<AdapterProxy<'static>> {
     AdapterProxy::builder(conn)
         .path(path.to_owned())
         .cache_properties(CacheProperties::No)

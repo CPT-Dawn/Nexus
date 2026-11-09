@@ -122,7 +122,8 @@ pub trait Backend: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), BackendError>> + Send;
 
     /// The address the Backend itself probes for connectivity, when it says.
-    fn connectivity_uri(&self) -> impl Future<Output = Result<Option<String>, BackendError>> + Send;
+    fn connectivity_uri(&self)
+    -> impl Future<Output = Result<Option<String>, BackendError>> + Send;
 
     /// Byte counters of the primary Link's Device, `None` without one.
     fn counters(&self) -> impl Future<Output = Result<Option<Counters>, BackendError>> + Send;

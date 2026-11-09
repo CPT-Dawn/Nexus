@@ -2,23 +2,17 @@
 //! finding it just found are ever run, never anything a Front end sent, and
 //! never without an explicit `confirm`.
 
-use nexus_ipc::{DoctorFixed, ErrorCode, Failure};
+use nexus_ipc::{DoctorFixed, Failure};
 use tokio::process::Command;
 
 use crate::backend::Backend;
 use crate::config::Settings;
+use crate::text;
 
 /// `pkexec` exits 126 when the dialog was dismissed and 127 when the user is
 /// not authorized (or no agent could ask).
 const PKEXEC_DISMISSED: i32 = 126;
 const PKEXEC_REFUSED: i32 = 127;
-
-fn failure(code: ErrorCode, message: impl Into<String>) -> Failure {
-    Failure {
-        code,
-        message: message.into(),
-    }
-}
 
 /// Runs the fix of finding `id`, in order, stopping at the first failure.
 pub async fn run_fix<B: Backend>(
@@ -28,10 +22,7 @@ pub async fn run_fix<B: Backend>(
     confirm: bool,
 ) -> Result<DoctorFixed, Failure> {
     if !confirm {
-        return Err(failure(
-            ErrorCode::NotConfirmed,
-            "a fix runs only after an explicit yes: send `confirm: true`",
-        ));
+        return Err(text::fix_not_confirmed().into());
     }
     // Always against a fresh look: what was true a minute ago may not be now.
     let findings = super::check(backend, settings).await;
@@ -40,12 +31,7 @@ pub async fn run_fix<B: Backend>(
         .find(|f| f.id == id)
         .and_then(|f| f.fix)
         .filter(|fix| fix.runnable)
-        .ok_or_else(|| {
-            failure(
-                ErrorCode::UnknownFinding,
-                format!("nothing to fix for `{id}` right now"),
-            )
-        })?;
+        .ok_or_else(|| Failure::from(text::nothing_to_fix(id)))?;
     let mut ran = Vec::new();
     for command in &fix.commands {
         ran.push(command.clone());
@@ -65,12 +51,7 @@ pub async fn run_fix<B: Backend>(
             .stdin(std::process::Stdio::null())
             .output()
             .await
-            .map_err(|e| {
-                failure(
-                    ErrorCode::FixFailed,
-                    format!("could not start `{command}`: {e}. Run it yourself in a terminal."),
-                )
-            })?;
+            .map_err(|e| Failure::from(text::fix_not_started(command, &e)))?;
         if output.status.success() {
             continue;
         }
@@ -92,7 +73,7 @@ pub async fn run_fix<B: Backend>(
                 )
             }
         };
-        return Err(failure(ErrorCode::FixFailed, message));
+        return Err(text::fix_failed(&message).into());
     }
     Ok(DoctorFixed { ran })
 }

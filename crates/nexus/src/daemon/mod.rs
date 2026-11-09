@@ -152,8 +152,9 @@ async fn keep_connectivity_check<B: Backend>(
         }
         loop {
             match events.recv().await {
-                Ok(Event::ConfigReloaded { .. })
-                | Err(broadcast::error::RecvError::Lagged(_)) => break,
+                Ok(Event::ConfigReloaded { .. }) | Err(broadcast::error::RecvError::Lagged(_)) => {
+                    break;
+                }
                 Ok(_) => {}
                 Err(broadcast::error::RecvError::Closed) => return,
             }

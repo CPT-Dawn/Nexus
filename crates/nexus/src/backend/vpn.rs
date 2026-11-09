@@ -505,10 +505,7 @@ async fn import_plugin(
     if !nexus_tui::plugin::installed(plugin) {
         return Err(text::missing_plugin(plugin));
     }
-    let internal = |e: std::io::Error| Failure {
-        code: nexus_ipc::ErrorCode::Internal,
-        message: format!("Could not run nmcli: {e}."),
-    };
+    let internal = |e: std::io::Error| text::nmcli_failed(&e);
     let scratch = Scratch::new().map_err(internal)?;
     let ext = known.extensions.first().copied().unwrap_or(known.name);
     let stem = file_stem(name.unwrap_or(""), known.label);
@@ -595,7 +592,7 @@ pub async fn create(
 ) -> zbus::Result<Result<VpnAdded, Failure>> {
     let name = tunnel.name.trim();
     if name.is_empty() {
-        return Ok(Err(text::invalid_config("the tunnel needs a name")));
+        return Ok(Err(text::invalid_config("the VPN needs a name")));
     }
     let mut addresses = Vec::new();
     for a in &tunnel.addresses {
@@ -609,7 +606,7 @@ pub async fn create(
         }
     }
     if addresses.is_empty() {
-        return Ok(Err(text::invalid_config("the tunnel needs an address")));
+        return Ok(Err(text::invalid_config("the VPN needs an address")));
     }
     let (mut dns, mut search) = (Vec::new(), Vec::new());
     for d in &tunnel.dns {

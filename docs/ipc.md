@@ -1125,7 +1125,7 @@ echo '{"v":1,"id":1,"confirm":true,"finding":"no-such-finding","op":"doctor_fix"
   "id": 1,
   "err": {
     "code": "unknown_finding",
-    "message": "nothing to fix for `no-such-finding` right now"
+    "message": "There is nothing to fix for `no-such-finding` right now."
   }
 }
 ```
