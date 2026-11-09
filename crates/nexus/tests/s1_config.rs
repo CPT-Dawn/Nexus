@@ -41,6 +41,25 @@ fn editing_the_file_applies_live_and_announces_it() {
 }
 
 #[test]
+fn a_half_written_file_is_not_reported_as_broken() {
+    let world = World::start(NEXUS);
+    let mut events = world.wire();
+    events.subscribe();
+
+    // The first half ends mid-value, which on its own would not parse.
+    world.write_config_in_pieces(
+        "theme = \"nord\"\n[connectivity]\nenabled = fal",
+        "se\n",
+        std::time::Duration::from_millis(50),
+    );
+
+    let event = events.next_event("config_reloaded");
+    assert!(event.get("warning").is_none(), "{event}");
+    assert_eq!(event["config"]["theme"], "nord");
+    assert_eq!(event["config"]["connectivity"]["enabled"], false);
+}
+
+#[test]
 fn a_single_key_can_be_read() {
     let world = World::start(NEXUS);
     let mut events = world.wire();
