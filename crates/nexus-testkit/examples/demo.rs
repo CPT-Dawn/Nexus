@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! cargo build -p nexus
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|wifi-enterprise]
 //! ```
 //!
 //! Scenarios:
@@ -13,6 +13,11 @@
 //! - `wifi`: six Wi-Fi Networks in range (Home-5G joined), two saved ones out
 //!   of range. Press `2` for the Wi-Fi tab; `r` rescans, `enter` joins, `x`
 //!   disconnects, `f` forgets, `a` toggles autoconnect, `u` undoes.
+//! - `wifi-enterprise`: `wifi` plus eduroam (WPA-Enterprise). Press `2`, move
+//!   to eduroam (`j`), `enter` opens the sign-in form: type an identity,
+//!   `tab` to move, `←`/`→` change the method, `space` toggles the server
+//!   check, `ctrl-r` shows passwords, `enter` joins, `esc` cancels. The right
+//!   login is `you@uni.example` / `correct-horse`, server name `radius.uni.example`.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
@@ -40,9 +45,11 @@ fn main() {
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" => {
+        "wifi" | "wifi-prompt" | "wifi-enterprise" => {
             if scenario == "wifi" {
                 nexus_testkit::scenarios::wifi_busy(&world);
+            } else if scenario == "wifi-enterprise" {
+                nexus_testkit::scenarios::wifi_enterprise(&world);
             } else {
                 // Same, plus a password prompt for Work-Secure, already open.
                 _prompt = Some(nexus_testkit::scenarios::wifi_with_open_prompt(&world));

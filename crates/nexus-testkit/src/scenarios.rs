@@ -50,6 +50,19 @@ pub fn wifi_busy(world: &World) -> DeviceId {
     wlan0
 }
 
+/// [`wifi_busy`], plus `eduroam`, a WPA-Enterprise Network in range that
+/// accepts `you@uni.example` with `correct-horse`. Returns the Device.
+pub fn wifi_enterprise(world: &World) -> DeviceId {
+    let wlan0 = wifi_busy(world);
+    world
+        .nm
+        .add_ap(wlan0, Ap::enterprise("eduroam", "AA:00:00:00:00:07", 74));
+    world
+        .nm
+        .set_eap_user("eduroam", "you@uni.example", "correct-horse");
+    wlan0
+}
+
 /// [`wifi_busy`], plus a join of `Work-Secure` that is waiting for its
 /// password: the Daemon holds an open Secret prompt for any Front end that
 /// subscribes. The returned thread ends when the prompt is answered.

@@ -1,0 +1,45 @@
+---
+source: crates/nexus/tests/s2_enterprise.rs
+expression: rig.styled(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Wi-Fi ─────╭ Sign in to eduroam ────────────────────────────────────────────────────╮────────────╮
+│   ● Home-5G│   Method         ‹ PEAP ›                                              │            │
+│ ▸   eduroam│   Inner method   ‹ MSCHAPv2 ›                                          │            │
+│     Work-Se│   Identity       e.g. you@uni.example                                  │            │
+│     Cafe Gu│   Enter your identity, usually your email or username.                 │            │
+│     Neighbo│   Anonymous id   e.g. anonymous@uni.example (optional)                 │            │
+│     A very │   Password                                                             │            │
+│     Rooftop│   Enter your password.                                                 │            │
+│   ── Saved,│   CA certificate empty: use the system CAs                             │            │
+│     Parents│   Server name    e.g. radius.uni.example                               │.           │
+│     Hotel L│ ▸ Skip check     [x] don't check the server                            │            │
+│            │   Anyone nearby can pose as this network and read your password.       │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │                                                                        │            │
+│            │ tab next  ←→ change  ^r show  enter join  esc cancel                   │            │
+╰────────────╰────────────────────────────────────────────────────────────────────────╯────────────╯
+ tab next  enter join  esc cancel
+
+   50 cells  fg=#2c4a4c bg=- mods=[]
+  167 cells  fg=#5d7377 bg=- mods=[]
+  261 cells  fg=#8de3dc bg=- mods=[]
+    7 cells  fg=#8de3dc bg=- mods=[bold]
+  186 cells  fg=#9db4b5 bg=- mods=[]
+    1 cells  fg=#9ece6a bg=- mods=[]
+   90 cells  fg=#e0af68 bg=- mods=[]
+   18 cells  fg=#e4f2f0 bg=#17302f mods=[bold]
+   34 cells  fg=#e4f2f0 bg=- mods=[]
+   27 cells  fg=#e4f2f0 bg=- mods=[bold]
+   77 cells  fg=#f7768e bg=- mods=[bold]
+ 1882 cells  fg=- bg=- mods=[]
