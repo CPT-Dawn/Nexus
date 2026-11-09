@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_portal.rs
+expression: frame
+---
+ Login required for CafeGuest. Press o to open it.
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                          ● Portal
+╭ VPN ─────────────────────────────────╮╭ VPN ─────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Nothing to list yet.                 ││ VPN arrives in a later release.                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ o login  h/l tab  ? help  q quit

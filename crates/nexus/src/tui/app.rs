@@ -9,11 +9,12 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use nexus_ipc::{
-    ActivityEntry, Event, Finding, PromptClosed, PromptKind, Secret, Status, Tethers, Traffic,
-    WifiList, WifiShare,
+    ActivityEntry, ActivityKind, Connectivity, Event, Finding, Op, PromptClosed, PromptKind,
+    Secret, Status, Tethers, Traffic, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
+use super::profile::{Action, Editor, ProfileMsg};
 use super::share::{Share, Stage};
 use super::tether::TetherTab;
 use super::theme::{Look, Theme};
@@ -49,6 +50,8 @@ pub enum Msg {
     Findings(Vec<Finding>),
     /// A fix the person confirmed ended: `Err` carries the words to show.
     FixDone(Result<(), String>),
+    /// Something about the Profile settings editor.
+    Profile(ProfileMsg),
     /// The Daemon cannot be reached (never connected, or the link dropped).
     Down,
     /// A running effect asked for a frame.
@@ -183,6 +186,8 @@ pub struct App {
     /// An open Secret prompt: it has the keys until answered or cancelled.
     field: Option<PasswordField>,
     confirm: Option<Confirm>,
+    /// The Profile settings editor, while open: it has the keys.
+    editor: Option<Editor>,
     /// The share view (QR code) of a saved Network.
     share: Option<Share>,
     toast: Option<Toast>,
@@ -210,6 +215,7 @@ impl App {
             tether: TetherTab::default(),
             field: None,
             confirm: None,
+            editor: None,
             share: None,
             toast: None,
             runner: None,
@@ -260,6 +266,10 @@ impl App {
         self.field.as_ref()
     }
 
+    pub fn editor(&self) -> Option<&Editor> {
+        self.editor.as_ref()
+    }
+
     pub fn confirm(&self) -> Option<&Confirm> {
         self.confirm.as_ref()
     }
@@ -286,6 +296,15 @@ impl App {
 
     pub fn status(&self) -> Option<&Status> {
         self.status.as_ref()
+    }
+
+    /// The Network whose Portal wants a login, while the Link is behind one.
+    pub fn portal(&self) -> Option<&str> {
+        let status = self.status.as_ref().filter(|_| self.conn == Conn::Up)?;
+        match (status.connectivity, &status.link) {
+            (Connectivity::Portal, Some(link)) => Some(&link.name),
+            _ => None,
+        }
     }
 
     /// Recent traffic, for the graphs.
@@ -368,6 +387,15 @@ impl App {
     /// while scanning, the toast's end while one shows (ADR-0003).
     pub fn next_tick(&self) -> Option<Duration> {
         let sweep = self.wifi.scanning().then_some(SWEEP_FRAME);
+        let countdown = self
+            .editor
+            .as_ref()
+            .is_some_and(Editor::is_pending)
+            .then_some(Duration::from_secs(1));
+        let sweep = match (sweep, countdown) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         let toast = self
             .toast
             .as_ref()
@@ -407,9 +435,13 @@ impl App {
                 changed && self.tab == Tab::Overview
             }
             Msg::Happened(entry) => {
+                let online = entry.kind == ActivityKind::Online;
+                if online {
+                    self.say("You're online.", false, None);
+                }
                 self.activity.insert(0, entry);
                 self.activity.truncate(ACTIVITY);
-                self.tab == Tab::Overview
+                online || self.tab == Tab::Overview
             }
             Msg::Findings(list) => {
                 let changed = self.findings != list;
@@ -441,6 +473,7 @@ impl App {
             Msg::Tethers(tethers) => self.tether.refresh(tethers),
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
+            Msg::Profile(m) => self.profile_msg(m),
             Msg::Shared(result) => match self.share.as_mut() {
                 Some(share) if matches!(share.stage, Stage::Reading) => {
                     share.arrived(result);
@@ -450,14 +483,29 @@ impl App {
             },
             Msg::Down => {
                 // A prompt dies with the link; the Daemon replays it if it lives.
-                let changed = self.conn != Conn::Down
+                let mut changed = self.conn != Conn::Down
                     || self.field.take().is_some()
                     || self.share.take().is_some();
+                match self.editor.take() {
+                    Some(e) if e.is_pending() => {
+                        self.say(
+                            "Lost the daemon. NetworkManager reverts the change on its own.",
+                            true,
+                            None,
+                        );
+                        changed = true;
+                    }
+                    Some(_) => changed = true,
+                    None => {}
+                }
                 self.conn = Conn::Down;
                 changed
             }
             Msg::Tick => {
                 let mut dirty = self.wifi.tick();
+                if let Some(editor) = self.editor.as_mut() {
+                    dirty |= editor.tick(Instant::now());
+                }
                 if self
                     .toast
                     .as_ref()
@@ -577,6 +625,9 @@ impl App {
                 };
                 self.say(text, false, Some(undo));
             }
+            (Cmd::OpenPortal, Ok(_)) => {
+                self.say("Opened the login page in your browser.", false, None);
+            }
             (_, Err(message)) => self.say(message, true, None),
             _ => return false,
         }
@@ -597,6 +648,10 @@ impl App {
         if self.confirm.is_some() {
             return self.confirm_key(key);
         }
+        if self.editor.is_some() {
+            return self.editor_key(key);
+        }
+
         if self.share.is_some() {
             return self.share_key(key);
         }
@@ -735,6 +790,10 @@ impl App {
                 self.fix = FixState::Asking;
                 true
             }
+            KeyCode::Char('o') if self.portal().is_some() => {
+                self.send(Cmd::OpenPortal);
+                false
+            }
             KeyCode::Tab | KeyCode::Right | KeyCode::Char('l' | ']') => self.step_tab(1),
             KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h' | '[') => self.step_tab(-1),
             KeyCode::Char(c @ '1'..='6') => {
@@ -845,6 +904,10 @@ impl App {
                         self.confirm = Some(Confirm { network, ssid });
                         true
                     }
+                    KeyCode::Char('e') if entry.saved() => {
+                        self.open_editor(network, ssid);
+                        true
+                    }
                     KeyCode::Char('a') if entry.autoconnect().is_some() => {
                         let enabled = !entry.autoconnect().unwrap_or(true);
                         self.run_wifi(Cmd::Autoconnect {
@@ -857,6 +920,128 @@ impl App {
                     _ => false,
                 }
             }
+        }
+    }
+
+    fn open_editor(&mut self, network: String, ssid: String) {
+        self.toast = None;
+        self.editor = Some(Editor::loading(network.clone(), ssid));
+        if let Some(runner) = &self.runner {
+            runner.call(Op::ProfileGet { network }, |r| {
+                Msg::Profile(ProfileMsg::Loaded(r.and_then(|v| {
+                    serde_json::from_value(v)
+                        .map_err(|_| "The daemon sent a Profile this nexus cannot read.".into())
+                })))
+            });
+        }
+    }
+
+    /// Keys while the Profile editor is open.
+    fn editor_key(&mut self, key: KeyEvent) -> bool {
+        let Some(editor) = self.editor.as_mut() else {
+            return false;
+        };
+        match editor.key(key) {
+            Action::None | Action::Idle => false,
+            Action::Redraw => true,
+            Action::Close => {
+                self.editor = None;
+                true
+            }
+            Action::Apply => {
+                if let Some(op) = editor.update_op() {
+                    editor.applying();
+                    if let Some(runner) = &self.runner {
+                        runner.call(op, |r| {
+                            Msg::Profile(ProfileMsg::Applied(r.and_then(|v| {
+                                serde_json::from_value(v).map_err(|_| {
+                                    "The daemon's answer was not understood.".to_string()
+                                })
+                            })))
+                        });
+                    }
+                }
+                true
+            }
+            Action::Confirm(pending) => {
+                self.answer_pending(Op::ProfileConfirm { pending });
+                true
+            }
+            Action::Revert(pending) => {
+                self.answer_pending(Op::ProfileRevert { pending });
+                true
+            }
+        }
+    }
+
+    fn answer_pending(&self, op: Op) {
+        if let Some(runner) = &self.runner {
+            runner.call(op, |r| match r {
+                // Success arrives as the `profile_settled` event.
+                Ok(_) => Msg::Tick,
+                Err(m) => Msg::Profile(ProfileMsg::Refused(m)),
+            });
+        }
+    }
+
+    fn profile_msg(&mut self, msg: ProfileMsg) -> bool {
+        match msg {
+            ProfileMsg::Loaded(result) => {
+                let Some(editor) = self.editor.as_mut() else {
+                    return false;
+                };
+                if let Err(message) = &result {
+                    let message = message.clone();
+                    self.editor = None;
+                    self.say(message, true, None);
+                    return true;
+                }
+                editor.load(result);
+                true
+            }
+            ProfileMsg::Applied(result) => {
+                let Some(editor) = self.editor.as_mut() else {
+                    return false;
+                };
+                match result {
+                    Err(message) => editor.applied_failed(message),
+                    Ok(applied) => match applied.pending {
+                        Some(change) => editor.pending(&change, Instant::now()),
+                        None => {
+                            let ssid = editor.ssid.clone();
+                            self.editor = None;
+                            self.say(format!("Saved the settings of {ssid}."), false, None);
+                        }
+                    },
+                }
+                true
+            }
+            ProfileMsg::Refused(message) => {
+                // Too late to keep it, say: the settled event follows.
+                self.say(message, true, None);
+                true
+            }
+            ProfileMsg::Event(Event::ProfilePending { change }) => {
+                // Our own update answers with the same change; this covers
+                // the event winning the race against the answer.
+                match self.editor.as_mut() {
+                    Some(e) if e.ssid == change.ssid && !e.is_pending() => {
+                        e.pending(&change, Instant::now());
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            ProfileMsg::Event(Event::ProfileSettled { id, outcome, .. }) => {
+                let Some(editor) = self.editor.as_ref().filter(|e| e.settled(id)) else {
+                    return false;
+                };
+                let (text, bad) = editor.outcome_text(outcome);
+                self.editor = None;
+                self.say(text, bad, None);
+                true
+            }
+            ProfileMsg::Event(_) => false,
         }
     }
 
@@ -902,6 +1087,10 @@ impl App {
         if self.confirm.is_some() {
             return vec![("y", "forget"), ("esc", "keep")];
         }
+        if let Some(editor) = &self.editor {
+            return editor_hints(editor);
+        }
+
         if let Some(share) = &self.share {
             return share.hints();
         }
@@ -940,6 +1129,9 @@ impl App {
                     && self.runnable_fix().is_some()
                 {
                     v.push(("f", "fix"));
+                }
+                if self.portal().is_some() {
+                    v.push(("o", "login"));
                 }
                 v.push(("h/l", "tab"));
                 v.push(("?", "help"));
@@ -986,10 +1178,33 @@ impl App {
             if e.autoconnect().is_some() {
                 v.push(("a", "auto"));
             }
+            if e.saved() {
+                v.push(("e", "settings"));
+            }
         }
         if self.toast.as_ref().is_some_and(|t| t.undo.is_some()) {
             v.push(("u", "undo"));
         }
         v
+    }
+}
+
+/// Footer keys of the Profile editor.
+fn editor_hints(editor: &Editor) -> Vec<(&'static str, &'static str)> {
+    use super::profile::Phase;
+    match editor.phase {
+        Phase::Loading | Phase::Applying => vec![("esc", "close")],
+        Phase::Pending { .. } => vec![("y", "keep"), ("n", "revert now")],
+        Phase::Editing => {
+            let mut v = vec![("tab", "next")];
+            if editor.focused().is_text() {
+                v.push(("type", "edit"));
+            } else {
+                v.push(("space", "change"));
+            }
+            v.push(("enter", "apply"));
+            v.push(("esc", "cancel"));
+            v
+        }
     }
 }

@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_portal.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Portal
+╭ Connections ───────╭ All keys ──────────────────────────────────────────────╮────────────────────╮
+│ ▸ ● Wi-Fi          │  j / k, Down / Up     Move in the list                 │                    │
+│     CafeGuest      │  g / G                Jump to top / bottom             │                    │
+│   ○ Ethernet       │  h / l, Left / Right  Previous / next tab              │                    │
+│     Not connected  │  Tab / Shift-Tab      Next / previous tab              │                    │
+│   ○ VPN            │  1 - 6                Jump to a tab                    │░                   │
+│     Not connected  │  Enter                Open the selected card's tab     │█░░                 │
+│   ○ Hotspot        │  d                    Details sheet (small windows)    │░                   │
+│     Not started    │  Wi-Fi: Enter         Join the selected Network        │                    │
+│                    │  Wi-Fi: r             Rescan                           │ign-in page is      │
+│                    │  Wi-Fi: x             Disconnect                       │                    │
+│                    │  Wi-Fi: f             Forget (asks first)              │manager 1.58.1      │
+│                    │  Wi-Fi: a             Toggle autoconnect               │────────────────────╯
+│                    │  Wi-Fi: e             Edit the Profile's settings      │────────────────────╮
+│                    │  Wi-Fi: s             Share as a QR code (asks first)  │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  Wi-Fi: u             Undo the toast's action          │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  o                    Open a Portal's login page       │────────────────────╯
+│                    │  Esc                  Back out; never quits            │────────────────────╮
+│                    │  ?                    Show or hide this help           │                    │
+│                    │  q, Ctrl-C            Quit                             │ visit any plain... │
+│                    │                                                        │────────────────────╯
+│                    │ Login page won't show? A browser with secure DNS (DNS  │────────────────────╮
+│                    │ over HTTPS) hides the Portal by skipping the network's │                    │
+│                    │ resolver. Turn it off until you have signed in, or     │                    │
+│                    │ press o: Nexus opens a plain http:// page.             │                    │
+╰────────────────────╰────────────────────────────────────────────────────────╯────────────────────╯
+ esc close

@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_profile.rs
+expression: self.text(size)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
+╭ Wi-Fi ───────────────────────────────╮╭ Home-5G ─────────────────────────────────────────────────────────────────────────────────────────╮
+│ ▸ ● Home-5G         ▂▄▆█ wpa2     5G ││ ● Connected                                                                                      │
+│     Work-Secure     ▂▄▆█ wpa3     5G ││                                                                                                  │
+│     Cafe Guest      ▂▄▆█ open   2.4G ││ Signal         82%  ▂▄▆█                                                                         │
+│     Neighbour-2G    ▂▄▆█ wpa2   2.4G ││ Security      WPA2 personal                                                                      │
+│     A very long ne… ▂▄▆█ wpa2   2.4G ││ Band          5 GHz                                                                              │
+│     Rooftop-6E      ▂▄▆█ wpa2     6G ││ Access points 1                                                                                  │
+│   ── Saved, out of range             ││ Adapter       wlan0                                                                              │
+│     Parents House               auto ││ Autoconnect   on                                                                                 │
+│     Hotel Lobby               manual ││                                                                                                  │
+│                                      ││ Press x to disconnect.                                                                           │
+│                                     ╭ Home-5G settings ────────────────────────────────────────────╮                                     │
+│                                     │ Keep these settings?                                         │                                     │
+│                                     │ Reverting in 15s                                             │                                     │
+│                                     │                                                              │                                     │
+│                                     │ IPv4 automatic, DNS 1.1.1.1                                  │                                     │
+│                                     │                                                              │                                     │
+│                                     │ y keep   n revert now                                        │                                     │
+│                                     ╰──────────────────────────────────────────────────────────────╯                                     │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ y keep  n revert now

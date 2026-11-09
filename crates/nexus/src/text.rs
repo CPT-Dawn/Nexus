@@ -343,6 +343,62 @@ pub fn forgot(ssid: &str) -> String {
     format!("Forgot {ssid}.")
 }
 
+// Profile settings
+
+pub fn invalid_settings(problems: &[String]) -> Failure {
+    fail(
+        ErrorCode::InvalidSettings,
+        format!("Nothing was changed. {}", problems.join(" ")),
+    )
+}
+
+/// The Profile changed since it was read.
+pub fn profile_conflict(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::Conflict,
+        format!(
+            "{ssid} was changed elsewhere while you were editing. \
+             Nothing was saved; open its settings again."
+        ),
+    )
+}
+
+pub fn change_waiting(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::Conflict,
+        format!("A change to {ssid} is waiting to be kept or reverted. Settle it first."),
+    )
+}
+
+pub fn nothing_pending() -> Failure {
+    fail(
+        ErrorCode::NothingPending,
+        "No change is waiting for confirmation. It was kept, reverted or timed out already.",
+    )
+}
+
+pub fn checkpoint_refused(why: &str) -> Failure {
+    fail(
+        ErrorCode::Internal,
+        format!(
+            "NetworkManager would not set up the safety net for this change, so nothing was \
+             changed: {why}"
+        ),
+    )
+}
+
+pub fn profile_kept(ssid: &str) -> String {
+    format!("Keeping the new settings of {ssid}.")
+}
+
+pub fn profile_reverted(ssid: &str) -> String {
+    format!("Reverted: {ssid} has its old settings again.")
+}
+
+pub fn profile_saved(ssid: &str) -> String {
+    format!("Saved the settings of {ssid}.")
+}
+
 pub fn share_password(ssid: &str, password: &str) -> String {
     format!("{ssid}: {password}")
 }

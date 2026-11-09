@@ -98,6 +98,8 @@ pub(super) async fn add_and_activate(
             persisted: persist_disk,
             agent_secrets: false,
             secret: None,
+            settings: Default::default(),
+            version: 1,
             bdaddr: Some(addr),
         }));
         m.profiles.len() - 1

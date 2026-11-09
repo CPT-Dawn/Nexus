@@ -27,9 +27,12 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::NotConnected => 11,
         ErrorCode::HardBlocked => 12,
         // 13 is `nexus doctor` finding a problem.
-        ErrorCode::BluetoothOff => 15,
-        ErrorCode::NoPhone => 16,
-        ErrorCode::UnknownPhone => 17,
+        ErrorCode::BluetoothOff => 18,
+        ErrorCode::NoPhone => 19,
+        ErrorCode::UnknownPhone => 20,
+        ErrorCode::InvalidSettings => 15,
+        ErrorCode::Conflict => 16,
+        ErrorCode::NothingPending => 17,
         ErrorCode::RevealDenied => 14,
         _ => EXIT_DAEMON_ERROR,
     }
@@ -459,7 +462,7 @@ fn config_call(op: Op) -> ExitCode {
     }
 }
 
-fn unreachable(e: &std::io::Error) -> ExitCode {
+pub(crate) fn unreachable(e: &std::io::Error) -> ExitCode {
     let path = nexus_ipc::socket_path().map_or_else(
         || "(XDG_RUNTIME_DIR is not set)".into(),
         |p| p.display().to_string(),
@@ -492,6 +495,9 @@ mod tests {
             ErrorCode::BluetoothOff,
             ErrorCode::NoPhone,
             ErrorCode::UnknownPhone,
+            ErrorCode::InvalidSettings,
+            ErrorCode::Conflict,
+            ErrorCode::NothingPending,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

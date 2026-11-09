@@ -42,7 +42,7 @@ pub fn sentence(s: &Status) -> String {
         (State::Disconnecting, _) => "Disconnecting...".into(),
         (State::Online, Connectivity::Portal) => {
             format!(
-                "You're connected{}, but a sign-in page is required.",
+                "You're connected{}, but a sign-in page is required. Press o to open it.",
                 via(s)
             )
         }

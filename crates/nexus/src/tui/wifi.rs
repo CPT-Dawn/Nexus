@@ -114,6 +114,8 @@ pub enum Cmd {
         phone: String,
         name: String,
     },
+    /// Open the Portal's login page in the browser.
+    OpenPortal,
 }
 
 impl Cmd {
@@ -143,6 +145,7 @@ impl Cmd {
                 phone: Some(phone.clone()),
             },
             Cmd::Untether { .. } => Op::TetherDisconnect,
+            Cmd::OpenPortal => Op::PortalOpen,
         }
     }
 
@@ -195,6 +198,33 @@ impl Runner {
                 if cmd.reports() {
                     let _ = tx.send(Msg::Done(Done { cmd, result }));
                 }
+            });
+        if let Err(e) = spawned {
+            tracing::warn!("cannot spawn a command thread: {e}");
+        }
+    }
+}
+
+impl Runner {
+    /// Runs one op on its own connection and reports as the message `wrap`
+    /// makes of the result (the Daemon's words on a refusal).
+    pub fn call(
+        &self,
+        op: Op,
+        wrap: impl FnOnce(Result<serde_json::Value, String>) -> Msg + Send + 'static,
+    ) {
+        let (socket, tx) = (self.socket.clone(), self.tx.clone());
+        let spawned = thread::Builder::new()
+            .name("nexus-command".into())
+            .spawn(move || {
+                let result = Connection::connect_to(&socket)
+                    .map_err(|_| "Can't reach the Nexus daemon.".to_string())
+                    .and_then(|mut c| {
+                        c.call(op)
+                            .map_err(|_| "Lost the Nexus daemon.".to_string())?
+                            .map_err(|f: Failure| f.message)
+                    });
+                let _ = tx.send(wrap(result));
             });
         if let Err(e) = spawned {
             tracing::warn!("cannot spawn a command thread: {e}");

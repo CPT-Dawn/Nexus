@@ -2,13 +2,15 @@
 
 mod activity;
 mod notify;
+mod portal;
+mod profile;
 mod socket;
 mod traffic;
 
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use nexus_ipc::{ErrorCode, Event, Op, Request, Response, Status, Tethers, WifiList};
+use nexus_ipc::{ErrorCode, Event, Op, Portal, Request, Response, Status, Tethers, WifiList};
 
 use crate::backend::BackendError;
 use tokio::sync::broadcast;
@@ -50,7 +52,8 @@ async fn serve() -> std::io::Result<()> {
     let broker = Arc::new(Broker::new(events.clone(), settings.clone()));
     let backend = Arc::new(NetworkManager::new(broker.clone()));
     tokio::spawn(config::watch(settings.clone()));
-    let live = Arc::new(Live::new(events.clone()));
+    let opener: portal::SharedOpener = Arc::new(portal::SystemOpener);
+    let live = Arc::new(Live::new(events.clone(), settings.clone(), opener.clone()));
     // Listen first, so nothing between the baseline and the first wait is lost.
     backend.arm().await;
     // The baseline is read before the socket exists, so anything a client
@@ -80,6 +83,7 @@ async fn serve() -> std::io::Result<()> {
         &broker,
         frontends.clone(),
         Arc::new(notify::SystemTerminal),
+        opener,
     );
     let listener = socket::listen()?;
     tracing::info!("listening");
@@ -103,7 +107,7 @@ async fn serve() -> std::io::Result<()> {
                         let (rx, backlog) = broker.subscribe();
                         (rx, backlog, frontends.join())
                     };
-                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, &live, &notifier, req)).await {
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| dispatch(&backend, &settings, &broker, &live, &notifier, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -122,6 +126,7 @@ struct Seen {
     status: Option<Status>,
     wifi: Option<WifiList>,
     tethers: Option<Tethers>,
+    portal: Option<Portal>,
 }
 
 /// How [`sync`] treats what it reads.
@@ -159,6 +164,13 @@ async fn sync<B: Backend>(
                     status: status.clone(),
                 });
             }
+            let portal = portal::of_status(&status, &live.settings);
+            if push == Push::All || portal != seen.portal {
+                let _ = events.send(Event::PortalChanged {
+                    portal: portal.clone(),
+                });
+            }
+            seen.portal = portal;
             seen.status = Some(status);
         }
         Err(e) => tracing::debug!("status unavailable: {e}"),
@@ -210,13 +222,23 @@ struct Live {
     traffic: traffic::Sampler,
     activity: activity::Log,
     doctor: crate::doctor::Memory,
+    settings: Arc<Settings>,
+    opener: portal::SharedOpener,
+    profile: Arc<profile::Gate>,
 }
 
 impl Live {
-    fn new(events: broadcast::Sender<Event>) -> Self {
+    fn new(
+        events: broadcast::Sender<Event>,
+        settings: Arc<Settings>,
+        opener: portal::SharedOpener,
+    ) -> Self {
         Self {
+            settings,
+            opener,
             traffic: traffic::Sampler::default(),
             activity: activity::Log::default(),
+            profile: Arc::new(profile::Gate::new(events.clone())),
             doctor: crate::doctor::Memory::new(events),
         }
     }
@@ -234,10 +256,14 @@ async fn watch_backend<B: Backend>(
     live: Arc<Live>,
     (wifi, status, tethers): (Option<WifiList>, Option<Status>, Option<Tethers>),
 ) {
+    let portal = status
+        .as_ref()
+        .and_then(|s| portal::of_status(s, &live.settings));
     let mut seen = Seen {
         status,
         wifi,
         tethers,
+        portal,
     };
     loop {
         let push = tokio::select! {
@@ -253,6 +279,23 @@ async fn watch_backend<B: Backend>(
         {
             tracing::debug!("no scan after resume: {e}");
         }
+    }
+}
+
+/// Routes a request: Profile settings ops need the shared Backend handle
+/// (their timers outlive the request), everything else is [`answer`].
+async fn dispatch<B: Backend>(
+    backend: &Arc<B>,
+    settings: &Settings,
+    broker: &Broker,
+    live: &Live,
+    notifier: &notify::Notifier,
+    req: Request,
+) -> Response {
+    if profile::handles(&req.op) {
+        profile::answer(backend, &live.profile, req).await
+    } else {
+        answer(&**backend, settings, broker, live, notifier, req).await
     }
 }
 
@@ -288,6 +331,18 @@ async fn answer<B: Backend>(
             })
             .expect("wire types serialize"),
         ),
+        Op::Portal => {
+            let portal = match backend.status().await {
+                Ok(status) => portal::of_status(&status, settings),
+                Err(e) => return backend_reply::<()>(req.id, Err(e)),
+            };
+            Response::ok(
+                req.id,
+                serde_json::to_value(nexus_ipc::PortalState { portal })
+                    .expect("wire types serialize"),
+            )
+        }
+        Op::PortalOpen => open_portal(backend, settings, live, req.id).await,
         Op::Doctor => Response::ok(
             req.id,
             serde_json::to_value(crate::doctor::run(backend, settings, &live.doctor).await)
@@ -339,6 +394,34 @@ async fn answer<B: Backend>(
         // `Subscribe` is handled by the connection itself.
         // `Op` is non_exhaustive: a newer client op this build cannot serve.
         _ => Response::err(Some(req.id), ErrorCode::UnknownOp, "op not supported"),
+    }
+}
+
+/// `portal_open`: the login page of the Portal the Link is behind, in the browser.
+async fn open_portal<B: Backend>(
+    backend: &B,
+    settings: &Settings,
+    live: &Live,
+    id: u64,
+) -> Response {
+    let status = match backend.status().await {
+        Ok(status) => status,
+        Err(e) => return backend_reply::<()>(id, Err(e)),
+    };
+    let Some(portal) = portal::of_status(&status, settings) else {
+        return Response::err(
+            Some(id),
+            ErrorCode::NoPortal,
+            "No network is asking for a login right now.",
+        );
+    };
+    match live.opener.open(&portal.url) {
+        Ok(()) => Response::ok(
+            id,
+            serde_json::to_value(nexus_ipc::PortalOpened { url: portal.url })
+                .expect("wire types serialize"),
+        ),
+        Err(message) => Response::err(Some(id), ErrorCode::OpenFailed, message),
     }
 }
 
