@@ -253,6 +253,46 @@ pub fn unsupported_security(ssid: &str, what: &str) -> Failure {
     )
 }
 
+/// The 802.1X form has problems; says each in one sentence.
+pub fn invalid_eap(ssid: &str, errors: &[nexus_ipc::EapError]) -> Failure {
+    let list: Vec<&str> = errors.iter().map(|e| e.message.as_str()).collect();
+    fail(
+        ErrorCode::InvalidSettings,
+        format!("Cannot sign in to {ssid} yet. {}", list.join(" ")),
+    )
+}
+
+/// Enterprise settings were given for a Network that is not enterprise.
+pub fn not_enterprise(ssid: &str, what: &str) -> Failure {
+    fail(
+        ErrorCode::InvalidSettings,
+        format!("{ssid} is not an enterprise Network (it uses {what}), so it has no sign-in settings."),
+    )
+}
+
+/// An enterprise Network joined with the plain `wifi_join`.
+pub fn needs_eap(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::InvalidSettings,
+        format!(
+            "{ssid} is an enterprise Network and needs a sign-in. \
+             Pass --eap peap (or ttls, tls) with --identity, --password-stdin and --domain \
+             or --ca-cert."
+        ),
+    )
+}
+
+/// The enterprise server refused the sign-in.
+pub fn eap_refused(ssid: &str) -> Failure {
+    fail(
+        ErrorCode::WrongPassword,
+        format!(
+            "{ssid} refused the sign-in. Check your identity and password, \
+             and that the server name or CA certificate is the right one."
+        ),
+    )
+}
+
 pub fn join_timed_out(ssid: &str) -> Failure {
     fail(
         ErrorCode::JoinFailed,

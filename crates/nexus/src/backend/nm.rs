@@ -362,7 +362,20 @@ impl Backend for NetworkManager {
     ) -> Result<Joined, BackendError> {
         let broker = self.broker.clone();
         self.with_bus(|c| async move {
-            super::wifi::join(&c, &broker, &network, password.as_ref()).await
+            super::wifi::join(&c, &broker, &network, password.as_ref(), None).await
+        })
+        .await?
+        .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_join_eap(
+        &self,
+        network: String,
+        eap: nexus_ipc::Eap,
+    ) -> Result<Joined, BackendError> {
+        let broker = self.broker.clone();
+        self.with_bus(|c| async move {
+            super::wifi::join(&c, &broker, &network, None, Some(&eap)).await
         })
         .await?
         .map_err(BackendError::Refused)

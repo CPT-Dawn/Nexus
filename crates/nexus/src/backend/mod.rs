@@ -2,6 +2,7 @@
 //! trait, never on NetworkManager types, so another Backend can be added later.
 
 mod agent;
+pub mod eap;
 pub mod nm;
 mod wifi;
 
@@ -103,6 +104,14 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         network: String,
         password: Option<Secret>,
+    ) -> impl Future<Output = Result<Joined, BackendError>> + Send;
+
+    /// Joins a WPA-Enterprise (802.1X) Network with `eap`, otherwise like
+    /// [`Backend::wifi_join`].
+    fn wifi_join_eap(
+        &self,
+        network: String,
+        eap: nexus_ipc::Eap,
     ) -> impl Future<Output = Result<Joined, BackendError>> + Send;
 
     /// Drops the Wi-Fi Link, keeping its Profile.

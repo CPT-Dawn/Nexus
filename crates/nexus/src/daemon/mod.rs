@@ -279,6 +279,15 @@ async fn answer<B: Backend>(
             }
             backend_reply(req.id, result)
         }
+        Op::WifiJoinEap { network, eap } => {
+            let result = backend.wifi_join_eap(network, eap).await;
+            if let Err(BackendError::Refused(f)) = &result
+                && f.code == ErrorCode::WrongPassword
+            {
+                notifier.wrong_password(&f.message);
+            }
+            backend_reply(req.id, result)
+        }
         Op::WifiPower { on } => backend_reply(req.id, backend.wifi_power(on).await),
         Op::Airplane { on } => backend_reply(req.id, backend.airplane(on).await),
         Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),

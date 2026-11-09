@@ -26,6 +26,7 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::PasswordRequired => 10,
         ErrorCode::NotConnected => 11,
         ErrorCode::HardBlocked => 12,
+        ErrorCode::InvalidSettings => 13,
         _ => EXIT_DAEMON_ERROR,
     }
 }
@@ -162,6 +163,57 @@ pub enum PasswordSource {
     None,
     Flag(String),
     Stdin,
+}
+
+/// `nexus wifi join <ssid> --eap ...`: an enterprise (802.1X) Network. The
+/// settings are checked here first, so a bad form never costs a round trip.
+pub fn wifi_join_eap(
+    ssid: &str,
+    mut eap: nexus_ipc::Eap,
+    source: PasswordSource,
+    json: bool,
+) -> ExitCode {
+    eap.password = match source {
+        PasswordSource::Flag(p) => Some(Secret::new(p)),
+        PasswordSource::Stdin => {
+            let mut line = zeroize::Zeroizing::new(String::new());
+            if let Err(e) = std::io::stdin().read_line(&mut line) {
+                eprintln!("nexus: cannot read the password from stdin: {e}");
+                return ExitCode::FAILURE;
+            }
+            Some(Secret::new(line.trim_end_matches(['\n', '\r'])))
+        }
+        PasswordSource::None
+            if eap.method != nexus_ipc::EapMethod::Tls
+                && std::io::IsTerminal::is_terminal(&std::io::stdin()) =>
+        {
+            read_masked("Password")
+        }
+        PasswordSource::None => None,
+    };
+    let errors = eap.validate();
+    if !errors.is_empty() {
+        let failure = crate::text::invalid_eap(ssid, &errors);
+        eprintln!("nexus: {}", failure.message);
+        return ExitCode::from(exit_code(failure.code));
+    }
+    if eap.skips_validation() {
+        eprintln!(
+            "nexus: warning: not checking {ssid}'s certificate. Anyone nearby can pose as it \
+             and read your password."
+        );
+    }
+    let op = Op::WifiJoinEap {
+        network: nexus_ipc::network_id(ssid.as_bytes()),
+        eap,
+    };
+    wifi_call(op, |value| {
+        if json {
+            println!("{value}");
+        } else if let Ok(j) = serde_json::from_value::<nexus_ipc::Joined>(value) {
+            println!("{}", crate::text::joined(&j.ssid));
+        }
+    })
 }
 
 /// `nexus wifi join <ssid>`. The SSID's bytes are its Network id, so no
