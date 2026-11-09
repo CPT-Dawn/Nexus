@@ -219,3 +219,14 @@ fn the_cli_keeps_a_profile_in_the_keyring_and_exits_33_without_one() {
     assert_eq!(out.status.code(), Some(33), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("keyring"));
 }
+
+#[test]
+fn sharing_a_kept_profile_reads_the_password_from_the_keyring() {
+    let world = world(true);
+    keep_in_keyring(&world, true);
+    let resp = world
+        .wire()
+        .call(json!({"op": "wifi_reveal", "network": id("Home")}));
+    assert_eq!(resp["ok"]["password"], PASSWORD, "{resp}");
+    assert_eq!(resp["ok"]["auth"], "wpa");
+}
