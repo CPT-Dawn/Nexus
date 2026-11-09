@@ -29,7 +29,7 @@ pub fn table(list: &WifiList) -> String {
             .max(4);
         let _ = writeln!(
             out,
-            "{:<width$}  {:>6}  {:<10}  {:<7}  SAVED",
+            "{:<width$}  {:>6}  {:<10}  {:<7}  STATE",
             "SSID", "SIGNAL", "SECURITY", "BAND"
         );
         for n in &list.networks {
@@ -40,7 +40,13 @@ pub fn table(list: &WifiList) -> String {
                 n.signal,
                 n.security.label(),
                 n.band.label(),
-                if n.profile.is_some() { "yes" } else { "" },
+                if n.joined {
+                    "connected"
+                } else if n.profile.is_some() {
+                    "saved"
+                } else {
+                    ""
+                },
             );
         }
     }

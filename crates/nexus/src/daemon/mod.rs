@@ -16,6 +16,7 @@ use tracing_subscriber::EnvFilter;
 use crate::backend::Backend;
 use crate::backend::nm::NetworkManager;
 use crate::config::{self, Settings};
+use crate::secrets::Broker;
 
 /// `nexus daemon`.
 pub fn run() -> ExitCode {
@@ -33,7 +34,7 @@ pub fn run() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match rt.block_on(serve(NetworkManager::new())) {
+    match rt.block_on(serve()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             tracing::error!("{e}");
@@ -42,10 +43,11 @@ pub fn run() -> ExitCode {
     }
 }
 
-async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
-    let backend = Arc::new(backend);
+async fn serve() -> std::io::Result<()> {
     let (events, _) = broadcast::channel::<Event>(64);
     let settings = Arc::new(Settings::load(config::default_path(), events.clone()));
+    let broker = Arc::new(Broker::new(events.clone(), settings.clone()));
+    let backend = Arc::new(NetworkManager::new(broker.clone()));
     tokio::spawn(config::watch(settings.clone()));
     let live = Arc::new(Live::default());
     // The baseline is read before the socket exists, so anything a client
@@ -61,6 +63,10 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
         live.clone(),
         baseline,
     ));
+    tokio::spawn({
+        let backend = backend.clone();
+        async move { backend.secrets().await }
+    });
     let listener = socket::listen()?;
     tracing::info!("listening");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -75,9 +81,10 @@ async fn serve<B: Backend>(backend: B) -> std::io::Result<()> {
                 let backend = backend.clone();
                 let settings = settings.clone();
                 let live = live.clone();
-                let events = events.clone();
+                let broker = broker.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = socket::serve_connection(stream, events, |req| answer(&*backend, &settings, &live, req)).await {
+                    let subscribe = || broker.subscribe();
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, &live, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -138,6 +145,7 @@ async fn watch_backend<B: Backend>(
 async fn answer<B: Backend>(
     backend: &B,
     settings: &Settings,
+    broker: &Broker,
     live: &Live,
     req: Request,
 ) -> Response {
@@ -166,6 +174,21 @@ async fn answer<B: Backend>(
         ),
         Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
+        Op::WifiJoin { network, password } => {
+            backend_reply(req.id, backend.wifi_join(network, password).await)
+        }
+        Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),
+        Op::WifiForget { network } => backend_reply(req.id, backend.wifi_forget(network).await),
+        Op::SecretAnswer { prompt, secret } => reply(
+            req.id,
+            broker
+                .answer(prompt, secret)
+                .map(|()| serde_json::json!({})),
+        ),
+        Op::SecretCancel { prompt } => reply(
+            req.id,
+            broker.cancel(prompt).map(|()| serde_json::json!({})),
+        ),
         Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
         Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
         // `Subscribe` is handled by the connection itself.
@@ -182,6 +205,7 @@ fn backend_reply<T: serde::Serialize>(id: u64, result: Result<T, BackendError>) 
             ErrorCode::BackendUnavailable,
             BackendError::Unavailable.to_string(),
         ),
+        Err(BackendError::Refused(f)) => Response::err(Some(id), f.code, f.message),
         Err(e @ BackendError::Failed(_)) => {
             Response::err(Some(id), ErrorCode::Internal, e.to_string())
         }

@@ -6,11 +6,15 @@
 //! reference (`org.freedesktop.NetworkManager`,
 //! `org.freedesktop.NetworkManager.Connection.Active`).
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
-use nexus_ipc::{BackendInfo, Connectivity, Link, LinkKind, ScanOutcome, State, Status, WifiList};
+use nexus_ipc::{
+    BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind, ScanOutcome,
+    Secret, State, Status, WifiList,
+};
 use std::pin::Pin;
 
 use tokio::sync::Mutex;
@@ -21,6 +25,7 @@ use zbus::names::BusName;
 use zbus::proxy::CacheProperties;
 
 use super::{Backend, BackendError, Capabilities, Counters};
+use crate::secrets::Broker;
 
 const SERVICE: &str = "org.freedesktop.NetworkManager";
 
@@ -39,6 +44,26 @@ pub(super) trait NetworkManager {
     #[zbus(property)]
     fn version(&self) -> zbus::Result<String>;
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
+    fn activate_connection(
+        &self,
+        connection: &OwnedObjectPath,
+        device: &OwnedObjectPath,
+        specific_object: &OwnedObjectPath,
+    ) -> zbus::Result<OwnedObjectPath>;
+    fn add_and_activate_connection2(
+        &self,
+        connection: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, zbus::OwnedVariant>,
+        >,
+        device: &OwnedObjectPath,
+        specific_object: &OwnedObjectPath,
+        options: std::collections::HashMap<String, zbus::OwnedVariant>,
+    ) -> zbus::Result<(
+        OwnedObjectPath,
+        OwnedObjectPath,
+        std::collections::HashMap<String, zbus::OwnedVariant>,
+    )>;
 }
 
 #[zbus::proxy(
@@ -79,8 +104,8 @@ const RETRY: Duration = Duration::from_secs(2);
 
 type Signals = Pin<Box<dyn Stream<Item = zbus::Result<zbus::Message>> + Send>>;
 
-#[derive(Default)]
 pub struct NetworkManager {
+    broker: Arc<Broker>,
     conn: Mutex<Option<Connection>>,
     /// Every signal NetworkManager sends, plus it appearing and vanishing.
     watch: Mutex<Option<Signals>>,
@@ -93,8 +118,12 @@ impl std::fmt::Debug for NetworkManager {
 }
 
 impl NetworkManager {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(broker: Arc<Broker>) -> Self {
+        Self {
+            broker,
+            conn: Mutex::default(),
+            watch: Mutex::default(),
+        }
     }
 
     /// The system bus connection, made on first use and remade after a failure.
@@ -229,6 +258,47 @@ impl Backend for NetworkManager {
     async fn counters(&self) -> Result<Option<Counters>, BackendError> {
         self.with_bus(|c| async move { read_counters(&c).await })
             .await
+    }
+
+    async fn wifi_join(
+        &self,
+        network: String,
+        password: Option<Secret>,
+    ) -> Result<Joined, BackendError> {
+        let broker = self.broker.clone();
+        self.with_bus(|c| async move {
+            super::wifi::join(&c, &broker, &network, password.as_ref()).await
+        })
+        .await?
+        .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_disconnect(&self) -> Result<Disconnected, BackendError> {
+        self.with_bus(|c| async move { super::wifi::disconnect(&c).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_forget(&self, network: String) -> Result<Forgotten, BackendError> {
+        self.with_bus(|c| async move { super::wifi::forget(&c, &network).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn secrets(&self) {
+        loop {
+            match self.connection().await {
+                Ok(conn) => {
+                    if let Err(e) = super::agent::keep_registered(&conn, self.broker.clone()).await
+                    {
+                        tracing::debug!("secret agent stopped: {e}");
+                    }
+                }
+                Err(e) => tracing::debug!("secret agent cannot reach the bus yet: {e}"),
+            }
+            self.forget_connection().await;
+            tokio::time::sleep(RETRY).await;
+        }
     }
 
     async fn changed(&self) {
