@@ -66,18 +66,6 @@ impl Rig {
         }
     }
 
-    /// Drops the scenario's link and waits for it to show, so a later join
-    /// cannot change the Home-5G row halfway through a snapshot.
-    fn drop_link(&mut self) {
-        self.select("Home-5G");
-        self.key(KeyCode::Char('x'));
-        self.pump_until("the link to drop", |a| {
-            a.toast().is_some()
-                && a.wifi().rows()[0].name() == "Home-5G"
-                && !a.wifi().rows()[0].joined()
-        });
-    }
-
     fn dev(&self) -> DeviceId {
         self.wlan0.expect("the scenario has a Wi-Fi device")
     }
@@ -139,15 +127,6 @@ impl Rig {
             .unwrap_or_default()
     }
 
-    fn names(&self) -> Vec<String> {
-        self.app
-            .wifi()
-            .rows()
-            .iter()
-            .map(|e| e.name().to_owned())
-            .collect()
-    }
-
     fn toast(&self) -> String {
         self.app.toast().map(|t| t.text.clone()).unwrap_or_default()
     }
@@ -158,10 +137,6 @@ impl Rig {
 
     fn styled(&self, (w, h): (u16, u16)) -> String {
         styled_of(&tui::render(&self.app, w, h))
-    }
-
-    fn footer(&self, size: (u16, u16)) -> String {
-        self.text(size).lines().last().unwrap().to_string()
     }
 }
 

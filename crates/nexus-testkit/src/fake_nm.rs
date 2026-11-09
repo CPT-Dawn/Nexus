@@ -646,7 +646,7 @@ fn show_variant(v: &OwnedVariant) -> String {
             .trim_end_matches('\0')
             .to_owned();
     }
-    format!("{:?}", &*v)
+    format!("{:?}", *v)
 }
 
 type SettingsDict = HashMap<String, HashMap<String, OwnedVariant>>;
