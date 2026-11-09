@@ -11,6 +11,7 @@
 
 mod bus;
 mod fake_nm;
+mod real;
 mod world;
 
 pub use bus::Bus;
@@ -18,4 +19,5 @@ pub use fake_nm::{
     ActiveConnection, Ap, ApId, DeviceId, FakeNm, NmConnectivity, NmState, SCAN_RATE_LIMIT_MS,
     boottime_ms,
 };
+pub use real::RealWorld;
 pub use world::{PATIENCE, Wire, World, WorldBuilder};
