@@ -45,8 +45,11 @@ impl RealWorld {
             let entry = entry.expect("interface").path();
             let wireless = entry.join("phy80211").exists();
             let lo = entry.file_name().is_some_and(|n| n == "lo");
+            // A tunnel NetworkManager made for a VPN test is virtual too.
+            let tunnel = std::fs::read_to_string(entry.join("uevent"))
+                .is_ok_and(|u| u.lines().any(|l| l == "DEVTYPE=wireguard"));
             assert!(
-                wireless || lo,
+                wireless || lo || tunnel,
                 "refusing to run: {} is not a virtual radio, this looks like the host",
                 entry.display()
             );
