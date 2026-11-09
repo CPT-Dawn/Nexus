@@ -12,6 +12,10 @@ const WPA3: (u32, u32, u32) = (0x1, 0, 0x408); // privacy, SAE | CCMP
 /// A busy Wi-Fi tab: six Networks in range (one joined, with a Profile), two
 /// saved ones out of range. Returns the Device.
 pub fn wifi_busy(world: &World) -> DeviceId {
+    busy(world, false)
+}
+
+fn busy(world: &World, enterprise: bool) -> DeviceId {
     let nm = &world.nm;
     let wlan0 = nm.add_wifi_device("wlan0");
     nm.add_ap(
@@ -38,6 +42,11 @@ pub fn wifi_busy(world: &World) -> DeviceId {
         wlan0,
         Ap::wpa2("Rooftop-6E", "AA:00:00:00:00:06", 14).frequency(6135),
     );
+    if enterprise {
+        // In range before the join, so the first list already has it.
+        nm.add_ap(wlan0, Ap::enterprise("eduroam", "AA:00:00:00:00:07", 74));
+        nm.set_eap_user("eduroam", "you@uni.example", "correct-horse");
+    }
     nm.add_wifi_profile("uuid-parents", "Parents House", b"Parents House", true);
     nm.set_profile_secret("uuid-parents", "wpa-psk", "parents-wifi-2024");
     nm.add_wifi_profile("uuid-hotel", "Hotel Lobby", b"Hotel Lobby", false);
@@ -54,14 +63,7 @@ pub fn wifi_busy(world: &World) -> DeviceId {
 /// [`wifi_busy`], plus `eduroam`, a WPA-Enterprise Network in range that
 /// accepts `you@uni.example` with `correct-horse`. Returns the Device.
 pub fn wifi_enterprise(world: &World) -> DeviceId {
-    let wlan0 = wifi_busy(world);
-    world
-        .nm
-        .add_ap(wlan0, Ap::enterprise("eduroam", "AA:00:00:00:00:07", 74));
-    world
-        .nm
-        .set_eap_user("eduroam", "you@uni.example", "correct-horse");
-    wlan0
+    busy(world, true)
 }
 
 /// [`wifi_busy`], plus a saved Profile (Parents House) that already has its
