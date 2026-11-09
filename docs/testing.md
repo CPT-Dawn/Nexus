@@ -41,3 +41,9 @@ rig.pump_until("the offline status", |a| ...);     // after changing the fake NM
 - Eyeball it for real: `cargo build -p nexus && cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal] [--ascii|--nerd-font]` runs the TUI on your terminal against a private fake NetworkManager and Daemon.
 
 Run: `cargo test --workspace`.
+
+## Overview data and the graphs (ticket #12)
+
+- S1 (`crates/nexus/tests/s1_overview.rs`): `{"op":"traffic"}` and `{"op":"activity"}` over the wire, plus `activity` events. Script counters with `nm.set_traffic(dev, rx_bytes, tx_bytes)` (the first device added carries the primary connection); `nm.statistics_reads()` proves whether anyone asked NetworkManager for them.
+- S2: `rig.traffic(rx_bps, tx_bps)` injects a scripted sample so graph snapshots do not depend on a clock; `rig.sync_watch()` does what `nexus` does after each frame (poll traffic only while `App::traffic_visible()`). Tests that need the Daemon's own rates pump until `app.traffic_samples()` / `traffic_now()` show them.
+- Demo: `... --example demo -- target/debug/nexus busy` shows the moving graphs and activity strip.
