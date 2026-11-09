@@ -631,10 +631,10 @@ mod tests {
     #[test]
     fn static_ipv4_rows_appear_and_are_checked_only_then() {
         let mut e = loaded();
-        assert_eq!(e.rows().len(), 6);
+        assert_eq!(e.rows().len(), 7);
         assert!(e.build().is_ok());
         e.key(key(KeyCode::Char(' '))); // IPv4 -> static
-        assert_eq!(e.rows().len(), 8);
+        assert_eq!(e.rows().len(), 9);
         let problems = e.problems();
         assert_eq!(problems[0].0, Row::Ipv4Address, "{problems:?}");
         e.key(key(KeyCode::Char(' '))); // static -> automatic again
@@ -656,7 +656,7 @@ mod tests {
     #[test]
     fn a_priority_that_is_not_a_number_is_a_complaint() {
         let mut e = loaded();
-        for _ in 0..6 {
+        for _ in 0..5 {
             e.key(key(KeyCode::Tab));
         }
         assert_eq!(e.focused(), Row::Priority);

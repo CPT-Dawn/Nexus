@@ -349,7 +349,7 @@ impl FakeSecretService {
     /// The keyring goes away (closed, crashed): the name is released.
     pub fn stop(&mut self) {
         if let Some(conn) = self.conn.take() {
-            let _ = self.rt.block_on(conn.graceful_shutdown());
+            self.rt.block_on(conn.graceful_shutdown());
         }
     }
 }
