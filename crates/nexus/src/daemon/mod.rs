@@ -3,6 +3,7 @@
 mod activity;
 mod notify;
 mod portal;
+mod profile;
 mod socket;
 mod traffic;
 
@@ -102,7 +103,7 @@ async fn serve() -> std::io::Result<()> {
                         let (rx, backlog) = broker.subscribe();
                         (rx, backlog, frontends.join())
                     };
-                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, &live, &notifier, req)).await {
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| dispatch(&backend, &settings, &broker, &live, &notifier, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -193,6 +194,7 @@ struct Live {
     doctor: crate::doctor::Memory,
     settings: Arc<Settings>,
     opener: portal::SharedOpener,
+    profile: Arc<profile::Gate>,
 }
 
 impl Live {
@@ -206,6 +208,7 @@ impl Live {
             opener,
             traffic: traffic::Sampler::default(),
             activity: activity::Log::default(),
+            profile: Arc::new(profile::Gate::new(events.clone())),
             doctor: crate::doctor::Memory::new(events),
         }
     }
@@ -245,6 +248,23 @@ async fn watch_backend<B: Backend>(
         {
             tracing::debug!("no scan after resume: {e}");
         }
+    }
+}
+
+/// Routes a request: Profile settings ops need the shared Backend handle
+/// (their timers outlive the request), everything else is [`answer`].
+async fn dispatch<B: Backend>(
+    backend: &Arc<B>,
+    settings: &Settings,
+    broker: &Broker,
+    live: &Live,
+    notifier: &notify::Notifier,
+    req: Request,
+) -> Response {
+    if profile::handles(&req.op) {
+        profile::answer(backend, &live.profile, req).await
+    } else {
+        answer(&**backend, settings, broker, live, notifier, req).await
     }
 }
 

@@ -16,17 +16,17 @@ expression: rig.text(STANDARD)
 │                    │  Wi-Fi: x             Disconnect                       │.1                  │
 │                    │  Wi-Fi: f             Forget (asks first)              │────────────────────╯
 │                    │  Wi-Fi: a             Toggle autoconnect               │────────────────────╮
-│                    │  Wi-Fi: s             Share as a QR code (asks first)  │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  Wi-Fi: u             Undo the toast's action          │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    │  o                    Open a Portal's login page       │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
-│                    │  Esc                  Back out; never quits            │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│                    │  ?                    Show or hide this help           │────────────────────╯
-│                    │  q, Ctrl-C            Quit                             │────────────────────╮
+│                    │  Wi-Fi: e             Edit the Profile's settings      │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  Wi-Fi: s             Share as a QR code (asks first)  │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  Wi-Fi: u             Undo the toast's action          │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀ │
+│                    │  o                    Open a Portal's login page       │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
+│                    │  Esc                  Back out; never quits            │────────────────────╯
+│                    │  ?                    Show or hide this help           │────────────────────╮
+│                    │  q, Ctrl-C            Quit                             │                    │
 │                    │                                                        │                    │
 │                    │ Login page won't show? A browser with secure DNS (DNS  │                    │
 │                    │ over HTTPS) hides the Portal by skipping the network's │                    │
 │                    │ resolver. Turn it off until you have signed in, or     │                    │
 │                    │ press o: Nexus opens a plain http:// page.             │                    │
-│                    ╰────────────────────────────────────────────────────────╯                    │
-╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+╰────────────────────╰────────────────────────────────────────────────────────╯────────────────────╯
  esc close

@@ -216,6 +216,9 @@ fn session(
             }
             Some(Event::Activity { entry }) => send(Msg::Happened(entry))?,
             Some(Event::DoctorFindings { findings }) => send(Msg::Findings(findings))?,
+            Some(event @ (Event::ProfilePending { .. } | Event::ProfileSettled { .. })) => {
+                send(Msg::Profile(super::ProfileMsg::Event(event)))?
+            }
             Some(_) => {}
             None => {
                 // A refusal (say NetworkManager vanished) just skips a sample.

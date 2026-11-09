@@ -22,6 +22,10 @@ _Avoid_: adapter, interface (in the UI), NIC
 A Device's live state while it carries a Network: the joined Network, addresses, speed and traffic.
 _Avoid_: active connection, session
 
+**Pending change**:
+An edit to the Profile carrying the current Link that has been applied but not yet kept. It reverts by itself unless the person confirms within the countdown (ADR-0004).
+_Avoid_: draft, transaction, trial
+
 **Forget**:
 Deleting a Profile, so Nexus no longer joins its Network automatically.
 _Avoid_: delete connection, remove

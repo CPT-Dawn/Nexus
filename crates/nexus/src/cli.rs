@@ -26,6 +26,9 @@ pub fn exit_code(code: ErrorCode) -> u8 {
         ErrorCode::PasswordRequired => 10,
         ErrorCode::NotConnected => 11,
         ErrorCode::HardBlocked => 12,
+        ErrorCode::InvalidSettings => 15,
+        ErrorCode::Conflict => 16,
+        ErrorCode::NothingPending => 17,
         ErrorCode::RevealDenied => 14,
         _ => EXIT_DAEMON_ERROR,
     }
@@ -419,7 +422,7 @@ fn config_call(op: Op) -> ExitCode {
     }
 }
 
-fn unreachable(e: &std::io::Error) -> ExitCode {
+pub(crate) fn unreachable(e: &std::io::Error) -> ExitCode {
     let path = nexus_ipc::socket_path().map_or_else(
         || "(XDG_RUNTIME_DIR is not set)".into(),
         |p| p.display().to_string(),
@@ -449,6 +452,9 @@ mod tests {
             ErrorCode::PasswordRequired,
             ErrorCode::NotConnected,
             ErrorCode::HardBlocked,
+            ErrorCode::InvalidSettings,
+            ErrorCode::Conflict,
+            ErrorCode::NothingPending,
         ];
         let mut codes: Vec<u8> = classes.iter().map(|c| exit_code(*c)).collect();
         codes.push(EXIT_UNREACHABLE);

@@ -16,6 +16,12 @@ use serde_json::Value;
 mod doctor;
 pub use doctor::{DoctorFixed, DoctorReport, Finding, Fix, Severity};
 
+pub mod profile;
+pub use profile::{
+    AddressEntry, Field, FieldError, Ipv4, Ipv4Method, Ipv6, Ipv6Method, MacMode, PendingChange,
+    ProfileApplied, ProfileSettings, ProfileView, Settled,
+};
+
 /// The protocol version this crate speaks.
 pub const PROTOCOL: u32 = 1;
 /// Versions a daemon built from this crate accepts.
@@ -100,6 +106,29 @@ pub enum Op {
         #[serde(default)]
         confirm: bool,
     },
+    /// Read the settings of the saved Profile of a Network (`WifiNetwork.id`).
+    /// Result: [`ProfileView`]; `unknown_network` when nothing is saved for it.
+    ProfileGet { network: String },
+    /// Change the settings of a saved Profile. `version` is the one
+    /// `profile_get` returned: a Profile that changed since fails with
+    /// `conflict`. Invalid settings fail with `invalid_settings` before
+    /// anything is written. When the Profile carries the current Link the
+    /// change is checkpointed: the result has `pending`, and unless
+    /// `profile_confirm` follows within `rollback_secs` (default 15) the
+    /// Backend puts the old settings back. Result: [`ProfileApplied`].
+    ProfileUpdate {
+        network: String,
+        version: u64,
+        settings: ProfileSettings,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rollback_secs: Option<u32>,
+    },
+    /// Keep a pending change (`pending` is `PendingChange.id`). Result `{}`;
+    /// `nothing_pending` when it was confirmed, reverted or timed out already.
+    ProfileConfirm { pending: u64 },
+    /// Revert a pending change now instead of waiting. Result `{}`;
+    /// `nothing_pending` as for `profile_confirm`.
+    ProfileRevert { pending: u64 },
     /// Switch Wi-Fi on or off. Result: [`Radios`]. `hard_blocked` while a
     /// hardware switch holds the radio off.
     WifiPower { on: bool },
@@ -239,6 +268,13 @@ pub enum ErrorCode {
     NoPortal,
     /// The browser could not be started.
     OpenFailed,
+    /// Profile settings are not valid; the message says which and why.
+    InvalidSettings,
+    /// The Profile changed since it was read (or a change still waits for
+    /// confirmation); read it again.
+    Conflict,
+    /// No change is waiting for confirmation under that id.
+    NothingPending,
     /// The Backend refused to hand over a stored secret (authorization denied).
     RevealDenied,
     #[serde(other)]
@@ -317,6 +353,17 @@ pub enum Event {
     /// signed in, or the Link went away).
     PortalChanged {
         portal: Option<Portal>,
+    },
+    /// A change to the Profile carrying the Link waits for confirmation:
+    /// it rolls back in `rollback_secs` unless somebody confirms it.
+    ProfilePending {
+        change: PendingChange,
+    },
+    /// A pending change was confirmed or rolled back.
+    ProfileSettled {
+        id: u64,
+        ssid: String,
+        outcome: Settled,
     },
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]

@@ -14,6 +14,7 @@ use super::caps::Glyphs;
 use super::doctor_view;
 use super::layout::{self, Areas, Mode};
 use super::overview;
+use super::profile_ui;
 use super::theme::Look;
 use super::wifi_ui;
 use super::words;
@@ -148,6 +149,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         ..a.header
     };
     wifi_ui::overlays(f, app, body, &look, &sym);
+    profile_ui::overlay(f, app, body, &look, &sym);
     if app.layer() == Layer::Help {
         help(f, area, &look, &sym);
     }
@@ -348,6 +350,7 @@ fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
         ("Wi-Fi: x", "Disconnect"),
         ("Wi-Fi: f", "Forget (asks first)"),
         ("Wi-Fi: a", "Toggle autoconnect"),
+        ("Wi-Fi: e", "Edit the Profile's settings"),
         ("Wi-Fi: s", "Share as a QR code (asks first)"),
         ("Wi-Fi: u", "Undo the toast's action"),
         ("o", "Open a Portal's login page"),

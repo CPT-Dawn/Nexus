@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! cargo build -p nexus
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|profile]
 //! ```
 //!
 //! Scenarios:
@@ -20,6 +20,12 @@
 //!   row (Home-5G, Parents House, Hotel Lobby) opens the share view; `enter`
 //!   reveals the QR code, `p` shows the password, `esc` closes.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
+//! - `profile`: `wifi`, where Parents House (saved, out of range) already has a
+//!   static address, custom DNS, metered and a priority. Press `2`, then `e`
+//!   on Home-5G (in use: Apply starts the 15 s "Keep these settings?"
+//!   countdown, `y` keeps, `n` or waiting reverts) or `G` `k` `e` on Parents
+//!   House (saved at once). In the form: `tab` next row, `space` or arrows
+//!   change a choice, type into address rows, `enter` apply, `esc` cancel.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -47,9 +53,11 @@ fn main() {
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" => {
+        "wifi" | "wifi-prompt" | "profile" => {
             if scenario == "wifi" {
                 nexus_testkit::scenarios::wifi_busy(&world);
+            } else if scenario == "profile" {
+                nexus_testkit::scenarios::profile_busy(&world);
             } else {
                 // Same, plus a password prompt for Work-Secure, already open.
                 _prompt = Some(nexus_testkit::scenarios::wifi_with_open_prompt(&world));
