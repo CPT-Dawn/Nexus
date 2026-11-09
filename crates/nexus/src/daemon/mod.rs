@@ -3,13 +3,14 @@
 mod activity;
 mod notify;
 mod portal;
+mod profile;
 mod socket;
 mod traffic;
 
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use nexus_ipc::{ErrorCode, Event, Op, Portal, Request, Response, Status, WifiList};
+use nexus_ipc::{ErrorCode, Event, Op, Portal, Request, Response, Status, Tethers, WifiList};
 
 use crate::backend::BackendError;
 use tokio::sync::broadcast;
@@ -58,7 +59,11 @@ async fn serve() -> std::io::Result<()> {
     // The baseline is read before the socket exists, so anything a client
     // can see happening is a change from it (and gets an activity entry).
     let baseline = tokio::time::timeout(BASELINE_WAIT, async {
-        (backend.wifi_list().await.ok(), backend.status().await.ok())
+        (
+            backend.wifi_list().await.ok(),
+            backend.status().await.ok(),
+            backend.tethers().await.ok(),
+        )
     })
     .await
     .unwrap_or_default();
@@ -102,7 +107,7 @@ async fn serve() -> std::io::Result<()> {
                         let (rx, backlog) = broker.subscribe();
                         (rx, backlog, frontends.join())
                     };
-                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, &live, &notifier, req)).await {
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| dispatch(&backend, &settings, &broker, &live, &notifier, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -120,6 +125,7 @@ async fn serve() -> std::io::Result<()> {
 struct Seen {
     status: Option<Status>,
     wifi: Option<WifiList>,
+    tethers: Option<Tethers>,
     portal: Option<Portal>,
 }
 
@@ -142,6 +148,7 @@ async fn sync<B: Backend>(
     seen: &mut Seen,
     push: Push,
 ) {
+    sync_tethers(backend, events, seen, push).await;
     match backend.status().await {
         Ok(status) => {
             // The log entry goes out first, so a Front end that shows the new
@@ -182,6 +189,30 @@ async fn sync<B: Backend>(
     seen.wifi = Some(list);
 }
 
+/// Pushes `tethers_changed` when Bluetooth or a phone's Link differs from
+/// what subscribers were last told.
+async fn sync_tethers<B: Backend>(
+    backend: &B,
+    events: &broadcast::Sender<Event>,
+    seen: &mut Seen,
+    push: Push,
+) {
+    let tethers = match backend.tethers().await {
+        Ok(t) => t,
+        Err(BackendError::Unavailable) => Tethers::default(),
+        Err(e) => {
+            tracing::debug!("tethers unavailable: {e}");
+            return;
+        }
+    };
+    if push == Push::All || (push == Push::Changes && seen.tethers.as_ref() != Some(&tethers)) {
+        let _ = events.send(Event::TethersChanged {
+            tethers: tethers.clone(),
+        });
+    }
+    seen.tethers = Some(tethers);
+}
+
 /// How long startup waits for the Backend's first answers before listening.
 const BASELINE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -193,6 +224,7 @@ struct Live {
     doctor: crate::doctor::Memory,
     settings: Arc<Settings>,
     opener: portal::SharedOpener,
+    profile: Arc<profile::Gate>,
 }
 
 impl Live {
@@ -206,6 +238,7 @@ impl Live {
             opener,
             traffic: traffic::Sampler::default(),
             activity: activity::Log::default(),
+            profile: Arc::new(profile::Gate::new(events.clone())),
             doctor: crate::doctor::Memory::new(events),
         }
     }
@@ -221,7 +254,7 @@ async fn watch_backend<B: Backend>(
     backend: Arc<B>,
     events: broadcast::Sender<Event>,
     live: Arc<Live>,
-    (wifi, status): (Option<WifiList>, Option<Status>),
+    (wifi, status, tethers): (Option<WifiList>, Option<Status>, Option<Tethers>),
 ) {
     let portal = status
         .as_ref()
@@ -229,6 +262,7 @@ async fn watch_backend<B: Backend>(
     let mut seen = Seen {
         status,
         wifi,
+        tethers,
         portal,
     };
     loop {
@@ -245,6 +279,23 @@ async fn watch_backend<B: Backend>(
         {
             tracing::debug!("no scan after resume: {e}");
         }
+    }
+}
+
+/// Routes a request: Profile settings ops need the shared Backend handle
+/// (their timers outlive the request), everything else is [`answer`].
+async fn dispatch<B: Backend>(
+    backend: &Arc<B>,
+    settings: &Settings,
+    broker: &Broker,
+    live: &Live,
+    notifier: &notify::Notifier,
+    req: Request,
+) -> Response {
+    if profile::handles(&req.op) {
+        profile::answer(backend, &live.profile, req).await
+    } else {
+        answer(&**backend, settings, broker, live, notifier, req).await
     }
 }
 
@@ -326,6 +377,9 @@ async fn answer<B: Backend>(
             }
             backend_reply(req.id, result)
         }
+        Op::Tethers => backend_reply(req.id, backend.tethers().await),
+        Op::TetherConnect { phone } => backend_reply(req.id, backend.tether_connect(phone).await),
+        Op::TetherDisconnect => backend_reply(req.id, backend.tether_disconnect().await),
         Op::WifiPower { on } => backend_reply(req.id, backend.wifi_power(on).await),
         Op::Airplane { on } => backend_reply(req.id, backend.airplane(on).await),
         Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),

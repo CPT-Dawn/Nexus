@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_tether.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Hotspot ▾  5/6                            ● Offline
+    ╭ Galaxy S24 Ultra of the whole family ────────────────╮
+    │ Paired                                               │
+    │                                                      │
+    │ Address     AA:BB:CC:DD:EE:03                        │
+    │ Bluetooth   on                                       │
+    │ Profile     none yet                                 │
+    │                                                      │
+    │ Press enter to tether. Switch on Bluetooth tethering │
+    │ on the phone first.                                  │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    │                                                      │
+    ╰──────────────────────────────────────────────────────╯
+ esc back  enter tether  ? help

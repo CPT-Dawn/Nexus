@@ -25,6 +25,9 @@ _Avoid_: active connection, session
 **Enterprise Network**:
 A Network that makes each person sign in with their own identity and a password or certificate, such as eduroam or an office Wi-Fi or Ethernet port. Joined through a guided sign-in form.
 _Avoid_: WPA-Enterprise, 802.1X, EAP (in the UI; fine in code and the CLI flags)
+**Pending change**:
+An edit to the Profile carrying the current Link that has been applied but not yet kept. It reverts by itself unless the person confirms within the countdown (ADR-0004).
+_Avoid_: draft, transaction, trial
 
 **Forget**:
 Deleting a Profile, so Nexus no longer joins its Network automatically.
@@ -45,6 +48,10 @@ _Avoid_: access point, AP mode, tethering (that is joining a phone's Network)
 **Tethering**:
 Joining the internet through a phone, over Bluetooth or USB.
 _Avoid_: hotspot, PAN
+
+**Phone**:
+A paired Bluetooth phone that offers network access, which Tethering joins. Listed by name and Bluetooth address; a phone that offers only dial-up is not a Phone to Nexus.
+_Avoid_: device (that is a hardware interface), handset, PAN client
 
 ### System
 

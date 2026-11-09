@@ -4,13 +4,14 @@
 mod agent;
 pub mod eap;
 pub mod nm;
+mod tether;
 mod wifi;
 
 use std::future::Future;
 
 use nexus_ipc::{
-    AutoconnectSet, Disconnected, Forgotten, Joined, Radios, ScanOutcome, Secret, Status, WifiList,
-    WifiShare,
+    AutoconnectSet, Disconnected, Forgotten, Joined, ProfileSettings, ProfileView, Radios,
+    ScanOutcome, Secret, Status, Tethered, Tethers, Untethered, WifiList, WifiShare,
 };
 
 use crate::text::Failure;
@@ -138,6 +139,20 @@ pub trait Backend: Send + Sync + 'static {
         network: String,
     ) -> impl Future<Output = Result<WifiShare, BackendError>> + Send;
 
+    /// Bluetooth's state and the paired phones that offer network access.
+    fn tethers(&self) -> impl Future<Output = Result<Tethers, BackendError>> + Send;
+
+    /// Tethers through a phone (address or name; the only one when `None`) and
+    /// waits until the Link is up or has failed. A Profile exists afterwards
+    /// only if it worked. Refused with `bluetooth_off` or `no_phone`.
+    fn tether_connect(
+        &self,
+        phone: Option<String>,
+    ) -> impl Future<Output = Result<Tethered, BackendError>> + Send;
+
+    /// Drops the Tethering Link, keeping the Profile.
+    fn tether_disconnect(&self) -> impl Future<Output = Result<Untethered, BackendError>> + Send;
+
     /// Switches Wi-Fi on or off. Refused with `hard_blocked` while a hardware
     /// switch holds it off.
     fn wifi_power(&self, on: bool) -> impl Future<Output = Result<Radios, BackendError>> + Send;
@@ -162,4 +177,43 @@ pub trait Backend: Send + Sync + 'static {
     /// Resolves after the Backend changed, once per burst: a storm of
     /// property changes is coalesced into a single tick. Cancel-safe.
     fn changed(&self) -> impl Future<Output = ()> + Send;
+
+    /// The settings of a Network's saved Profile and its version.
+    fn profile_get(
+        &self,
+        network: String,
+    ) -> impl Future<Output = Result<ProfileView, BackendError>> + Send;
+
+    /// Writes `settings` if the Profile is still at `version` (else a
+    /// `conflict`). A Profile carrying the current Link is changed under a
+    /// checkpoint that rolls back after `rollback_secs` unless confirmed.
+    fn profile_update(
+        &self,
+        network: String,
+        version: u64,
+        settings: ProfileSettings,
+        rollback_secs: u32,
+    ) -> impl Future<Output = Result<ProfileChanged, BackendError>> + Send;
+
+    /// Keeps a checkpointed change. Fails when the checkpoint is gone.
+    fn checkpoint_confirm(
+        &self,
+        checkpoint: String,
+    ) -> impl Future<Output = Result<(), BackendError>> + Send;
+
+    /// Reverts a checkpointed change now. Fails when the checkpoint is gone.
+    fn checkpoint_rollback(
+        &self,
+        checkpoint: String,
+    ) -> impl Future<Output = Result<(), BackendError>> + Send;
+}
+
+/// What `profile_update` did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileChanged {
+    pub ssid: String,
+    /// The Profile's version after the change.
+    pub version: u64,
+    /// Set when the change waits for [`Backend::checkpoint_confirm`].
+    pub checkpoint: Option<String>,
 }

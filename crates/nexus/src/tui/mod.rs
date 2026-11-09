@@ -14,7 +14,11 @@ mod eap_ui;
 mod graph;
 mod layout;
 mod overview;
+mod profile;
+mod profile_ui;
 mod share;
+mod tether;
+mod tether_ui;
 mod theme;
 mod view;
 mod wifi;
@@ -33,6 +37,7 @@ use ratatui::buffer::Buffer;
 pub use app::{App, Conn, FixState, Layer, Msg, Tab};
 pub use caps::{Caps, ColorTier, Glyphs};
 pub use client::Client;
+pub use profile::{Editor, Phase, ProfileMsg, Row};
 pub use wifi::{PasswordField, Toast};
 
 /// Draws `app` into a fresh buffer of the given size (what a snapshot sees).

@@ -1,0 +1,24 @@
+---
+source: crates/nexus/tests/s2_tether.rs
+expression: rig.text(NARROW)
+---
+ Nexus  Hotspot ▾  5/6                            ● Offline
+╭ Tethering ───────────────────────────────────────────────╮
+│ ● Bluetooth is on                                        │
+│                                                          │
+│ ▸   Galaxy S24 Ultra of the whole family          paired │
+│     Pixel 8                                        saved │
+│     Sam's iPhone                                  paired │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ j/k move  enter tether  d details  h/l tab  ? help  q quit

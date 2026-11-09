@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_tether.rs
+expression: rig.text(STANDARD)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Tethering ─────────────────╮╭ Sam's iPhone ──────────────────────────────────────────────────────╮
+│ ● Bluetooth is on          ││ Paired                                                             │
+│                            ││                                                                    │
+│     Galaxy S24…     paired ││ Address     AA:BB:CC:DD:EE:02                                      │
+│     Pixel 8          saved ││ Bluetooth   on                                                     │
+│ ▸   Sam's iPho…     paired ││ Profile     none yet                                               │
+│                            ││                                                                    │
+│                            ││ Press enter to tether. Switch on Bluetooth tethering on the phone  │
+│                            ││ first.                                                             │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╭ Problem ───────────────────────────────────────────────────────────────────────────────────────╮ │
+│ Could not tether through Sam's iPhone (stopped while asking for an address: the network never  │ │
+│ gave this computer an address). Check that Bluetooth tethering is switched on in the phone's   │ │
+│ settings.                                                                                      │ │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ j/k move  enter tether  h/l tab  ? help  q quit

@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use crate::{Bus, FakeNm, FakeNotifications, FakeSystemd};
+use crate::{Bus, FakeBluez, FakeNm, FakeNotifications, FakeSystemd};
 
 /// How long to wait for the Daemon's socket, and for any single reply.
 pub const PATIENCE: Duration = Duration::from_secs(10);
@@ -22,9 +22,17 @@ pub struct WorldBuilder {
     start_daemon: bool,
     notifications: bool,
     env: Vec<(String, String)>,
+    bluez: Option<bool>,
 }
 
 impl WorldBuilder {
+    /// Starts a fake BlueZ with one adapter, powered or not (default: no
+    /// Bluetooth service at all). Reach it with [`World::bluez`].
+    pub fn bluez(mut self, powered: bool) -> Self {
+        self.bluez = Some(powered);
+        self
+    }
+
     /// Whether the fake NetworkManager owns its name at start (default yes).
     pub fn nm_running(mut self, yes: bool) -> Self {
         self.nm_running = yes;
@@ -63,6 +71,7 @@ impl WorldBuilder {
             nm.stop();
         }
         let systemd = FakeSystemd::start(&nm_bus.address);
+        let bluez = self.bluez.map(|on| FakeBluez::start(&nm_bus.address, on));
         let session = self
             .notifications
             .then(|| Bus::start(tmp.path(), "session-bus"));
@@ -73,6 +82,7 @@ impl WorldBuilder {
             bin: self.bin,
             nm,
             systemd,
+            bluez,
             nm_bus,
             session,
             notifications,
@@ -95,6 +105,7 @@ pub struct World {
     pub nm: FakeNm,
     /// The fake systemd (units start absent).
     pub systemd: FakeSystemd,
+    bluez: Option<FakeBluez>,
     /// The fake notification server, when the builder asked for one.
     pub notifications: Option<FakeNotifications>,
     bin: PathBuf,
@@ -115,7 +126,15 @@ impl World {
             start_daemon: true,
             notifications: false,
             env: Vec::new(),
+            bluez: None,
         }
+    }
+
+    /// The fake BlueZ; the world must have been built with `.bluez(..)`.
+    pub fn bluez(&mut self) -> &mut FakeBluez {
+        self.bluez
+            .as_mut()
+            .expect("build the world with WorldBuilder::bluez to get a fake BlueZ")
     }
 
     /// Fake NetworkManager running, Daemon started and accepting connections.

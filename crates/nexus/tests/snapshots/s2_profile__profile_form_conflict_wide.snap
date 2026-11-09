@@ -1,0 +1,36 @@
+---
+source: crates/nexus/tests/s2_profile.rs
+expression: self.text(size)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
+╭ Wi-Fi ───────────────────────────────╮╭ Parents House ───────────────────────────────────────────────────────────────────────────────────╮
+│   ● Home-5G         ▂▄▆█ wpa2     5G ││ Saved, out of range                                                                              │
+│     Work-Secure     ▂▄▆█ wpa3     5G ││                                                                                                  │
+│     Cafe Guest      ▂▄▆█ open   2.4G ││ Autoconnect   on                                                                                 │
+│     Neighbour-2G    ▂▄▆█ wpa2   2.4G ││                                                                                                  │
+│     A very long ne… ▂▄▆█ wpa2   2.4G ││ Nexus joins it again when it is back in range.                                                   │
+│     Rooftop-6E      ▂▄▆█ wpa2     6G ││                                                                                                  │
+│   ── Saved, out of range             ││                                                                                                  │
+│ ▸   Parents House               auto╭ Parents House settings ──────────────────────────────────────╮                                     │
+│     Hotel Lobby               manual│ ▸ IPv4         ‹ static ›                                    │                                     │
+│                                     │     address    192.168.7.20/24                               │                                     │
+│                                     │     gateway    192.168.7.1                                   │                                     │
+│                                     │   IPv6         automatic                                     │                                     │
+│                                     │   DNS          9.9.9.9, 149.112.112.112                      │                                     │
+│                                     │   MAC address  random per Network                            │                                     │
+│                                     │   Metered      yes                                           │                                     │
+│                                     │   Priority     10                                            │                                     │
+│                                     │  Parents House was changed elsewhere while you were editing. │                                     │
+│                                     │  Nothing was saved; open its settings again.                 │                                     │
+│                                     │ tab next  space change  enter apply  esc cancel              │                                     │
+│                                     ╰──────────────────────────────────────────────────────────────╯                                     │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+│                                      ││                                                                                                  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ tab next  space change  enter apply  esc cancel

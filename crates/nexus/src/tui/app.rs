@@ -9,13 +9,15 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use nexus_ipc::{
-    ActivityEntry, ActivityKind, Connectivity, Event, Finding, PromptClosed, PromptKind, Secret,
-    Status, Traffic, WifiList, WifiShare,
+    ActivityEntry, ActivityKind, Connectivity, Event, Finding, Op, PromptClosed, PromptKind,
+    Secret, Status, Tethers, Traffic, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
 use super::eap_form::{EapForm, Typed};
+use super::profile::{Action, Editor, ProfileMsg};
 use super::share::{Share, Stage};
+use super::tether::TetherTab;
 use super::theme::{Look, Theme};
 use super::wifi::{Cmd, Confirm, Done, Entry, PasswordField, Runner, SWEEP_FRAME, Toast, WifiTab};
 
@@ -31,6 +33,8 @@ pub enum Msg {
     Status(Status),
     /// A fresh Wi-Fi list (first connect or `networks_changed`).
     Wifi(WifiList),
+    /// The Daemon's picture of Bluetooth and the paired phones.
+    Tethers(Tethers),
     /// A Secret prompt opened or closed.
     Prompt(Event),
     /// A command the person gave has finished.
@@ -47,6 +51,8 @@ pub enum Msg {
     Findings(Vec<Finding>),
     /// A fix the person confirmed ended: `Err` carries the words to show.
     FixDone(Result<(), String>),
+    /// Something about the Profile settings editor.
+    Profile(ProfileMsg),
     /// The Daemon cannot be reached (never connected, or the link dropped).
     Down,
     /// A running effect asked for a frame.
@@ -177,11 +183,14 @@ pub struct App {
     size: (u16, u16),
     quit: bool,
     wifi: WifiTab,
+    tether: TetherTab,
     /// An open Secret prompt: it has the keys until answered or cancelled.
     field: Option<PasswordField>,
     confirm: Option<Confirm>,
     /// The 802.1X sign-in form: while open it has the keys.
     eap: Option<EapForm>,
+    /// The Profile settings editor, while open: it has the keys.
+    editor: Option<Editor>,
     /// The share view (QR code) of a saved Network.
     share: Option<Share>,
     toast: Option<Toast>,
@@ -206,9 +215,11 @@ impl App {
             size: (80, 24),
             quit: false,
             wifi: WifiTab::default(),
+            tether: TetherTab::default(),
             field: None,
             confirm: None,
             eap: None,
+            editor: None,
             share: None,
             toast: None,
             runner: None,
@@ -233,6 +244,7 @@ impl App {
     pub fn selected(&self) -> usize {
         match self.tab {
             Tab::WiFi => self.wifi.cursor(),
+            Tab::Hotspot => self.tether.cursor(),
             _ => self.selected,
         }
     }
@@ -241,6 +253,7 @@ impl App {
     pub fn rows(&self) -> usize {
         match self.tab {
             Tab::WiFi => self.wifi.len(),
+            Tab::Hotspot => self.tether.len(),
             other => other.rows(),
         }
     }
@@ -249,12 +262,20 @@ impl App {
         &self.wifi
     }
 
+    pub fn tether(&self) -> &TetherTab {
+        &self.tether
+    }
+
     pub fn field(&self) -> Option<&PasswordField> {
         self.field.as_ref()
     }
 
     pub fn eap_form(&self) -> Option<&EapForm> {
         self.eap.as_ref()
+    }
+
+    pub fn editor(&self) -> Option<&Editor> {
+        self.editor.as_ref()
     }
 
     pub fn confirm(&self) -> Option<&Confirm> {
@@ -374,6 +395,15 @@ impl App {
     /// while scanning, the toast's end while one shows (ADR-0003).
     pub fn next_tick(&self) -> Option<Duration> {
         let sweep = self.wifi.scanning().then_some(SWEEP_FRAME);
+        let countdown = self
+            .editor
+            .as_ref()
+            .is_some_and(Editor::is_pending)
+            .then_some(Duration::from_secs(1));
+        let sweep = match (sweep, countdown) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         let toast = self
             .toast
             .as_ref()
@@ -448,8 +478,10 @@ impl App {
                 changed
             }
             Msg::Wifi(list) => self.wifi.refresh(list),
+            Msg::Tethers(tethers) => self.tether.refresh(tethers),
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
+            Msg::Profile(m) => self.profile_msg(m),
             Msg::Shared(result) => match self.share.as_mut() {
                 Some(share) if matches!(share.stage, Stage::Reading) => {
                     share.arrived(result);
@@ -459,14 +491,29 @@ impl App {
             },
             Msg::Down => {
                 // A prompt dies with the link; the Daemon replays it if it lives.
-                let changed = self.conn != Conn::Down
+                let mut changed = self.conn != Conn::Down
                     || self.field.take().is_some()
                     || self.share.take().is_some();
+                match self.editor.take() {
+                    Some(e) if e.is_pending() => {
+                        self.say(
+                            "Lost the daemon. NetworkManager reverts the change on its own.",
+                            true,
+                            None,
+                        );
+                        changed = true;
+                    }
+                    Some(_) => changed = true,
+                    None => {}
+                }
                 self.conn = Conn::Down;
                 changed
             }
             Msg::Tick => {
                 let mut dirty = self.wifi.tick();
+                if let Some(editor) = self.editor.as_mut() {
+                    dirty |= editor.tick(Instant::now());
+                }
                 if self
                     .toast
                     .as_ref()
@@ -564,6 +611,26 @@ impl App {
                 };
                 self.say(format!("Disconnected from {ssid}."), false, Some(undo));
             }
+            (Cmd::Tether { phone, name }, result) => {
+                self.tether.busy = None;
+                match result {
+                    Ok(_) => {
+                        let undo = Cmd::Untether {
+                            phone: phone.clone(),
+                            name: name.clone(),
+                        };
+                        self.say(format!("Tethered through {name}."), false, Some(undo));
+                    }
+                    Err(message) => self.say(message, true, None),
+                }
+            }
+            (Cmd::Untether { phone, name }, Ok(_)) => {
+                let undo = Cmd::Tether {
+                    phone: phone.clone(),
+                    name: name.clone(),
+                };
+                self.say(format!("Dropped the tether to {name}."), false, Some(undo));
+            }
             (Cmd::Forget { ssid, .. }, Ok(_)) => {
                 self.say(format!("Forgot {ssid}."), false, None);
             }
@@ -622,6 +689,10 @@ impl App {
         if self.confirm.is_some() {
             return self.confirm_key(key);
         }
+        if self.editor.is_some() {
+            return self.editor_key(key);
+        }
+
         if self.share.is_some() {
             return self.share_key(key);
         }
@@ -777,7 +848,7 @@ impl App {
             KeyCode::Enter if self.tab == Tab::Overview => {
                 self.go_tab(Tab::ALL[1 + self.selected.min(3)])
             }
-            KeyCode::Enter if self.narrow() && self.tab != Tab::WiFi => {
+            KeyCode::Enter if self.narrow() && !matches!(self.tab, Tab::WiFi | Tab::Hotspot) => {
                 self.layer = Layer::Sheet;
                 true
             }
@@ -794,8 +865,46 @@ impl App {
     fn tab_key(&mut self, key: KeyEvent) -> bool {
         match self.tab {
             Tab::WiFi => self.wifi_key(key),
+            Tab::Hotspot => self.tether_key(key),
             _ => false,
         }
+    }
+
+    /// Keys of the Tethering list: enter tethers, x drops it, u undoes.
+    fn tether_key(&mut self, key: KeyEvent) -> bool {
+        if key.code == KeyCode::Char('u') {
+            return match self.toast.take().and_then(|t| t.undo) {
+                Some(undo) => {
+                    self.run_tether(undo);
+                    true
+                }
+                None => false,
+            };
+        }
+        let Some(phone) = self.tether.selected().cloned() else {
+            return false;
+        };
+        let (id, name) = (phone.id.clone(), phone.name.clone());
+        match key.code {
+            KeyCode::Enter if !phone.connected && self.tether.busy.is_none() => {
+                self.run_tether(Cmd::Tether { phone: id, name });
+                true
+            }
+            KeyCode::Char('x') if phone.connected => {
+                self.run_tether(Cmd::Untether { phone: id, name });
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Sends a Tethering command, marking a connect as in flight.
+    fn run_tether(&mut self, cmd: Cmd) {
+        if let Cmd::Tether { phone, .. } = &cmd {
+            self.tether.busy = Some(phone.clone());
+        }
+        self.toast = None;
+        self.send(cmd);
     }
 
     fn wifi_key(&mut self, key: KeyEvent) -> bool {
@@ -842,6 +951,10 @@ impl App {
                         self.confirm = Some(Confirm { network, ssid });
                         true
                     }
+                    KeyCode::Char('e') if entry.saved() => {
+                        self.open_editor(network, ssid);
+                        true
+                    }
                     KeyCode::Char('a') if entry.autoconnect().is_some() => {
                         let enabled = !entry.autoconnect().unwrap_or(true);
                         self.run_wifi(Cmd::Autoconnect {
@@ -857,6 +970,128 @@ impl App {
         }
     }
 
+    fn open_editor(&mut self, network: String, ssid: String) {
+        self.toast = None;
+        self.editor = Some(Editor::loading(network.clone(), ssid));
+        if let Some(runner) = &self.runner {
+            runner.call(Op::ProfileGet { network }, |r| {
+                Msg::Profile(ProfileMsg::Loaded(r.and_then(|v| {
+                    serde_json::from_value(v)
+                        .map_err(|_| "The daemon sent a Profile this nexus cannot read.".into())
+                })))
+            });
+        }
+    }
+
+    /// Keys while the Profile editor is open.
+    fn editor_key(&mut self, key: KeyEvent) -> bool {
+        let Some(editor) = self.editor.as_mut() else {
+            return false;
+        };
+        match editor.key(key) {
+            Action::None | Action::Idle => false,
+            Action::Redraw => true,
+            Action::Close => {
+                self.editor = None;
+                true
+            }
+            Action::Apply => {
+                if let Some(op) = editor.update_op() {
+                    editor.applying();
+                    if let Some(runner) = &self.runner {
+                        runner.call(op, |r| {
+                            Msg::Profile(ProfileMsg::Applied(r.and_then(|v| {
+                                serde_json::from_value(v).map_err(|_| {
+                                    "The daemon's answer was not understood.".to_string()
+                                })
+                            })))
+                        });
+                    }
+                }
+                true
+            }
+            Action::Confirm(pending) => {
+                self.answer_pending(Op::ProfileConfirm { pending });
+                true
+            }
+            Action::Revert(pending) => {
+                self.answer_pending(Op::ProfileRevert { pending });
+                true
+            }
+        }
+    }
+
+    fn answer_pending(&self, op: Op) {
+        if let Some(runner) = &self.runner {
+            runner.call(op, |r| match r {
+                // Success arrives as the `profile_settled` event.
+                Ok(_) => Msg::Tick,
+                Err(m) => Msg::Profile(ProfileMsg::Refused(m)),
+            });
+        }
+    }
+
+    fn profile_msg(&mut self, msg: ProfileMsg) -> bool {
+        match msg {
+            ProfileMsg::Loaded(result) => {
+                let Some(editor) = self.editor.as_mut() else {
+                    return false;
+                };
+                if let Err(message) = &result {
+                    let message = message.clone();
+                    self.editor = None;
+                    self.say(message, true, None);
+                    return true;
+                }
+                editor.load(result);
+                true
+            }
+            ProfileMsg::Applied(result) => {
+                let Some(editor) = self.editor.as_mut() else {
+                    return false;
+                };
+                match result {
+                    Err(message) => editor.applied_failed(message),
+                    Ok(applied) => match applied.pending {
+                        Some(change) => editor.pending(&change, Instant::now()),
+                        None => {
+                            let ssid = editor.ssid.clone();
+                            self.editor = None;
+                            self.say(format!("Saved the settings of {ssid}."), false, None);
+                        }
+                    },
+                }
+                true
+            }
+            ProfileMsg::Refused(message) => {
+                // Too late to keep it, say: the settled event follows.
+                self.say(message, true, None);
+                true
+            }
+            ProfileMsg::Event(Event::ProfilePending { change }) => {
+                // Our own update answers with the same change; this covers
+                // the event winning the race against the answer.
+                match self.editor.as_mut() {
+                    Some(e) if e.ssid == change.ssid && !e.is_pending() => {
+                        e.pending(&change, Instant::now());
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            ProfileMsg::Event(Event::ProfileSettled { id, outcome, .. }) => {
+                let Some(editor) = self.editor.as_ref().filter(|e| e.settled(id)) else {
+                    return false;
+                };
+                let (text, bad) = editor.outcome_text(outcome);
+                self.editor = None;
+                self.say(text, bad, None);
+                true
+            }
+            ProfileMsg::Event(_) => false,
+        }
+    }
+
     /// Sends a Wi-Fi command, marking a join as in flight.
     fn run_wifi(&mut self, cmd: Cmd) {
         if let Cmd::Join { ssid, .. } | Cmd::JoinEap { ssid, .. } = &cmd {
@@ -869,6 +1104,9 @@ impl App {
     fn select(&mut self, row: usize) -> bool {
         if self.tab == Tab::WiFi {
             return self.wifi.move_to(row);
+        }
+        if self.tab == Tab::Hotspot {
+            return self.tether.move_to(row);
         }
         let changed = row != self.selected;
         self.selected = row;
@@ -899,6 +1137,10 @@ impl App {
         if self.confirm.is_some() {
             return vec![("y", "forget"), ("esc", "keep")];
         }
+        if let Some(editor) = &self.editor {
+            return editor_hints(editor);
+        }
+
         if let Some(share) = &self.share {
             return share.hints();
         }
@@ -909,6 +1151,8 @@ impl App {
                 let mut v = vec![("esc", "back")];
                 if self.tab == Tab::WiFi {
                     v.extend(self.wifi_hints(false));
+                } else if self.tab == Tab::Hotspot {
+                    v.extend(self.tether_hints());
                 }
                 v.push(("?", "help"));
                 v
@@ -922,6 +1166,11 @@ impl App {
                     // No list and nothing to open on the setup screen.
                 } else if self.tab == Tab::WiFi {
                     v.extend(self.wifi_hints(!narrow));
+                } else if self.tab == Tab::Hotspot {
+                    v.extend(self.tether_hints());
+                    if narrow && self.rows() > 0 {
+                        v.push(("d", "details"));
+                    }
                 } else if self.tab == Tab::Overview || (narrow && self.rows() > 0) {
                     v.push(("enter", "open"));
                 }
@@ -940,6 +1189,22 @@ impl App {
                 v
             }
         }
+    }
+
+    /// Tethering keys that apply to the selected phone.
+    fn tether_hints(&self) -> Vec<(&'static str, &'static str)> {
+        let mut v = Vec::new();
+        if let Some(phone) = self.tether.selected() {
+            if phone.connected {
+                v.push(("x", "drop tether"));
+            } else {
+                v.push(("enter", "tether"));
+            }
+        }
+        if self.toast.as_ref().is_some_and(|t| t.undo.is_some()) {
+            v.push(("u", "undo"));
+        }
+        v
     }
 
     /// Wi-Fi keys that apply to the selected row; `more` adds the less common ones.
@@ -963,10 +1228,33 @@ impl App {
             if e.autoconnect().is_some() {
                 v.push(("a", "auto"));
             }
+            if e.saved() {
+                v.push(("e", "settings"));
+            }
         }
         if self.toast.as_ref().is_some_and(|t| t.undo.is_some()) {
             v.push(("u", "undo"));
         }
         v
+    }
+}
+
+/// Footer keys of the Profile editor.
+fn editor_hints(editor: &Editor) -> Vec<(&'static str, &'static str)> {
+    use super::profile::Phase;
+    match editor.phase {
+        Phase::Loading | Phase::Applying => vec![("esc", "close")],
+        Phase::Pending { .. } => vec![("y", "keep"), ("n", "revert now")],
+        Phase::Editing => {
+            let mut v = vec![("tab", "next")];
+            if editor.focused().is_text() {
+                v.push(("type", "edit"));
+            } else {
+                v.push(("space", "change"));
+            }
+            v.push(("enter", "apply"));
+            v.push(("esc", "cancel"));
+            v
+        }
     }
 }

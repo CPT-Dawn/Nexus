@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_profile.rs
+expression: self.text(size)
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Wi-Fi ─────────────────────╮╭ Home-5G ───────────────────────────────────────────────────────────╮
+│ ▸ ● Home-5G    ▂▄▆█ wpa2   ││ ● Connected                                                        │
+│     Work-Secu… ▂▄▆█ wpa3   ││                                                                    │
+│     Cafe Guest ▂▄▆█ open   ││ Signal         82%  ▂▄▆█                                           │
+│     Neighbour… ▂▄▆█ wpa2   ││ Security      WPA2 personal                                        │
+│     A very lo… ▂▄▆█ wpa2   ││ Band          5 GHz                                                │
+│     Rooftop-6E ▂▄▆█ wpa2   ││ Access points 1                                                    │
+│   ── Saved, out ╭ Home-5G settings ────────────────────────────────────────────╮                 │
+│     Parents Hous│ ▸ IPv4         ‹ automatic (DHCP) ›                          │                 │
+│     Hotel Lobby │   IPv6         automatic                                     │                 │
+│                 │   DNS                                                        │                 │
+│                 │   MAC address  permanent (hardware)                          │                 │
+│                 │   Metered      no                                            │                 │
+│                 │   Priority     0                                             │                 │
+│                 │  In use: you will be asked to keep the change.               │                 │
+│                 │                                                              │                 │
+│                 │ tab next  space change  enter apply  esc cancel              │                 │
+│                 ╰──────────────────────────────────────────────────────────────╯                 │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ tab next  space change  enter apply  esc cancel

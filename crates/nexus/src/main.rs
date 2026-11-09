@@ -3,7 +3,9 @@ mod cli;
 mod config;
 mod daemon;
 mod doctor;
+mod profile_cli;
 mod secrets;
+mod tether_view;
 mod text;
 mod wifi_view;
 
@@ -40,6 +42,16 @@ enum Command {
     Wifi {
         #[command(subcommand)]
         action: WifiAction,
+    },
+    /// Get online through a paired phone over Bluetooth.
+    Tether {
+        #[command(subcommand)]
+        action: TetherAction,
+    },
+    /// Show or change the settings of a saved Network's Profile.
+    Profile {
+        #[command(subcommand)]
+        action: ProfileAction,
     },
     /// Explain why the machine is or is not online, and how to fix it.
     Doctor {
@@ -129,6 +141,44 @@ enum WifiAction {
         #[arg(long, conflicts_with = "qr")]
         json: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum TetherAction {
+    /// List paired phones that offer network access, and whether Bluetooth is on.
+    List {
+        /// Print the list as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Tether through a phone (the only paired one if you name none).
+    Connect {
+        /// The phone's name or Bluetooth address.
+        phone: Option<String>,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Drop the tether; the phone stays paired and its Profile stays saved.
+    Disconnect {
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProfileAction {
+    /// Show a Profile's IP, DNS, MAC, metered and priority settings.
+    Show {
+        /// The Network's name (SSID).
+        ssid: String,
+        /// Print the Profile as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Change some of a Profile's settings; what you leave out stays.
+    Set(profile_cli::SetArgs),
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -293,9 +343,24 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Forget { ssid, json },
         } => cli::wifi_forget(&ssid, json),
+        Command::Profile {
+            action: ProfileAction::Show { ssid, json },
+        } => profile_cli::show(&ssid, json),
+        Command::Profile {
+            action: ProfileAction::Set(args),
+        } => profile_cli::set(args),
         Command::Wifi {
             action: WifiAction::Share { ssid, qr, json },
         } => cli::wifi_share(&ssid, qr, json),
+        Command::Tether {
+            action: TetherAction::List { json },
+        } => cli::tether_list(json),
+        Command::Tether {
+            action: TetherAction::Connect { phone, json },
+        } => cli::tether_connect(phone, json),
+        Command::Tether {
+            action: TetherAction::Disconnect { json },
+        } => cli::tether_disconnect(json),
         Command::Doctor { json, fix } => cli::doctor(json, fix),
         Command::Config {
             action: ConfigAction::Get { key },

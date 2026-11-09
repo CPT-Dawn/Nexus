@@ -203,7 +203,7 @@ fn the_cli_joins_with_flags_and_reads_the_password_from_stdin() {
 }
 
 #[test]
-fn the_cli_explains_a_bad_form_and_exits_13() {
+fn the_cli_explains_a_bad_form_and_exits_15() {
     let (world, _) = world();
     let out = world
         .nexus()
@@ -218,7 +218,7 @@ fn the_cli_explains_a_bad_form_and_exits_13() {
         ])
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(13));
+    assert_eq!(out.status.code(), Some(15));
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("identity"), "{err}");
     assert_eq!(world.nm.profile_count(), 0);

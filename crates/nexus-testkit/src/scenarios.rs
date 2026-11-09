@@ -64,6 +64,36 @@ pub fn wifi_enterprise(world: &World) -> DeviceId {
     wlan0
 }
 
+/// [`wifi_busy`], plus a saved Profile (Parents House) that already has its
+/// own settings: a static address, custom DNS, metered, a priority. The
+/// joined Home-5G has defaults, so editing it shows the checkpoint countdown.
+pub fn profile_busy(world: &World) -> DeviceId {
+    let wlan0 = wifi_busy(world);
+    let network = nexus_ipc::network_id(b"Parents House");
+    let view = world
+        .wire()
+        .call(json!({"op": "profile_get", "network": network}));
+    let resp = world.wire().call(json!({
+        "op": "profile_update",
+        "network": network,
+        "version": view["ok"]["version"],
+        "settings": {
+            "ipv4": {
+                "method": "manual",
+                "addresses": [{"address": "192.168.7.20", "prefix": 24}],
+                "gateway": "192.168.7.1",
+            },
+            "ipv6": {"method": "auto"},
+            "dns": ["9.9.9.9", "149.112.112.112"],
+            "mac": "per_network",
+            "metered": true,
+            "priority": 10,
+        },
+    }));
+    assert!(resp.get("ok").is_some(), "editing Parents House: {resp}");
+    wlan0
+}
+
 /// [`wifi_busy`], plus a join of `Work-Secure` that is waiting for its
 /// password: the Daemon holds an open Secret prompt for any Front end that
 /// subscribes. The returned thread ends when the prompt is answered.
@@ -76,4 +106,28 @@ pub fn wifi_with_open_prompt(world: &World) -> JoinHandle<()> {
             "network": nexus_ipc::network_id(b"Work-Secure"),
         }));
     })
+}
+
+/// A world with Bluetooth (powered or not) and three paired phones that offer
+/// network access: `Pixel 8` (a Profile is saved, nothing connected),
+/// `Sam's iPhone` (paired only) and one with a name too long for a row. Shared
+/// by the S2 tests and `demo tether` / `demo tether-off`.
+pub fn tether_world(bin: impl Into<std::path::PathBuf>, powered: bool) -> World {
+    let mut world = World::builder(bin).bluez(true).start();
+    world.nm.add_phone("AA:BB:CC:DD:EE:01", "Pixel 8");
+    world.nm.add_phone("AA:BB:CC:DD:EE:02", "Sam's iPhone");
+    world
+        .nm
+        .add_phone("AA:BB:CC:DD:EE:03", "Galaxy S24 Ultra of the whole family");
+    // Tether once and let go, so Pixel 8 has a saved Profile.
+    let resp = world
+        .wire()
+        .call(json!({"op": "tether_connect", "phone": "AA:BB:CC:DD:EE:01"}));
+    assert!(resp.get("ok").is_some(), "tethering Pixel 8: {resp}");
+    let resp = world.wire().call(json!({"op": "tether_disconnect"}));
+    assert!(resp.get("ok").is_some(), "dropping the tether: {resp}");
+    if !powered {
+        world.bluez().set_powered(false);
+    }
+    world
 }

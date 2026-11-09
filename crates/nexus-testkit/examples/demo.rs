@@ -3,7 +3,8 @@
 //!
 //! ```text
 //! cargo build -p nexus
-//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|wifi-enterprise]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|tether|tether-off]
+//! cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal|busy|wifi|wifi-prompt|wifi-enterprise|profile]
 //! ```
 //!
 //! Scenarios:
@@ -25,6 +26,18 @@
 //!   check, `ctrl-r` shows passwords, `enter` joins, `esc` cancels. The right
 //!   login is `you@uni.example` / `correct-horse`, server name `radius.uni.example`.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
+//! - `tether`: Bluetooth on and three paired phones (Pixel 8 with a saved
+//!   Profile, Sam's iPhone, a long-named Galaxy). Press `5` for the Hotspot tab
+//!   (Tethering lives there until the Hotspot arrives); `j`/`k` move, `enter`
+//!   tethers, `x` drops the tether, `u` undoes. `d` opens details when narrow.
+//! - `tether-off`: the same, with Bluetooth switched off, so `enter` shows how
+//!   to turn it on.
+//! - `profile`: `wifi`, where Parents House (saved, out of range) already has a
+//!   static address, custom DNS, metered and a priority. Press `2`, then `e`
+//!   on Home-5G (in use: Apply starts the 15 s "Keep these settings?"
+//!   countdown, `y` keeps, `n` or waiting reverts) or `G` `k` `e` on Parents
+//!   House (saved at once). In the form: `tab` next row, `space` or arrows
+//!   change a choice, type into address rows, `enter` apply, `esc` cancel.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -43,20 +56,26 @@ fn main() {
     let scenario = args.next().unwrap_or_else(|| "online".into());
     let rest: Vec<String> = args.collect();
 
-    let world = World::start(&bin);
+    let world = if scenario.starts_with("tether") {
+        nexus_testkit::scenarios::tether_world(&bin, scenario == "tether")
+    } else {
+        World::start(&bin)
+    };
     let mut _prompt = None;
     let opened = world.dir().join("opened.log");
     let mut wlan0 = None;
     match scenario.as_str() {
-        "offline" => {}
+        "offline" | "tether" | "tether-off" => {}
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" | "wifi-enterprise" => {
+        "wifi" | "wifi-prompt" | "wifi-enterprise" | "profile" => {
             if scenario == "wifi" {
                 nexus_testkit::scenarios::wifi_busy(&world);
             } else if scenario == "wifi-enterprise" {
                 nexus_testkit::scenarios::wifi_enterprise(&world);
+            } else if scenario == "profile" {
+                nexus_testkit::scenarios::profile_busy(&world);
             } else {
                 // Same, plus a password prompt for Work-Secure, already open.
                 _prompt = Some(nexus_testkit::scenarios::wifi_with_open_prompt(&world));
