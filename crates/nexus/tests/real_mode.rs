@@ -113,8 +113,11 @@ fn joining_open_wpa2_and_sae_works_and_forget_removes_the_profile() {
             .wire()
             .call(json!({"op": "wifi_forget", "network": id(ssid)}));
         assert_eq!(gone["ok"]["ssid"], ssid, "{gone}");
-        let r = row(&list(&world), ssid).expect("still listed");
-        assert_eq!(r["joined"], false, "{r}");
+        // NetworkManager drops the active access point a moment after
+        // Forget returns, so `joined` settles rather than flips.
+        let r = eventually(&format!("{ssid} no longer joined"), || {
+            row(&list(&world), ssid).filter(|r| r["joined"] == false)
+        });
         assert!(r.get("profile").is_none(), "{r}");
     }
 }

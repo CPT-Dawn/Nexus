@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::time::Duration;
 
 use tempfile::TempDir;
 
@@ -112,7 +113,7 @@ impl RealWorld {
     }
 
     pub fn wire(&self) -> Wire {
-        Wire::connect(&self.socket())
+        Wire::connect_patiently(&self.socket(), Duration::from_secs(60))
     }
 
     pub fn run_nexus(&self, args: &[&str]) -> std::process::Output {
