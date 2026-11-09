@@ -37,7 +37,15 @@ impl Rig {
     /// The Tethering scenario, with the TUI on the Hotspot tab and the
     /// Daemon's picture received.
     fn new(powered: bool) -> Rig {
-        Rig::with(tether_world(NEXUS, powered), truecolor())
+        let mut rig = Rig::with(tether_world(NEXUS, powered), truecolor());
+        // The scenario switches Bluetooth off after the Daemon started, so the
+        // first picture can still say "on"; wait for the one that says "off".
+        if !powered {
+            rig.pump_until("Bluetooth to read off", |a| {
+                a.tether().bluetooth() == Bluetooth::Off
+            });
+        }
+        rig
     }
 
     fn with(world: World, caps: Caps) -> Rig {
