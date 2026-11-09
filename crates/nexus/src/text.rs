@@ -946,46 +946,6 @@ pub fn ago(secs: u64) -> String {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_known_reason_has_its_own_sentence() {
-        for n in 0..=79 {
-            assert!(!device_reason(n).starts_with("Unknown"), "reason {n}");
-        }
-    }
-
-    #[test]
-    fn numbers_beyond_the_catalog_fall_back() {
-        assert_eq!(device_reason(80), "Unknown reason (80)");
-        assert_eq!(device_state(130), "in an unknown state (130)");
-    }
-
-    #[test]
-    fn every_device_state_reads_as_words() {
-        for n in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120] {
-            assert!(!device_state(n).contains("unknown state ("), "state {n}");
-        }
-    }
-
-    #[test]
-    fn supplicant_trouble_is_a_wrong_password_only_when_a_password_was_in_play() {
-        let f = join_failure("Home", STATE_CONFIG, SUPPLICANT_TIMEOUT, true);
-        assert_eq!(f.code, ErrorCode::WrongPassword);
-        let f = join_failure("Cafe", STATE_CONFIG, SUPPLICANT_TIMEOUT, false);
-        assert_eq!(f.code, ErrorCode::JoinFailed);
-        assert!(f.message.contains("supplicant timed out"), "{}", f.message);
-    }
-
-    #[test]
-    fn the_wrong_password_sentence_names_the_network() {
-        let f = join_failure("Home-5G", STATE_NEED_AUTH, NO_SECRETS, true);
-        assert_eq!(f.message, "Wrong password for Home-5G.");
-    }
-}
-
 // ---- Doctor fixes, config and notifications ---------------------------------
 
 pub fn fix_not_confirmed() -> Failure {
@@ -1042,4 +1002,44 @@ pub fn login_required(network: &str) -> (String, &'static str) {
         format!("Login required for {network}"),
         "This Network wants you to sign in before it gives internet access.",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_known_reason_has_its_own_sentence() {
+        for n in 0..=79 {
+            assert!(!device_reason(n).starts_with("Unknown"), "reason {n}");
+        }
+    }
+
+    #[test]
+    fn numbers_beyond_the_catalog_fall_back() {
+        assert_eq!(device_reason(80), "Unknown reason (80)");
+        assert_eq!(device_state(130), "in an unknown state (130)");
+    }
+
+    #[test]
+    fn every_device_state_reads_as_words() {
+        for n in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120] {
+            assert!(!device_state(n).contains("unknown state ("), "state {n}");
+        }
+    }
+
+    #[test]
+    fn supplicant_trouble_is_a_wrong_password_only_when_a_password_was_in_play() {
+        let f = join_failure("Home", STATE_CONFIG, SUPPLICANT_TIMEOUT, true);
+        assert_eq!(f.code, ErrorCode::WrongPassword);
+        let f = join_failure("Cafe", STATE_CONFIG, SUPPLICANT_TIMEOUT, false);
+        assert_eq!(f.code, ErrorCode::JoinFailed);
+        assert!(f.message.contains("supplicant timed out"), "{}", f.message);
+    }
+
+    #[test]
+    fn the_wrong_password_sentence_names_the_network() {
+        let f = join_failure("Home-5G", STATE_NEED_AUTH, NO_SECRETS, true);
+        assert_eq!(f.message, "Wrong password for Home-5G.");
+    }
 }
