@@ -610,7 +610,12 @@ impl EapArgs {
 #[derive(Subcommand)]
 enum ConfigAction {
     /// Print the effective config, or one value by dotted key (e.g. `connectivity.url`).
-    Get { key: Option<String> },
+    Get {
+        key: Option<String>,
+        /// Print the value as JSON (strings quoted).
+        #[arg(long)]
+        json: bool,
+    },
     /// Set a value in config.toml, keeping your comments. `null` resets it.
     Set { key: String, value: String },
 }
@@ -808,8 +813,8 @@ fn main() -> ExitCode {
         } => cli::wifi_autoconnect(&ssid, matches!(state, Switch::On), hex, json),
         Command::Doctor { json, fix } => cli::doctor(json, fix),
         Command::Config {
-            action: ConfigAction::Get { key },
-        } => cli::config_get(key),
+            action: ConfigAction::Get { key, json },
+        } => cli::config_get(key, json),
         Command::Config {
             action: ConfigAction::Set { key, value },
         } => cli::config_set(key, &value),

@@ -267,6 +267,9 @@ fn the_cli_sets_and_gets_a_key() {
     assert!(out.status.success(), "{out:?}");
     let out = world.run_nexus(&["config", "get", "theme"]);
     assert_eq!(String::from_utf8_lossy(&out.stdout), "nord\n");
+    // --json prints the value as JSON: a string keeps its quotes.
+    let out = world.run_nexus(&["config", "get", "theme", "--json"]);
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "\"nord\"\n");
     // Values that look like booleans or numbers are typed.
     let out = world.run_nexus(&["config", "set", "connectivity.enabled", "false"]);
     assert!(out.status.success(), "{out:?}");

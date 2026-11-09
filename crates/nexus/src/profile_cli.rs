@@ -310,7 +310,7 @@ fn settle(
     let (tx, answers) = mpsc::channel::<String>();
     if !args.keep {
         println!(
-            "Keep these settings? Reverting in {}s. Type y and Enter to keep them.",
+            "Keep these settings? Reverting in {}s. Type y and Enter to keep them, n to revert now.",
             pending.rollback_secs
         );
         std::thread::spawn(move || {
@@ -325,11 +325,27 @@ fn settle(
         });
     }
     let mut keep = args.keep;
+    let mut revert = false;
     let deadline = Instant::now() + Duration::from_secs(u64::from(pending.rollback_secs) + 10);
     let mut result = ExitCode::SUCCESS;
     let outcome = loop {
         if !keep && let Ok(line) = answers.try_recv() {
             keep = matches!(line.trim().to_lowercase().as_str(), "y" | "yes");
+            revert = !keep;
+        }
+        if revert {
+            revert = false; // ask once
+            match conn.call(Op::ProfileRevert {
+                pending: pending.id,
+            }) {
+                Ok(Err(f)) if f.code == ErrorCode::NothingPending => {
+                    eprintln!("nexus: {}", f.message);
+                    result = ExitCode::from(exit_code(f.code));
+                }
+                Ok(Err(f)) => result = refused(&f),
+                Err(e) => return unreachable(&e),
+                Ok(Ok(_)) => {}
+            }
         }
         if keep {
             keep = false; // ask once

@@ -373,3 +373,33 @@ fn the_cli_keeps_an_active_change_with_keep_and_rolls_back_without_it() {
     );
     assert_eq!(get(&world)["settings"]["dns"], json!(["9.9.9.9"]));
 }
+
+#[test]
+fn answering_n_reverts_an_active_change_at_once() {
+    use std::io::Write as _;
+    use std::process::Stdio;
+    let world = joined_world();
+    let mut cmd = world.nexus();
+    cmd.args([
+        "profile",
+        "set",
+        "Home",
+        "--dns",
+        "8.8.8.8",
+        "--rollback-secs",
+        "60",
+    ])
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+    let mut child = cmd.spawn().expect("spawn nexus");
+    child.stdin.take().unwrap().write_all(b"n\n").unwrap();
+    let out = child.wait_with_output().expect("wait");
+    assert!(out.status.success(), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("Reverted"),
+        "{out:?}"
+    );
+    assert_eq!(world.nm.checkpoint_rollbacks(), 1);
+    assert_eq!(get(&world)["settings"]["dns"], json!([]));
+}
