@@ -1,0 +1,10 @@
+[Unit]
+Description=Nexus network manager socket
+
+[Socket]
+ListenStream=%t/nexus/nexus.sock
+DirectoryMode=0700
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target

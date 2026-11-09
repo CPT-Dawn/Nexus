@@ -1,0 +1,12 @@
+[Unit]
+Description=Nexus network manager daemon
+Requires=nexus.socket
+After=nexus.socket
+
+[Service]
+ExecStart=/usr/bin/nexus daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+Also=nexus.socket

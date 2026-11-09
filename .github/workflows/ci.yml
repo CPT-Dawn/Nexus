@@ -45,7 +45,14 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # S1 harness: a private dbus-daemon (dbus), socat + a second user for
+      # the peer-credential test, systemd-socket-activate (systemd) for the
+      # socket-activation test.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus socat systemd
+      - run: sudo useradd --create-home intruder
       - run: cargo test --workspace --locked
+        env:
+          NEXUS_TEST_INTRUDER: intruder
 
   deny:
     name: cargo-deny
