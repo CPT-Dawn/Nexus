@@ -4,7 +4,7 @@ expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
 ╭ Wi-Fi ─────────────────────╮╭ Parents House ─────────────────────────────────────────────────────╮
-│     Home-5G    ▂▄▆█ wpa2   ││ Saved, out of range                                                │
+│   ● Home-5G    ▂▄▆█ wpa2   ││ Saved, out of range                                                │
 │     Work-Secu… ▂▄▆█ wpa3   ││                                                                    │
 │     Cafe Guest ▂▄▆█ open   ││ Autoconnect   on                                                   │
 │     Neighbour… ▂▄▆█ wpa2   ││                                                                    │
