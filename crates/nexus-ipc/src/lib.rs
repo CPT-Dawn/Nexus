@@ -1153,6 +1153,13 @@ pub struct Connection {
     parked: std::collections::VecDeque<Event>,
 }
 
+impl std::os::fd::AsFd for Connection {
+    /// The socket, for waiting on it together with something else.
+    fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
+        std::os::fd::AsFd::as_fd(self.reader.get_ref())
+    }
+}
+
 impl Connection {
     /// Connects to the default socket path.
     pub fn connect() -> io::Result<Self> {
@@ -1201,6 +1208,13 @@ impl Connection {
                 Outcome::Err(f) => Err(f),
             });
         }
+    }
+
+    /// Whether `next_event` has something without touching the socket (an
+    /// event parked by `call`, or bytes already buffered). A caller that
+    /// waits on the socket with `poll` must check this first.
+    pub fn has_buffered(&self) -> bool {
+        !self.parked.is_empty() || !self.partial.is_empty() || !self.reader.buffer().is_empty()
     }
 
     /// Waits up to `wait` for the next event line, skipping responses.
