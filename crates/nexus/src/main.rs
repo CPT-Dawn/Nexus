@@ -370,7 +370,7 @@ enum EthernetAction {
         #[arg(long, requires = "eap")]
         password_stdin: bool,
         #[command(flatten)]
-        eap: EapArgs,
+        eap: Box<EapArgs>,
     },
     /// Drop a port's Link; its Profile stays.
     Disconnect {
