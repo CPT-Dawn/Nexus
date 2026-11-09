@@ -100,6 +100,12 @@ pub enum Op {
     /// Airplane mode: every radio the Backend controls off (`on`) or back on.
     /// Result: [`Radios`]. `hard_blocked` when a hardware switch prevents it.
     Airplane { on: bool },
+    /// The Portal the Link is behind, if any. Result: [`PortalState`].
+    Portal,
+    /// Open the Portal's login page in the user's browser (the Daemon runs
+    /// `xdg-open`). Result: [`PortalOpened`]; `no_portal` when no Network is
+    /// asking for a login right now; `open_failed` when no browser started.
+    PortalOpen,
     /// Start receiving event lines on this connection. Answered with
     /// `{"ok": {}}`; events follow, interleaved with later responses.
     Subscribe,
@@ -223,6 +229,10 @@ pub enum ErrorCode {
     UnknownFinding,
     /// A fix command failed or was not authorized.
     FixFailed,
+    /// No Network is asking for a login right now.
+    NoPortal,
+    /// The browser could not be started.
+    OpenFailed,
     #[serde(other)]
     Unknown,
 }
@@ -295,9 +305,36 @@ pub enum Event {
     DoctorFindings {
         findings: Vec<Finding>,
     },
+    /// The Network is now behind a Portal (`Some`), or no longer is (`None`:
+    /// signed in, or the Link went away).
+    PortalChanged {
+        portal: Option<Portal>,
+    },
     /// An event from a newer daemon; its payload is discarded.
     #[serde(other)]
     Unknown,
+}
+
+/// A Network that wants a login before it gives real internet access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Portal {
+    /// The Network's name, as the user knows it.
+    pub network: String,
+    /// The plain `http://` page to open: the connectivity check URL, which
+    /// the Portal redirects to its login page.
+    pub url: String,
+}
+
+/// The `portal` result.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PortalState {
+    pub portal: Option<Portal>,
+}
+
+/// The `portal_open` result: what was opened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PortalOpened {
+    pub url: String,
 }
 
 /// The `traffic` result: the primary Link's rates in bytes per second.
