@@ -3,13 +3,13 @@ source: crates/nexus/tests/s2_ethernet.rs
 expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
-╭ Ethernet ───────╭ Command palette ─────────────────────────────────────────────╮─────────────────╮
-│   ! enp3s0      │ : 802.1x▏                                                    │                 │
-│ ▸ ○ enp4s0      │ ──────────────────────────────────────────────────────────── │                 │
-│                 │ ▸ Sign in to Ethernet                                      s │k that the other │
-│                 │   No cable is plugged in.                                    │                 │
-│                 ╰──────────────────────────────────────────────────────────────╯                 │
-│                            ││ MAC       52:54:00:00:00:01                                        │
+╭ Ethernet ──────────────────╮╭ enp4s0 ────────────────────────────────────────────────────────────╮
+│   ! enp3s0         problem ││ ○╭ Command palette ─────────────────────────────────────────────╮  │
+│ ▸ ○ enp4s0       unplugged ││  │ : 802.1x▏                                                    │  │
+│                            ││ N│ ──────────────────────────────────────────────────────────── │r │
+│                            ││ e│ ▸ Sign in to Ethernet                                      s │  │
+│                            ││  │   No cable is plugged in.                                    │  │
+│                            ││ M╰──────────────────────────────────────────────────────────────╯  │
 │                            ││                                                                    │
 │                            ││ Nothing to join until a cable is in.                               │
 │                            ││                                                                    │

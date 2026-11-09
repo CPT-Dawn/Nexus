@@ -17,11 +17,11 @@ expression: frame
 │                 │   MAC address  permanent (hardware)                          │                 │
 │                 │   Metered      no                                            │the Profile      │
 │                 │   Priority     0                                             │                 │
+│                 │   Keyring      no, system store                              │                 │
 │                 │                                                              │                 │
 │                 │                                                              │                 │
 │                 │ tab next  space change  enter apply  esc cancel              │                 │
 │                 ╰──────────────────────────────────────────────────────────────╯                 │
-│                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
