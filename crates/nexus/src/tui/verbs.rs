@@ -501,7 +501,7 @@ static SETTINGS: &[Verb] = &[
         verb: "Change setting",
         words: "toggle switch notification option",
         key: "Enter",
-        help: "Settings: change the selected setting",
+        help: "Change the selected setting",
         scope: Scope::Tab(Tab::Settings),
         run: Run::Key(Tab::Settings, KeyCode::Enter),
         ready: |app| {
@@ -516,7 +516,7 @@ static SETTINGS: &[Verb] = &[
         verb: "Reset setting",
         words: "default restore",
         key: "r",
-        help: "Settings: put the default back",
+        help: "Put the default back",
         scope: Scope::Tab(Tab::Settings),
         run: Run::Key(Tab::Settings, KeyCode::Char('r')),
         ready: |app| {
