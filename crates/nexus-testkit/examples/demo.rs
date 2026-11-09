@@ -45,6 +45,13 @@
 //!   countdown, `y` keeps, `n` or waiting reverts) or `G` `k` `e` on Parents
 //!   House (saved at once). In the form: `tab` next row, `space` or arrows
 //!   change a choice, type into address rows, `enter` apply, `esc` cancel.
+//! - `effects`: `wifi`, with Cafe Guest set to fail its join. Press `3`..`6`
+//!   and `1`: the body glides in on each tab change. Press `2`, move to Cafe
+//!   Guest (`j`) and `enter`: it fails, and the "Problem" toast slides in and
+//!   shakes once. Move to Work-Secure, `enter` and type any password: it
+//!   joins, blooms and the toast slides in. While it connects the header
+//!   status and the Overview hero pulse. Set `NEXUS_REDUCE_MOTION=1` to see
+//!   the same events without movement. With nothing happening it draws nothing.
 //! - `busy`: online with live, wandering traffic on the graphs, and a VPN
 //!   going up and down every few seconds so the activity strip moves.
 //!
@@ -76,9 +83,13 @@ fn main() {
         // Press 2 for the Wi-Fi tab. Six Networks in range (Home-5G joined),
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
-        "wifi" | "wifi-prompt" | "wifi-enterprise" | "profile" => {
-            if scenario == "wifi" {
+        "wifi" | "wifi-prompt" | "wifi-enterprise" | "profile" | "effects" => {
+            if scenario == "wifi" || scenario == "effects" {
                 nexus_testkit::scenarios::wifi_busy(&world);
+                if scenario == "effects" {
+                    // Activation fails (state 60) with "no secrets" (reason 7).
+                    world.nm.script_join_failure("Cafe Guest", 60, 7);
+                }
             } else if scenario == "wifi-enterprise" {
                 nexus_testkit::scenarios::wifi_enterprise(&world);
             } else if scenario == "profile" {
