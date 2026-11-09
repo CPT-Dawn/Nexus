@@ -11,7 +11,7 @@ pub const EXIT_UNREACHABLE: u8 = 3;
 /// Exit code when the Daemon answered with an error.
 pub const EXIT_DAEMON_ERROR: u8 = 4;
 /// Exit code of `nexus doctor` when it found a problem (a warning alone is 0).
-pub const EXIT_PROBLEM: u8 = 12;
+pub const EXIT_PROBLEM: u8 = 13;
 
 /// The exit code for a refusal, one per failure class, so scripts can tell
 /// a typo'd password (5) from a Network out of range (6) and so on.

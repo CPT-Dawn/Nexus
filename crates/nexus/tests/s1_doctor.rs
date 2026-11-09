@@ -421,7 +421,7 @@ fn the_cli_prints_words_and_fails_when_something_is_a_problem() {
 
     world.nm.set_radio(false, true);
     let out = world.run_nexus(&["doctor"]);
-    assert_eq!(out.status.code(), Some(12), "{out:?}");
+    assert_eq!(out.status.code(), Some(13), "{out:?}");
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("Fix:"), "{text}");
     assert!(text.contains("nmcli radio wifi on"), "{text}");
