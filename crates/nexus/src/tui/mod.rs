@@ -5,9 +5,12 @@
 //! says the screen changed. With nothing happening it is asleep.
 
 mod app;
+mod bigtype;
 mod caps;
 mod client;
+mod graph;
 mod layout;
+mod overview;
 mod theme;
 mod view;
 mod wifi;
@@ -99,9 +102,12 @@ pub fn run(ascii: bool, nerd: bool) -> io::Result<()> {
     let size = terminal.size()?;
     app.update(Msg::Resize(size.width, size.height));
     app.attach(socket.clone(), tx.clone());
-    let _client = Client::spawn(socket, tx.clone());
+    let client = Client::spawn(socket, tx.clone());
     spawn_input(tx);
-    let result = event_loop(&mut terminal, &mut app, &rx, |_| {});
+    // Poll traffic exactly while the graphs are on screen (ADR-0003).
+    let result = event_loop(&mut terminal, &mut app, &rx, |app| {
+        client.watch_traffic(app.traffic_visible());
+    });
     ratatui::restore();
     result
 }

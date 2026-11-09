@@ -3,15 +3,15 @@ source: crates/nexus/tests/s2_tui.rs
 expression: down
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                    ? help
-╭ Overview ──────────────────╮╭ Wi-Fi ─────────────────────────────────────────────────────────────╮
-│ ▸ Wi-Fi     Off            ││ Can't reach the Nexus daemon.                                      │
-│   Ethernet  Off            ││                                                                    │
-│   VPN       Off            ││ Reconnecting automatically.                                        │
-│   Hotspot   Off            ││ Start it with `systemctl --user start nexus.socket`, or run `nexus │
-│                            ││ daemon`.                                                           │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
+╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+│ ▸ ○ Wi-Fi                  ││ Can't reach the Nexus daemon.                                      │
+│     -                      ││                                                                    │
+│   ○ Ethernet               ││ Reconnecting automatically.                                        │
+│     -                      ││ Start it with `systemctl --user start nexus.socket`, or run `nexus │
+│   ○ VPN                    ││ daemon`.                                                           │
+│     -                      ││                                                                    │
+│   ○ Hotspot                ││                                                                    │
+│     -                      ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
@@ -29,4 +29,4 @@ expression: down
 │                            ││                                                                    │
 │                            ││                                                                    │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  h/l tab  ? help  q quit                                     daemon unreachable, retrying
+ j/k move  enter open  h/l tab  ? help  q quit                         daemon unreachable, retrying

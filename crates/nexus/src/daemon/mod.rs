@@ -1,11 +1,13 @@
 //! The Daemon: owns the socket and the Backend, answers Front ends.
 
+mod activity;
 mod socket;
+mod traffic;
 
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use nexus_ipc::{ErrorCode, Event, Op, Request, Response};
+use nexus_ipc::{ErrorCode, Event, Op, Request, Response, Status, WifiList};
 
 use crate::backend::BackendError;
 use tokio::sync::broadcast;
@@ -47,7 +49,20 @@ async fn serve() -> std::io::Result<()> {
     let broker = Arc::new(Broker::new(events.clone(), settings.clone()));
     let backend = Arc::new(NetworkManager::new(broker.clone()));
     tokio::spawn(config::watch(settings.clone()));
-    tokio::spawn(watch_wifi(backend.clone(), events.clone()));
+    let live = Arc::new(Live::default());
+    // The baseline is read before the socket exists, so anything a client
+    // can see happening is a change from it (and gets an activity entry).
+    let baseline = tokio::time::timeout(BASELINE_WAIT, async {
+        (backend.wifi_list().await.ok(), backend.status().await.ok())
+    })
+    .await
+    .unwrap_or_default();
+    tokio::spawn(watch_backend(
+        backend.clone(),
+        events.clone(),
+        live.clone(),
+        baseline,
+    ));
     tokio::spawn({
         let backend = backend.clone();
         async move { backend.secrets().await }
@@ -65,10 +80,11 @@ async fn serve() -> std::io::Result<()> {
                 }
                 let backend = backend.clone();
                 let settings = settings.clone();
+                let live = live.clone();
                 let broker = broker.clone();
                 tokio::spawn(async move {
                     let subscribe = || broker.subscribe();
-                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, req)).await {
+                    if let Err(e) = socket::serve_connection(stream, subscribe, |req| answer(&*backend, &settings, &broker, &live, req)).await {
                         tracing::debug!("connection ended: {e}");
                     }
                 });
@@ -81,11 +97,26 @@ async fn serve() -> std::io::Result<()> {
     Ok(())
 }
 
-/// Tells subscribers when the Wi-Fi list changes. The Backend coalesces each
-/// burst of changes into one tick; a tick that changed nothing visible is not
-/// worth an event.
-async fn watch_wifi<B: Backend>(backend: Arc<B>, events: broadcast::Sender<Event>) {
-    let mut last = backend.wifi_list().await.ok();
+/// How long startup waits for the Backend's first answers before listening.
+const BASELINE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What the Daemon remembers between requests.
+#[derive(Debug, Default)]
+struct Live {
+    traffic: traffic::Sampler,
+    activity: activity::Log,
+}
+
+/// Tells subscribers what changed. The Backend coalesces each burst of
+/// changes into one tick, and only one task may wait for ticks, so the Wi-Fi
+/// list and the activity log are both fed from here. A tick that changed
+/// nothing visible is not worth an event.
+async fn watch_backend<B: Backend>(
+    backend: Arc<B>,
+    events: broadcast::Sender<Event>,
+    live: Arc<Live>,
+    (mut last, mut status): (Option<WifiList>, Option<Status>),
+) {
     loop {
         backend.changed().await;
         match backend.wifi_list().await {
@@ -96,6 +127,17 @@ async fn watch_wifi<B: Backend>(backend: Arc<B>, events: broadcast::Sender<Event
             Ok(_) => {}
             Err(e) => tracing::debug!("wifi list unavailable: {e}"),
         }
+        match backend.status().await {
+            Ok(now) => {
+                if let Some(before) = &status {
+                    for entry in live.activity.observe(before, &now) {
+                        let _ = events.send(Event::Activity { entry });
+                    }
+                }
+                status = Some(now);
+            }
+            Err(e) => tracing::debug!("status unavailable: {e}"),
+        }
     }
 }
 
@@ -104,6 +146,7 @@ async fn answer<B: Backend>(
     backend: &B,
     settings: &Settings,
     broker: &Broker,
+    live: &Live,
     req: Request,
 ) -> Response {
     match req.op {
@@ -114,6 +157,21 @@ async fn answer<B: Backend>(
             ),
             Err(e) => backend_reply::<()>(req.id, Err(e)),
         },
+        Op::Traffic => match backend.counters().await {
+            Ok(counters) => Response::ok(
+                req.id,
+                serde_json::to_value(live.traffic.rates(counters).await)
+                    .expect("wire types serialize"),
+            ),
+            Err(e) => backend_reply::<()>(req.id, Err(e)),
+        },
+        Op::Activity => Response::ok(
+            req.id,
+            serde_json::to_value(nexus_ipc::ActivityLog {
+                entries: live.activity.entries(),
+            })
+            .expect("wire types serialize"),
+        ),
         Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
         Op::WifiJoin { network, password } => {

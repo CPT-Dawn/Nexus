@@ -40,6 +40,13 @@ rig.pump_until("the offline status", |a| ...);     // after changing the fake NM
 - Widths: `NARROW` 60x20, `STANDARD` 100x28, `WIDE` 140x32 (plus a 30x6 "too small"). Colour tiers: `styled_of(&buffer)` snapshots the text plus a table of every distinct style, so truecolor/256/16/none/ASCII all have a frame.
 - `tui::render(&app, w, h)` returns the `Buffer`; `App::update(Msg)` returns whether a redraw is needed, which is how the zero-idle-frames test counts: it runs `tui::event_loop` on a `TestBackend` thread and asserts no frame is drawn over a quiet period.
 - New snapshot: write the test, run `INSTA_UPDATE=always cargo test -p nexus --test s2_tui`, read the `.snap` file in `crates/nexus/tests/snapshots/`, commit it. CI never updates snapshots.
+- The Wi-Fi tab (`tests/s2_wifi.rs`) acts on the Daemon, so its `Rig` calls `app.attach(world.socket(), tx)`; commands run on threads and come back as `Msg::Done`, so use `rig.pump_until(..)` after a key that sends one. Worlds come from `nexus_testkit::scenarios` (`wifi_busy`, `wifi_with_open_prompt`), the same ones `demo wifi` / `demo wifi-prompt` show. Feed `Msg::Tick` by hand to move the scan sweep.
 - Eyeball it for real: `cargo build -p nexus && cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal] [--ascii|--nerd-font]` runs the TUI on your terminal against a private fake NetworkManager and Daemon.
 
 Run: `cargo test --workspace`.
+
+## Overview data and the graphs (ticket #12)
+
+- S1 (`crates/nexus/tests/s1_overview.rs`): `{"op":"traffic"}` and `{"op":"activity"}` over the wire, plus `activity` events. Script counters with `nm.set_traffic(dev, rx_bytes, tx_bytes)` (the first device added carries the primary connection); `nm.statistics_reads()` proves whether anyone asked NetworkManager for them.
+- S2: `rig.traffic(rx_bps, tx_bps)` injects a scripted sample so graph snapshots do not depend on a clock; `rig.sync_watch()` does what `nexus` does after each frame (poll traffic only while `App::traffic_visible()`). Tests that need the Daemon's own rates pump until `app.traffic_samples()` / `traffic_now()` show them.
+- Demo: `... --example demo -- target/debug/nexus busy` shows the moving graphs and activity strip.

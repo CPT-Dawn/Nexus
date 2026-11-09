@@ -1,20 +1,18 @@
 //! Drawing. Pure: `App` in, cells out. Colours come only from [`Look`] tokens,
 //! areas only from the layout engine.
 
-use nexus_ipc::{Connectivity, LinkKind, State, Status};
+use nexus_ipc::{Connectivity, State, Status};
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
 use ratatui::symbols::border;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, BorderType, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Padding,
-    Paragraph, Wrap,
-};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wrap};
 
 use super::app::{App, Conn, Layer, Tab};
 use super::caps::Glyphs;
 use super::layout::{self, Areas, Mode};
+use super::overview;
 use super::theme::Look;
 use super::wifi_ui;
 use super::words;
@@ -25,6 +23,27 @@ pub(super) struct Sym {
 }
 
 impl Sym {
+    pub(super) fn hollow(&self) -> &'static str {
+        match self.glyphs {
+            Glyphs::Ascii => "o",
+            _ => "○",
+        }
+    }
+
+    pub(super) fn down(&self) -> &'static str {
+        match self.glyphs {
+            Glyphs::Ascii => "v",
+            _ => "↓",
+        }
+    }
+
+    pub(super) fn up(&self) -> &'static str {
+        match self.glyphs {
+            Glyphs::Ascii => "^",
+            _ => "↑",
+        }
+    }
+
     pub(super) fn dot(&self) -> &'static str {
         match self.glyphs {
             Glyphs::Ascii => "*",
@@ -128,7 +147,7 @@ fn too_small(f: &mut Frame, area: Rect, look: &Look) {
     );
 }
 
-fn state_style(look: &Look, status: &Status) -> Style {
+pub(super) fn state_style(look: &Look, status: &Status) -> Style {
     match (status.state, status.connectivity) {
         (State::Online, Connectivity::Full | Connectivity::Unknown) => look.ok(),
         (State::Online | State::Connecting | State::Disconnecting, _) => look.warn(),
@@ -204,10 +223,14 @@ fn footer(f: &mut Frame, app: &App, a: &Areas, look: &Look) {
 }
 
 fn body(f: &mut Frame, app: &App, a: &Areas, look: &Look, sym: &Sym) {
+    if let (Tab::Overview, Conn::Up, Some(status)) = (app.tab(), app.conn(), app.status()) {
+        overview::draw(f, app, status, a, look, sym);
+        return;
+    }
     if a.mode.split() {
         master(f, app, a.master, look, sym);
         if let Some(detail) = a.detail {
-            self::detail(f, app, detail, a.mode == Mode::Wide, look, sym);
+            self::detail(f, app, detail, look, sym);
         }
         return;
     }
@@ -219,111 +242,49 @@ fn body(f: &mut Frame, app: &App, a: &Areas, look: &Look, sym: &Sym) {
         } else {
             a.master
         };
-        detail(f, app, area, false, look, sym);
+        detail(f, app, area, look, sym);
     } else {
         master(f, app, a.master, look, sym);
     }
-}
-
-/// The summary of one Overview card.
-fn card(app: &App, row: usize) -> (&'static str, String) {
-    let link = app.status().and_then(|s| s.link.as_ref());
-    let (name, kinds): (&str, &[LinkKind]) = match row {
-        0 => ("Wi-Fi", &[LinkKind::Wifi]),
-        1 => ("Ethernet", &[LinkKind::Ethernet]),
-        2 => ("VPN", &[LinkKind::Vpn, LinkKind::Wireguard]),
-        _ => ("Hotspot", &[]),
-    };
-    let value = match link {
-        Some(l) if kinds.contains(&l.kind) => l.name.clone(),
-        _ if row == 3 || app.status().is_none() => "Off".into(),
-        _ => "Idle".into(),
-    };
-    (name, value)
 }
 
 fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     if app.tab() == Tab::WiFi {
         return wifi_ui::master(f, app, area, look, sym);
     }
-    let title = app.tab().title();
-    let block = sym.block(look, title, true);
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-    if app.tab().rows() == 0 {
-        f.render_widget(
-            Paragraph::new(Span::styled("Nothing to list yet.", look.dim())),
-            inner,
-        );
+    if app.tab().rows() > 0 {
+        overview::cards_panel(f, app, area, look, sym, true);
         return;
     }
-    let items: Vec<ListItem> = (0..app.tab().rows())
-        .map(|row| {
-            let (name, value) = card(app, row);
-            ListItem::new(Line::from(vec![
-                Span::raw(format!("{name:<10}")),
-                Span::styled(value, look.muted()),
-            ]))
-        })
-        .collect();
-    let list = List::new(items)
-        .highlight_style(look.selected())
-        .highlight_symbol(sym.pointer())
-        .highlight_spacing(HighlightSpacing::Always);
-    let mut state = ListState::default().with_selected(Some(app.selected()));
-    f.render_stateful_widget(list, inner, &mut state);
+    let block = sym.block(look, app.tab().title(), true);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    f.render_widget(
+        Paragraph::new(Span::styled("Nothing to list yet.", look.dim())),
+        inner,
+    );
 }
 
-fn detail(f: &mut Frame, app: &App, area: Rect, wide: bool, look: &Look, sym: &Sym) {
+fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
+    if app.tab() == Tab::WiFi && app.conn() == Conn::Up {
+        return wifi_ui::detail(f, app, area, look, sym);
+    }
     let title = match app.tab() {
-        Tab::Overview => card(app, app.selected()).0,
+        Tab::Overview => "Status",
         other => other.title(),
     };
+    let block = sym.block(look, title, false);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
     if app.conn() != Conn::Up {
-        let block = sym.block(look, title, false);
-        let inner = block.inner(area);
-        f.render_widget(block, area);
         f.render_widget(
             Paragraph::new(daemon_lines(app, look)).wrap(Wrap { trim: false }),
             inner,
         );
         return;
     }
-    if app.tab() == Tab::WiFi {
-        return wifi_ui::detail(f, app, area, look, sym);
-    }
-    let (Tab::Overview, Some(status)) = (app.tab(), app.status()) else {
-        let block = sym.block(look, title, false);
-        let inner = block.inner(area);
-        f.render_widget(block, area);
-        let msg = format!("{} arrives in a later release.", app.tab().title());
-        f.render_widget(Paragraph::new(Span::styled(msg, look.dim())), inner);
-        return;
-    };
-
-    if wide {
-        let [left, right] =
-            Layout::horizontal([Constraint::Percentage(55), Constraint::Fill(1)]).areas(area);
-        let block = sym.block(look, "Status", false);
-        let inner = block.inner(left);
-        f.render_widget(block, left);
-        f.render_widget(
-            Paragraph::new(hero(status, look, sym)).wrap(Wrap { trim: false }),
-            inner,
-        );
-        let block = sym.block(look, title, false);
-        let inner = block.inner(right);
-        f.render_widget(block, right);
-        f.render_widget(Paragraph::new(facts(app, status, look)), inner);
-    } else {
-        let block = sym.block(look, title, false);
-        let inner = block.inner(area);
-        f.render_widget(block, area);
-        let mut lines = hero(status, look, sym);
-        lines.push(Line::default());
-        lines.extend(facts(app, status, look));
-        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
-    }
+    let msg = format!("{} arrives in a later release.", app.tab().title());
+    f.render_widget(Paragraph::new(Span::styled(msg, look.dim())), inner);
 }
 
 fn daemon_lines(app: &App, look: &Look) -> Vec<Line<'static>> {
@@ -344,57 +305,15 @@ fn daemon_lines(app: &App, look: &Look) -> Vec<Line<'static>> {
     }
 }
 
-fn hero(status: &Status, look: &Look, sym: &Sym) -> Vec<Line<'static>> {
-    vec![
-        Line::default(),
-        Line::from(vec![Span::styled(
-            format!("{} {}", sym.dot(), words::headline(status)),
-            state_style(look, status).bold(),
-        )]),
-        Line::default(),
-        Line::styled(words::sentence(status), look.text()),
-    ]
-}
-
-fn facts(app: &App, status: &Status, look: &Look) -> Vec<Line<'static>> {
-    let row = |k: &str, v: String| {
-        Line::from(vec![
-            Span::styled(format!("{k:<14}"), look.muted()),
-            Span::styled(v, look.text()),
-        ])
-    };
-    let (name, value) = card(app, app.selected());
-    let link = match &status.link {
-        Some(l) => l.name.clone(),
-        None => "none".into(),
-    };
-    let connectivity = match status.connectivity {
-        Connectivity::None => "none",
-        Connectivity::Portal => "sign-in required",
-        Connectivity::Limited => "limited",
-        Connectivity::Full => "full",
-        _ => "unknown",
-    };
-    let backend = match &status.backend.version {
-        Some(v) => format!("{} {v}", status.backend.name),
-        None => status.backend.name.clone(),
-    };
-    vec![
-        row(name, value),
-        row("Primary link", link),
-        row("Internet", connectivity.into()),
-        row("Backend", backend),
-    ]
-}
-
 fn help(f: &mut Frame, area: Rect, look: &Look, sym: &Sym) {
-    const KEYS: [(&str, &str); 15] = [
+    const KEYS: [(&str, &str); 16] = [
         ("j / k, Down / Up", "Move in the list"),
         ("g / G", "Jump to top / bottom"),
         ("h / l, Left / Right", "Previous / next tab"),
         ("Tab / Shift-Tab", "Next / previous tab"),
         ("1 - 6", "Jump to a tab"),
-        ("Enter, d", "Open details (small windows)"),
+        ("Enter", "Open the selected card's tab"),
+        ("d", "Details sheet (small windows)"),
         ("Wi-Fi: Enter", "Join the selected Network"),
         ("Wi-Fi: r", "Rescan"),
         ("Wi-Fi: x", "Disconnect"),

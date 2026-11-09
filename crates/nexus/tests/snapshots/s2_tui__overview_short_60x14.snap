@@ -1,0 +1,18 @@
+---
+source: crates/nexus/tests/s2_tui.rs
+expression: frame
+---
+ Nexus  Overview ▾  1/6                            ● Online
+╭ Status ──────────────────────────────────────────────────╮
+│ ● Online                                                 │
+│ You're online via Wi-Fi (Home-5G). Everything looks      │
+│ healthy.                                                 │
+╰──────────────────────────────────────────────────────────╯
+╭ Connections ─────────────────────────────────────────────╮
+│ ▸ ● Wi-Fi    Home-5G                                     │
+│   ○ Ethernet Not connected                               │
+│   ○ VPN      Not connected                               │
+│   ○ Hotspot  Not started                                 │
+╰──────────────────────────────────────────────────────────╯
+
+ j/k move  enter open  h/l tab  ? help  q quit
