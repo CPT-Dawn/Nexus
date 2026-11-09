@@ -1,0 +1,33 @@
+---
+source: crates/nexus/tests/s2_hotspot.rs
+assertion_line: 277
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Hotspot ───────────────────╮╭ Galaxy S24 Ultra of the whole family ──────────────────────────────╮
+│ ● Garage Wi-Fi             ││ Paired                                                             │
+│ 2 devices joined           ││                                                                    │
+│ s QR code   S stop         ││ Address     AA╭ Share Garage Wi-Fi ───────────────╮                │
+│                            ││ Bluetooth   on│                                   │                │
+╰────────────────────────────╯│ Profile     no│   █▀▀▀▀▀█  ▀▀█▄█▄█ █▀   █▀▀▀▀▀█   │                │
+╭ Tethering ─────────────────╮│               │   █ ███ █ ▄▀██    ▀▀█ ▀ █ ███ █   │                │
+│ ● Bluetooth is on          ││ Press enter to│   █ ▀▀▀ █ ▀▄█ ▀▄▀▀ ▄▄▄▀ █ ▀▀▀ █   │g on the phone  │
+│                            ││ first.        │   ▀▀▀▀▀▀▀ ▀▄▀ █ ▀▄█▄▀▄▀ ▀▀▀▀▀▀▀   │                │
+│ ▸   Galaxy S24…     paired ││               │   ▀█▄▄▄█▀█ ▀█ ▀ ▄██▀▀ █▄ ▄██▄▄    │                │
+│     Pixel 8          saved ││               │   █  ▄ ▀▀▄▄▀▄█▀▀▄██  █▄ ▄▄█▄▀▄█   │                │
+│     Sam's iPho…     paired ││               │   ▀█▄ █ ▀██▀█ ▄▀ ▀▄▀██▄█▀▀ ▄▄▀▄   │                │
+│                            ││               │   █ ▄ ▄ ▀ ▀ █ ▄▀ █ █▀ ▀▄ ▀▄▄▀▄▄   │                │
+│                            ││               │   ██▀▀ █▀  ▄▄ ▀▀ █▀▀█  ▀▄▀▄▄▀ ▄   │                │
+│                            ││               │   █▀▀█▀▄▀ ▄▀▄▄▀▄██▄▄▄█▀ █▄██▀██   │                │
+│                            ││               │   ▀     ▀ ▄ ▀▀▄▀ ▀▄▀ ▄█▀▀▀█▄▀██   │                │
+│                            ││               │   █▀▀▀▀▀█ █▀  ▄█▄█ ▀ ▄█ ▀ ██▀▄    │                │
+│                            ││               │   █ ███ █  ▄▄▀▀ ███▀█▀█▀▀█▀▀▀ ▀   │                │
+│                            ││               │   █ ▀▀▀ █ ▄  █▀ ▄▄ ▀▄█ ▄▄▄  █▀    │                │
+│                            ││               │   ▀▀▀▀▀▀▀ ▀▀▀▀▀  ▀▀  ▀ ▀▀ ▀ ▀▀    │                │
+│                            ││               │                                   │                │
+│                            ││               │     Password  ••••••••••••••      │                │
+│                            ││               ╰───────────────────────────────────╯                │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ p show password  esc close

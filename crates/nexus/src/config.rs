@@ -28,6 +28,7 @@ pub struct Config {
     pub prompts: Prompts,
     pub doctor: DoctorConfig,
     pub notifications: Notifications,
+    pub hotspot: HotspotConfig,
 }
 
 /// Look and feel switches of the TUI. The environment (`NEXUS_REDUCE_MOTION`)
@@ -71,6 +72,21 @@ impl Default for Notifications {
             vpn_dropped: true,
             portal: true,
         }
+    }
+}
+
+/// The Hotspot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HotspotConfig {
+    /// Seconds between counts of the devices joined to a running Hotspot
+    /// (1 to 60). Nothing is counted while no Hotspot runs.
+    pub poll_secs: u64,
+}
+
+impl Default for HotspotConfig {
+    fn default() -> Self {
+        Self { poll_secs: 5 }
     }
 }
 
@@ -132,6 +148,7 @@ impl Default for Config {
             prompts: Prompts::default(),
             doctor: DoctorConfig::default(),
             notifications: Notifications::default(),
+            hotspot: HotspotConfig::default(),
         }
     }
 }
@@ -171,6 +188,12 @@ pub fn parse(text: &str) -> Result<Config, String> {
     if !(1..=3600).contains(&secs) {
         return Err(format!(
             "prompts.timeout_secs must be between 1 and 3600, got {secs}"
+        ));
+    }
+    let secs = config.hotspot.poll_secs;
+    if !(1..=60).contains(&secs) {
+        return Err(format!(
+            "hotspot.poll_secs must be between 1 and 60, got {secs}"
         ));
     }
     Ok(config)
@@ -225,6 +248,12 @@ impl Settings {
     pub fn prompt_timeout(&self) -> std::time::Duration {
         let state = self.state.lock().expect("settings lock");
         std::time::Duration::from_secs(state.config.prompts.timeout_secs)
+    }
+
+    /// How often a running Hotspot's devices are counted.
+    pub fn hotspot_poll(&self) -> std::time::Duration {
+        let state = self.state.lock().expect("settings lock");
+        std::time::Duration::from_secs(state.config.hotspot.poll_secs)
     }
 
     /// The connectivity check as configured right now.

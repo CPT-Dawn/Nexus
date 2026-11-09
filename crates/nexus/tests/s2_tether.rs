@@ -70,7 +70,9 @@ impl Rig {
             _client: client,
         };
         rig.key(KeyCode::Char('5'));
-        rig.pump_until("the phones", |a| a.tether().has_data());
+        rig.pump_until("the phones and the Hotspot", |a| {
+            a.tether().has_data() && a.hotspot().has_data()
+        });
         rig
     }
 

@@ -258,6 +258,14 @@ fn parse_profile(
     if text("type")? != "802-11-wireless" {
         return None;
     }
+    // A Hotspot is not a Network to join.
+    let mode: Option<String> = all
+        .get("802-11-wireless")?
+        .get("mode")
+        .and_then(|v| v.try_clone().ok()?.try_into().ok());
+    if mode.as_deref() == Some("ap") {
+        return None;
+    }
     let ssid: Vec<u8> = all
         .get("802-11-wireless")?
         .get("ssid")?

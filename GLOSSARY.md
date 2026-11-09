@@ -42,7 +42,7 @@ A login or terms page a Network demands before it gives real internet access.
 _Avoid_: captive page, splash page, hotspot login
 
 **Hotspot**:
-A Network this machine creates so other devices can share its internet connection.
+A Network this machine creates so other devices can share its internet connection. Started with a generated strong password unless the person chooses one, shown as a QR code only after an explicit reveal, and forgotten when stopped: its Profile lives in memory, not on disk. Needs a Wi-Fi card whose driver offers access point mode; on a single-radio card the Wi-Fi Link usually drops while it runs. Devices that joined it are counted, not listed.
 _Avoid_: access point, AP mode, tethering (that is joining a phone's Network)
 
 **Tethering**:

@@ -91,7 +91,7 @@ impl App {
     pub(in crate::tui) fn undo(&mut self) -> bool {
         let key = plain(KeyCode::Char('u'));
         if self.tab == Tab::Hotspot {
-            self.tether_key(key)
+            self.hotspot_tab_key(key)
         } else {
             self.wifi_key(key)
         }
@@ -103,7 +103,7 @@ impl App {
         match verb.run {
             Run::Root(code) => self.root_key(plain(code)),
             Run::Key(Tab::WiFi, code) => self.wifi_key(plain(code)),
-            Run::Key(Tab::Hotspot, code) => self.tether_key(plain(code)),
+            Run::Key(Tab::Hotspot, code) => self.hotspot_tab_key(plain(code)),
             Run::Key(Tab::Settings, code) => self.settings_key(plain(code)),
             Run::Key(..) => false,
             Run::Go(tab) => self.go_tab(tab),

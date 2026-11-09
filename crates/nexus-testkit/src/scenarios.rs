@@ -212,3 +212,50 @@ pub fn settings_world(bin: impl Into<std::path::PathBuf>, bad_theme: bool) -> Wo
     world.start_daemon();
     world
 }
+
+/// What the Hotspot tab starts from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotspotStart {
+    /// A card that can host one; nothing runs yet.
+    Capable,
+    /// A card that can host one, with `Garage Wi-Fi` already up and two
+    /// devices joined.
+    Running,
+    /// A card whose driver cannot be an access point.
+    NoCard,
+}
+
+/// Puts `n` stations on the stand-in `iw` of a world made by [`hotspot_world`].
+pub fn hotspot_stations(world: &World, n: usize) {
+    let text: String = (0..n)
+        .map(|i| format!("Station 02:00:00:00:00:{i:02x} (on wlan0)\n\tinactive time:\t120 ms\n"))
+        .collect();
+    std::fs::create_dir_all(world.home()).expect("home dir");
+    std::fs::write(world.home().join("stations"), text).expect("write stations");
+}
+
+/// The Hotspot tab's worlds: the Tethering phones (so the tab has both halves),
+/// a Wi-Fi card, and a stand-in `iw` that lists the stations
+/// [`hotspot_stations`] wrote. Shared by the S2 tests and `demo hotspot*`.
+pub fn hotspot_world(bin: impl Into<std::path::PathBuf>, start: HotspotStart) -> World {
+    let world = tether_world(bin, true);
+    let wlan0 = world.nm.add_wifi_device("wlan0");
+    world.install_tool(
+        "iw",
+        "[ -f \"$HOME/stations\" ] || exit 1\ncat \"$HOME/stations\"",
+    );
+    match start {
+        HotspotStart::Capable => {}
+        HotspotStart::NoCard => world.nm.set_ap_support(wlan0, false),
+        HotspotStart::Running => {
+            hotspot_stations(&world, 2);
+            let resp = world.wire().call(json!({
+                "op": "hotspot_start",
+                "ssid": "Garage Wi-Fi",
+                "password": "open sesame 42",
+            }));
+            assert!(resp.get("ok").is_some(), "starting the Hotspot: {resp}");
+        }
+    }
+    world
+}

@@ -2,6 +2,7 @@
 //! arrive as [`Msg`]s, and `update` says whether the screen changed. The only
 //! I/O is [`Runner`] sending the commands the person asked for.
 
+mod hotspot_keys;
 mod settings_keys;
 mod vpn_keys;
 
@@ -12,14 +13,15 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
 use nexus_ipc::{
-    ActivityEntry, ActivityKind, Connectivity, Event, Finding, Op, PromptClosed, PromptKind,
-    Secret, State, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
+    ActivityEntry, ActivityKind, Connectivity, Event, Finding, Hotspot, Op, PromptClosed,
+    PromptKind, Secret, State, Status, Tethers, Traffic, VpnList, WifiList, WifiShare,
 };
 
 use super::caps::Caps;
 use super::eap_form::{EapForm, Typed};
 use super::fx::{self, Fx};
 use super::hits::Hit;
+use super::hotspot::{self, HotspotTab};
 use super::profile::{Action, Editor, ProfileMsg};
 use super::settings::SettingsTab;
 use super::share::{Share, Stage};
@@ -53,6 +55,10 @@ pub enum Msg {
     Vpn(Box<vpn::Done>),
     /// The Daemon's picture of Bluetooth and the paired phones.
     Tethers(Tethers),
+    /// Whether this machine can host a Hotspot, and the one that runs.
+    Hotspot(Hotspot),
+    /// A Hotspot start or stop the person asked for has finished.
+    HotspotDone(hotspot::Done),
     /// A Secret prompt opened or closed.
     Prompt(Event),
     /// A command the person gave has finished.
@@ -220,6 +226,7 @@ pub struct App {
     env_motion: bool,
     /// Why the configured theme is not in force, if it is not.
     theme_note: Option<String>,
+    hotspot: HotspotTab,
     /// An open Secret prompt: it has the keys until answered or cancelled.
     field: Option<PasswordField>,
     confirm: Option<Confirm>,
@@ -268,6 +275,7 @@ impl App {
             flag_caps: caps,
             env_motion: false,
             theme_note: None,
+            hotspot: HotspotTab::default(),
             field: None,
             confirm: None,
             eap: None,
@@ -330,6 +338,10 @@ impl App {
 
     pub fn tether(&self) -> &TetherTab {
         &self.tether
+    }
+
+    pub fn hotspot(&self) -> &HotspotTab {
+        &self.hotspot
     }
 
     pub fn field(&self) -> Option<&PasswordField> {
@@ -644,6 +656,16 @@ impl App {
                 true
             }
             Msg::Setting(Ok(())) => false,
+            Msg::Hotspot(info) => {
+                let changed = self.hotspot.refresh(info);
+                // The details of a Hotspot that went away are not worth showing.
+                let gone = self.share.as_ref().is_some_and(|s| s.hotspot) && !self.hotspot.on();
+                if gone {
+                    self.share = None;
+                }
+                changed || gone
+            }
+            Msg::HotspotDone(done) => self.hotspot_done(done),
             Msg::Prompt(event) => self.prompt_event(event),
             Msg::Done(done) => self.done(done),
             Msg::Profile(m) => self.profile_msg(m),
@@ -884,6 +906,9 @@ impl App {
             return self.editor_key(key);
         }
 
+        if self.hotspot.form.is_some() {
+            return self.hotspot_form_key(key);
+        }
         if self.share.is_some() {
             return self.share_key(key);
         }
@@ -991,7 +1016,11 @@ impl App {
             (Stage::Ask | Stage::Failed(_), KeyCode::Enter) => {
                 share.stage = Stage::Reading;
                 if let Some(runner) = &self.runner {
-                    runner.reveal(share.network.clone());
+                    if share.hotspot {
+                        runner.reveal_hotspot();
+                    } else {
+                        runner.reveal(share.network.clone());
+                    }
                 }
             }
             (
@@ -1083,7 +1112,7 @@ impl App {
         match self.tab {
             Tab::WiFi => self.wifi_key(key),
             Tab::Vpn => self.vpn_key(key),
-            Tab::Hotspot => self.tether_key(key),
+            Tab::Hotspot => self.hotspot_tab_key(key),
             Tab::Settings => self.settings_key(key),
             _ => false,
         }
@@ -1349,6 +1378,15 @@ impl App {
             self.fx.tab_changed(self.body_rect());
             self.sync_pulse();
         }
+        if changed && tab == Tab::Hotspot {
+            // A card plugged in or a radio switched is not pushed: look again.
+            if let Some(runner) = &self.runner {
+                runner.call(Op::Hotspot, |r| match r.map(serde_json::from_value) {
+                    Ok(Ok(info)) => Msg::Hotspot(info),
+                    _ => Msg::Tick,
+                });
+            }
+        }
         changed
     }
 
@@ -1359,6 +1397,14 @@ impl App {
         }
         if self.eap.is_some() {
             return vec![("tab", "next"), ("enter", "join"), ("esc", "cancel")];
+        }
+        if self.hotspot.form.is_some() {
+            return vec![
+                ("tab", "next"),
+                ("enter", "start"),
+                ("ctrl-r", "show"),
+                ("esc", "cancel"),
+            ];
         }
         if let Some(field) = &self.field {
             let go = if field.prompt.kind == PromptKind::VpnSecret {
@@ -1440,9 +1486,18 @@ impl App {
         }
     }
 
-    /// Tethering keys that apply to the selected phone.
+    /// Hotspot keys, then the Tethering keys of the selected phone.
     fn tether_hints(&self) -> Vec<(&'static str, &'static str)> {
         let mut v = Vec::new();
+        if self.hotspot.on() {
+            if self.hotspot.ready() {
+                v.push(("s", "hotspot QR"));
+            }
+            v.push(("S", "stop hotspot"));
+        } else if self.hotspot.available() {
+            v.push(("n", "hotspot"));
+            v.push(("c", "custom"));
+        }
         if let Some(phone) = self.tether.selected() {
             if phone.connected {
                 v.push(("x", "drop tether"));
