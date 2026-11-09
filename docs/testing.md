@@ -42,3 +42,29 @@ rig.pump_until("the offline status", |a| ...);     // after changing the fake NM
 - Eyeball it for real: `cargo build -p nexus && cargo run -p nexus-testkit --example demo -- target/debug/nexus [online|offline|portal] [--ascii|--nerd-font]` runs the TUI on your terminal against a private fake NetworkManager and Daemon.
 
 Run: `cargo test --workspace`.
+
+## Real mode: hwsim + hostapd + real NetworkManager
+
+`crates/nexus/tests/real_mode.rs` runs the S1 wire and CLI against real NetworkManager (status, wifi list/scan, join open/WPA2/SAE, wrong password, Forget). It skips in a plain `cargo test`. The rig runs it:
+
+```
+rig/run.sh [test-name-filter]      # as your user; builds, then uses sudo
+```
+
+CI runs it as `.github/workflows/rig.yml` (ubuntu-24.04 with `linux-modules-extra-$(uname -r)` for `mac80211_hwsim`).
+
+Needs on the machine: `network-manager wpa_supplicant hostapd dnsmasq iw dbus` (dnsmasq-base is enough), the `mac80211_hwsim` module, root via sudo. The rig does not install or configure anything on the host.
+
+How it stays off your network:
+- It loads `mac80211_hwsim` itself (refuses if already loaded), then moves each new radio into a throwaway namespace: the station radio into a mount+net+pid namespace with a tmpfs `/run`, `/var/lib` and `/etc/NetworkManager` plus a private `dbus-daemon` (`/run/nexus-rig/bus`), the AP radios into a bare network namespace with hostapd and dnsmasq (DHCP, `10.99.N.0/24`).
+- `inner.sh` refuses to continue if any non-wireless interface is visible; `RealWorld::start` refuses a bus address outside `/run/nexus-rig/` and any wired interface. The test Daemon gets a cleared environment like in the fake world.
+- If NetworkManager runs on the host, the rig stops unless `NEXUS_RIG_ALLOW_HOST_NM=1`: for a few milliseconds the new radios exist in the host namespace before they are moved and the host's NM may glimpse them (it has no Profile for them).
+- Teardown kills the pid namespace's init (everything inside dies), removes the radios and temp files.
+- On failure the tail of every rig log (`dbus`, `hostapd-*`, `dnsmasq`, `wpa_supplicant`, `networkmanager`) is printed.
+
+Add an AP: drop a hostapd config in `rig/aps.d/<name>.conf` with `interface=@IFACE@` (the rig substitutes it). One radio and one `10.99.N.0/24` DHCP subnet per file, in alphabetical order. Then add its SSID and password as constants in `real_mode.rs`. Sketches:
+- OWE: `wpa=2`, `wpa_key_mgmt=OWE`, `rsn_pairwise=CCMP`, `ieee80211w=2`.
+- Transition: WPA-PSK and SAE in one `wpa_key_mgmt=WPA-PSK SAE`, `ieee80211w=1`.
+- Hidden: `ignore_broadcast_ssid=1`.
+- Enterprise: `wpa_key_mgmt=WPA-EAP`, `ieee8021x=1`, `eap_server=1`, `eap_user_file=` (a file next to the config), plus server certificates generated in `rig/`.
+- Simulated Portal: a small HTTP responder in the AP namespace (`in_ap` in `inner.sh`) that answers NetworkManager's connectivity check URL (set `[connectivity]` in the generated `NetworkManager.conf`) with a redirect.
