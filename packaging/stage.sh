@@ -18,4 +18,6 @@ install -Dm644 "$here/polkit/50-nexus-wheel.rules.example" \
 "$bin" completions bash | install -Dm644 /dev/stdin "$dest/usr/share/bash-completion/completions/nexus"
 "$bin" completions zsh | install -Dm644 /dev/stdin "$dest/usr/share/zsh/site-functions/_nexus"
 "$bin" completions fish | install -Dm644 /dev/stdin "$dest/usr/share/fish/vendor_completions.d/nexus.fish"
-"$bin" man | install -Dm644 /dev/stdin "$dest/usr/share/man/man1/nexus.1"
+mkdir -p "$dest/usr/share/man/man1"
+"$bin" man --dir "$dest/usr/share/man/man1"
+chmod 644 "$dest"/usr/share/man/man1/*.1

@@ -457,6 +457,91 @@ pub enum ErrorCode {
     Unknown,
 }
 
+impl ErrorCode {
+    /// Every code this version of the crate knows, in documentation order
+    /// (`Unknown` is what an unrecognised code from a newer daemon reads as,
+    /// so it is not listed).
+    pub const ALL: &'static [ErrorCode] = &[
+        ErrorCode::BadRequest,
+        ErrorCode::UnsupportedVersion,
+        ErrorCode::UnknownOp,
+        ErrorCode::Internal,
+        ErrorCode::BackendUnavailable,
+        ErrorCode::WrongPassword,
+        ErrorCode::OutOfRange,
+        ErrorCode::NoAddress,
+        ErrorCode::JoinFailed,
+        ErrorCode::PasswordRequired,
+        ErrorCode::UnknownNetwork,
+        ErrorCode::NotConnected,
+        ErrorCode::HardBlocked,
+        ErrorCode::UnknownPrompt,
+        ErrorCode::NotConfirmed,
+        ErrorCode::UnknownFinding,
+        ErrorCode::FixFailed,
+        ErrorCode::BluetoothOff,
+        ErrorCode::NoPhone,
+        ErrorCode::UnknownPhone,
+        ErrorCode::NoPortal,
+        ErrorCode::OpenFailed,
+        ErrorCode::InvalidSettings,
+        ErrorCode::Conflict,
+        ErrorCode::NothingPending,
+        ErrorCode::RevealDenied,
+        ErrorCode::UnknownVpn,
+        ErrorCode::InvalidConfig,
+        ErrorCode::VpnFailed,
+        ErrorCode::Unplugged,
+        ErrorCode::UnknownPort,
+        ErrorCode::MissingPlugin,
+        ErrorCode::KeyringUnavailable,
+        ErrorCode::UnknownDevice,
+        ErrorCode::HotspotUnsupported,
+    ];
+
+    /// The code as it appears on the wire (`wrong_password`).
+    pub fn name(self) -> &'static str {
+        match self {
+            ErrorCode::BadRequest => "bad_request",
+            ErrorCode::UnsupportedVersion => "unsupported_version",
+            ErrorCode::UnknownOp => "unknown_op",
+            ErrorCode::Internal => "internal",
+            ErrorCode::BackendUnavailable => "backend_unavailable",
+            ErrorCode::WrongPassword => "wrong_password",
+            ErrorCode::OutOfRange => "out_of_range",
+            ErrorCode::NoAddress => "no_address",
+            ErrorCode::JoinFailed => "join_failed",
+            ErrorCode::PasswordRequired => "password_required",
+            ErrorCode::UnknownNetwork => "unknown_network",
+            ErrorCode::NotConnected => "not_connected",
+            ErrorCode::HardBlocked => "hard_blocked",
+            ErrorCode::UnknownPrompt => "unknown_prompt",
+            ErrorCode::NotConfirmed => "not_confirmed",
+            ErrorCode::UnknownFinding => "unknown_finding",
+            ErrorCode::FixFailed => "fix_failed",
+            ErrorCode::BluetoothOff => "bluetooth_off",
+            ErrorCode::NoPhone => "no_phone",
+            ErrorCode::UnknownPhone => "unknown_phone",
+            ErrorCode::NoPortal => "no_portal",
+            ErrorCode::OpenFailed => "open_failed",
+            ErrorCode::InvalidSettings => "invalid_settings",
+            ErrorCode::Conflict => "conflict",
+            ErrorCode::NothingPending => "nothing_pending",
+            ErrorCode::RevealDenied => "reveal_denied",
+            ErrorCode::UnknownVpn => "unknown_vpn",
+            ErrorCode::InvalidConfig => "invalid_config",
+            ErrorCode::VpnFailed => "vpn_failed",
+            ErrorCode::Unplugged => "unplugged",
+            ErrorCode::UnknownPort => "unknown_port",
+            ErrorCode::MissingPlugin => "missing_plugin",
+            ErrorCode::KeyringUnavailable => "keyring_unavailable",
+            ErrorCode::UnknownDevice => "unknown_device",
+            ErrorCode::HotspotUnsupported => "hotspot_unsupported",
+            ErrorCode::Unknown => "unknown",
+        }
+    }
+}
+
 impl Response {
     pub fn ok(id: u64, value: Value) -> Self {
         Self {

@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 crossterm = "0.29"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "string"] }
 clap_complete = "4"
 clap_mangen = "0.2"
 listenfd = "1"

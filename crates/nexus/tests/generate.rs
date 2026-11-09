@@ -34,3 +34,43 @@ fn man_page_is_roff_for_nexus() {
     assert!(page.contains("nexus"));
     assert!(page.contains("status"));
 }
+
+#[test]
+fn the_man_page_ends_with_the_exit_status_table() {
+    let page = run(&["man"]);
+    let (_, table) = page
+        .split_once(".SH EXIT STATUS")
+        .expect("EXIT STATUS section");
+    for needle in ["no_portal", "unknown_device", "doctor", "cannot be reached"] {
+        assert!(table.contains(needle), "{needle} missing from {table}");
+    }
+}
+
+#[test]
+fn man_dir_writes_a_page_for_every_command() {
+    let dir = tempfile::tempdir().unwrap();
+    run(&["man", "--dir", dir.path().to_str().unwrap()]);
+    for page in [
+        "nexus.1",
+        "nexus-status.1",
+        "nexus-wifi.1",
+        "nexus-wifi-join.1",
+        "nexus-portal-open.1",
+    ] {
+        let text = std::fs::read_to_string(dir.path().join(page))
+            .unwrap_or_else(|e| panic!("{page}: {e}"));
+        assert!(text.contains(".TH"), "{page}: {text}");
+    }
+    let join = std::fs::read_to_string(dir.path().join("nexus-wifi-join.1")).unwrap();
+    assert!(join.contains("password\\-stdin"), "{join}");
+}
+
+#[test]
+fn completions_know_the_newest_commands() {
+    for shell in ["bash", "zsh", "fish"] {
+        let script = run(&["completions", shell]);
+        for word in ["portal", "autoconnect", "activity"] {
+            assert!(script.contains(word), "{shell} lacks {word}");
+        }
+    }
+}

@@ -6,6 +6,7 @@ mod daemon;
 mod doctor;
 mod ethernet_view;
 mod keyring;
+mod manpages;
 mod menu;
 mod profile_cli;
 mod secrets;
@@ -132,8 +133,12 @@ enum Command {
         /// Shell to generate for.
         shell: Shell,
     },
-    /// Print the man page (roff) to stdout.
-    Man,
+    /// Print the man page (roff) to stdout, or write one page per command into DIR.
+    Man {
+        /// Write nexus.1 and nexus-<command>.1 for every command into this directory.
+        #[arg(long, value_name = "DIR")]
+        dir: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -813,8 +818,7 @@ fn main() -> ExitCode {
             clap_complete::generate(shell, &mut Args::command(), "nexus", &mut std::io::stdout());
             ExitCode::SUCCESS
         }
-        Command::Man => match clap_mangen::Man::new(Args::command()).render(&mut std::io::stdout())
-        {
+        Command::Man { dir } => match manpages::write(&Args::command(), dir.as_deref()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("nexus: cannot write the man page: {e}");

@@ -13,6 +13,74 @@ pub const EXIT_DAEMON_ERROR: u8 = 4;
 /// Exit code of `nexus doctor` when it found a problem (a warning alone is 0).
 pub const EXIT_PROBLEM: u8 = 13;
 
+/// Every exit code `nexus` returns, sorted, with what it means. The man page
+/// and `docs/ipc.md` publish this table, and a test keeps them equal to
+/// [`exit_code`] and `menu.rs`.
+pub const EXIT_CODES: &[(u8, &str)] = &[
+    (0, "Success."),
+    (1, "Another failure (the message says which)."),
+    (2, "Usage error: a flag or argument was not understood."),
+    (3, "The Daemon cannot be reached."),
+    (
+        4,
+        "The Daemon refused for a reason with no code of its own (backend_unavailable, bad_request, internal, ...).",
+    ),
+    (5, "wrong_password: the password was rejected."),
+    (6, "out_of_range: the Network is not in range."),
+    (7, "no_address: joined, but no address was handed out."),
+    (8, "join_failed: the join failed; the message says why."),
+    (
+        9,
+        "unknown_network: nothing is saved or nearby by that name.",
+    ),
+    (
+        10,
+        "password_required: the Network needs a password and none was given.",
+    ),
+    (11, "not_connected: there is nothing to disconnect or stop."),
+    (12, "hard_blocked: a hardware switch holds the radio off."),
+    (13, "`nexus doctor` found a problem."),
+    (
+        14,
+        "reveal_denied: authorization to read a stored secret was refused.",
+    ),
+    (15, "invalid_settings: the settings are not valid."),
+    (16, "conflict: the Profile changed since it was read."),
+    (
+        17,
+        "nothing_pending: no change is waiting for confirmation.",
+    ),
+    (18, "bluetooth_off: Bluetooth is off or missing."),
+    (19, "no_phone: no paired phone offers network access."),
+    (20, "unknown_phone: no paired phone matches, or several do."),
+    (21, "unknown_vpn: no VPN has that name."),
+    (22, "invalid_config: a VPN config could not be read."),
+    (23, "vpn_failed: the VPN did not come up."),
+    (
+        24,
+        "missing_plugin: the VPN's NetworkManager plugin is not installed.",
+    ),
+    (
+        25,
+        "keyring_unavailable: no Secret Service answers, or it is locked.",
+    ),
+    (
+        26,
+        "hotspot_unsupported: this Wi-Fi card cannot host a Hotspot.",
+    ),
+    (27, "unplugged: no cable in the Ethernet port."),
+    (28, "unknown_port: no Ethernet port by that name."),
+    (29, "`nexus menu`: no launcher found."),
+    (30, "`nexus menu`: the launcher would not run."),
+    (
+        31,
+        "`nexus menu`: the launcher named in the config is not one Nexus knows.",
+    ),
+    (32, "unknown_device: no Wi-Fi device by that name."),
+    (33, "no_portal: no Network is asking for a login."),
+    (34, "open_failed: the browser could not be started."),
+];
+
 /// The exit code for a refusal, one per failure class, so scripts can tell
 /// a typo'd password (5) from a Network out of range (6) and so on.
 /// 3 and 4 are taken by "cannot reach the Daemon" and "other Daemon error".
@@ -898,5 +966,42 @@ mod tests {
         codes.sort_unstable();
         codes.dedup();
         assert_eq!(codes.len(), n, "exit codes must not collide");
+    }
+
+    #[test]
+    fn the_table_is_sorted_and_without_gaps() {
+        for (i, (code, _)) in EXIT_CODES.iter().enumerate() {
+            assert_eq!(usize::from(*code), i, "codes run 0, 1, 2, ... in order");
+        }
+    }
+
+    #[test]
+    fn every_error_code_exits_with_a_code_the_table_explains() {
+        for code in ErrorCode::ALL {
+            let exit = exit_code(*code);
+            let row = EXIT_CODES
+                .iter()
+                .find(|(c, _)| *c == exit)
+                .unwrap_or_else(|| panic!("{} exits {exit}, not in the table", code.name()));
+            let own = exit != EXIT_DAEMON_ERROR;
+            assert_eq!(
+                row.1.starts_with(&format!("{}:", code.name())),
+                own,
+                "{} exits {exit}: {}",
+                code.name(),
+                row.1
+            );
+        }
+    }
+
+    #[test]
+    fn the_other_constants_are_in_the_table() {
+        let says = |code: u8| EXIT_CODES[usize::from(code)].1;
+        assert!(says(EXIT_UNREACHABLE).contains("cannot be reached"));
+        assert!(says(EXIT_DAEMON_ERROR).contains("no code of its own"));
+        assert!(says(EXIT_PROBLEM).contains("doctor"));
+        assert!(says(crate::menu::EXIT_NO_LAUNCHER).contains("no launcher"));
+        assert!(says(crate::menu::EXIT_LAUNCHER_FAILED).contains("would not run"));
+        assert!(says(crate::menu::EXIT_UNKNOWN_LAUNCHER).contains("not one Nexus knows"));
     }
 }
