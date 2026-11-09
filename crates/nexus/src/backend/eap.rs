@@ -90,6 +90,10 @@ pub fn setting(eap: &Eap) -> HashMap<String, OwnedVariant> {
         if let Some(pw) = &eap.private_key_password {
             s.insert("private-key-password".to_owned(), variant(pw.expose()));
             s.insert("private-key-password-flags".to_owned(), variant(0u32));
+        } else {
+            // An unencrypted key: without this NetworkManager asks for a
+            // password nobody has (NM_SETTING_SECRET_FLAG_NOT_REQUIRED).
+            s.insert("private-key-password-flags".to_owned(), variant(4u32));
         }
     }
     s
