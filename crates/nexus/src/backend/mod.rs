@@ -6,7 +6,9 @@ mod wifi;
 
 use std::future::Future;
 
-use nexus_ipc::{ScanOutcome, Status, WifiList};
+use nexus_ipc::{Disconnected, Forgotten, Joined, ScanOutcome, Secret, Status, WifiList};
+
+use crate::text::Failure;
 
 /// What a Backend can do, so Front ends can hide what is not there.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -25,6 +27,8 @@ pub enum BackendError {
     /// The Backend is not running or not reachable.
     Unavailable,
     Failed(String),
+    /// The Backend (or Nexus) turned the request down, with words for the person.
+    Refused(Failure),
 }
 
 impl std::fmt::Display for BackendError {
@@ -32,6 +36,7 @@ impl std::fmt::Display for BackendError {
         match self {
             BackendError::Unavailable => f.write_str("NetworkManager is not running"),
             BackendError::Failed(msg) => f.write_str(msg),
+            BackendError::Refused(failure) => f.write_str(&failure.message),
         }
     }
 }
@@ -56,6 +61,24 @@ pub trait Backend: Send + Sync + 'static {
     /// Refreshes the Wi-Fi list, reusing recent results instead of
     /// re-requesting inside the Backend's rate limit.
     fn wifi_scan(&self) -> impl Future<Output = Result<ScanOutcome, BackendError>> + Send;
+
+    /// Joins a Wi-Fi Network (`network` is a `WifiNetwork.id`) and waits
+    /// until it is up or has failed. A Profile exists afterwards only if the
+    /// join worked.
+    fn wifi_join(
+        &self,
+        network: String,
+        password: Option<Secret>,
+    ) -> impl Future<Output = Result<Joined, BackendError>> + Send;
+
+    /// Drops the Wi-Fi Link, keeping its Profile.
+    fn wifi_disconnect(&self) -> impl Future<Output = Result<Disconnected, BackendError>> + Send;
+
+    /// Deletes the Profile(s) of a Network.
+    fn wifi_forget(
+        &self,
+        network: String,
+    ) -> impl Future<Output = Result<Forgotten, BackendError>> + Send;
 
     /// Resolves after the Backend changed, once per burst: a storm of
     /// property changes is coalesced into a single tick. Cancel-safe.

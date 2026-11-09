@@ -2,11 +2,12 @@ mod backend;
 mod cli;
 mod config;
 mod daemon;
+mod text;
 mod wifi_view;
 
 use std::process::ExitCode;
 
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{Args as ClapArgs, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -61,6 +62,37 @@ enum WifiAction {
         #[arg(long)]
         json: bool,
     },
+    /// Join a Network. The Profile is saved only if the join works.
+    Join(JoinArgs),
+    /// Drop the current Wi-Fi Link; the Profile stays.
+    Disconnect {
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Forget a Network: delete its saved Profile.
+    Forget {
+        /// The Network's name (SSID).
+        ssid: String,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(ClapArgs)]
+struct JoinArgs {
+    /// The Network's name (SSID).
+    ssid: String,
+    /// The password. Visible in the process list: prefer --password-stdin.
+    #[arg(long, conflicts_with = "password_stdin")]
+    password: Option<String>,
+    /// Read the password from the first line of stdin.
+    #[arg(long)]
+    password_stdin: bool,
+    /// Print the result as JSON.
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Subcommand)]
@@ -80,6 +112,22 @@ fn main() -> ExitCode {
         Command::Wifi {
             action: WifiAction::Scan { json },
         } => cli::wifi_scan(json),
+        Command::Wifi {
+            action: WifiAction::Join(a),
+        } => {
+            let source = match (a.password, a.password_stdin) {
+                (Some(p), _) => cli::PasswordSource::Flag(p),
+                (None, true) => cli::PasswordSource::Stdin,
+                (None, false) => cli::PasswordSource::None,
+            };
+            cli::wifi_join(&a.ssid, source, a.json)
+        }
+        Command::Wifi {
+            action: WifiAction::Disconnect { json },
+        } => cli::wifi_disconnect(json),
+        Command::Wifi {
+            action: WifiAction::Forget { ssid, json },
+        } => cli::wifi_forget(&ssid, json),
         Command::Config {
             action: ConfigAction::Get { key },
         } => cli::config_get(key),

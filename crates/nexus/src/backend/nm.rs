@@ -10,7 +10,10 @@ use std::time::Duration;
 
 use futures_util::FutureExt as _;
 use futures_util::stream::{self, Stream, StreamExt as _};
-use nexus_ipc::{BackendInfo, Connectivity, Link, LinkKind, ScanOutcome, State, Status, WifiList};
+use nexus_ipc::{
+    BackendInfo, Connectivity, Disconnected, Forgotten, Joined, Link, LinkKind, ScanOutcome,
+    Secret, State, Status, WifiList,
+};
 use std::pin::Pin;
 
 use tokio::sync::Mutex;
@@ -39,6 +42,26 @@ pub(super) trait NetworkManager {
     #[zbus(property)]
     fn version(&self) -> zbus::Result<String>;
     fn get_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
+    fn activate_connection(
+        &self,
+        connection: &OwnedObjectPath,
+        device: &OwnedObjectPath,
+        specific_object: &OwnedObjectPath,
+    ) -> zbus::Result<OwnedObjectPath>;
+    fn add_and_activate_connection2(
+        &self,
+        connection: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, zbus::OwnedVariant>,
+        >,
+        device: &OwnedObjectPath,
+        specific_object: &OwnedObjectPath,
+        options: std::collections::HashMap<String, zbus::OwnedVariant>,
+    ) -> zbus::Result<(
+        OwnedObjectPath,
+        OwnedObjectPath,
+        std::collections::HashMap<String, zbus::OwnedVariant>,
+    )>;
 }
 
 #[zbus::proxy(
@@ -204,6 +227,28 @@ impl Backend for NetworkManager {
     async fn wifi_scan(&self) -> Result<ScanOutcome, BackendError> {
         self.with_bus(|c| async move { super::wifi::scan(&c).await })
             .await
+    }
+
+    async fn wifi_join(
+        &self,
+        network: String,
+        password: Option<Secret>,
+    ) -> Result<Joined, BackendError> {
+        self.with_bus(|c| async move { super::wifi::join(&c, &network, password.as_ref()).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_disconnect(&self) -> Result<Disconnected, BackendError> {
+        self.with_bus(|c| async move { super::wifi::disconnect(&c).await })
+            .await?
+            .map_err(BackendError::Refused)
+    }
+
+    async fn wifi_forget(&self, network: String) -> Result<Forgotten, BackendError> {
+        self.with_bus(|c| async move { super::wifi::forget(&c, &network).await })
+            .await?
+            .map_err(BackendError::Refused)
     }
 
     async fn changed(&self) {

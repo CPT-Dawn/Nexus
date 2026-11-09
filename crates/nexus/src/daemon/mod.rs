@@ -104,6 +104,11 @@ async fn answer<B: Backend>(backend: &B, settings: &Settings, req: Request) -> R
         },
         Op::WifiList => backend_reply(req.id, backend.wifi_list().await),
         Op::WifiScan => backend_reply(req.id, backend.wifi_scan().await),
+        Op::WifiJoin { network, password } => {
+            backend_reply(req.id, backend.wifi_join(network, password).await)
+        }
+        Op::WifiDisconnect => backend_reply(req.id, backend.wifi_disconnect().await),
+        Op::WifiForget { network } => backend_reply(req.id, backend.wifi_forget(network).await),
         Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
         Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
         // `Subscribe` is handled by the connection itself.
@@ -120,6 +125,7 @@ fn backend_reply<T: serde::Serialize>(id: u64, result: Result<T, BackendError>) 
             ErrorCode::BackendUnavailable,
             BackendError::Unavailable.to_string(),
         ),
+        Err(BackendError::Refused(f)) => Response::err(Some(id), f.code, f.message),
         Err(e @ BackendError::Failed(_)) => {
             Response::err(Some(id), ErrorCode::Internal, e.to_string())
         }
