@@ -377,3 +377,22 @@ fn an_empty_answer_on_the_terminal_cancels_the_join() {
     assert_eq!(status.code(), Some(10), "{seen}");
     assert_eq!(world.nm.profile_count(), 0);
 }
+
+#[test]
+fn a_wrong_password_given_with_the_join_fails_without_opening_a_prompt() {
+    let (world, wlan0) = world();
+    let mut fe = front_end(&world);
+    let resp = world.wire().call(json!({
+        "op": "wifi_join", "network": id("Home"), "password": "typo-password"
+    }));
+    assert_eq!(resp["err"]["code"], "wrong_password", "{resp}");
+    assert_eq!(resp["err"]["message"], "Wrong password for Home.");
+    while let Some(ev) = fe.try_read_line(std::time::Duration::from_millis(300)) {
+        assert_ne!(
+            ev["event"], "secret_prompt_opened",
+            "no prompt may open for a password the caller supplied: {ev}"
+        );
+    }
+    assert_eq!(world.nm.profile_count(), 0);
+    assert_eq!(world.nm.joined_ssid(wlan0), None);
+}

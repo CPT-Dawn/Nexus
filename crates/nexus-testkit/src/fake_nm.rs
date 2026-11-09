@@ -238,6 +238,9 @@ struct Model {
     /// Ask the agent again with `REQUEST_NEW` after a wrong password (what
     /// NetworkManager does); `false` makes the join fail with reason 8 instead.
     request_new: bool,
+    /// Keep `ActiveAccessPoint` after the Link drops, as real NetworkManager
+    /// does for a moment.
+    ap_lag: bool,
     /// The `GetSecrets` request waiting on the agent: `(connection path, setting)`.
     pending_secrets: Option<(String, String)>,
     /// The software Wi-Fi switch (`WirelessEnabled` as set by clients).
@@ -375,9 +378,18 @@ impl Manager {
         os.at(profile_path(n), Profile(self.0.clone(), n)).await?;
         let dev = device_index(device.as_str())?;
         let given = text("802-11-wireless-security", "psk").unwrap_or_default();
-        let ask = needs_agent.then(|| Ask {
+        let wrong_inline = !needs_agent
+            && self
+                .0
+                .lock()
+                .unwrap()
+                .psks
+                .get(&ssid)
+                .is_some_and(|want| *want != given);
+        let ask = (needs_agent || wrong_inline).then(|| Ask {
             settings: clone_settings(&connection),
             path: profile_path(n),
+            wrong_inline,
         });
         let task = tokio::spawn(activate(
             conn.clone(),
@@ -568,7 +580,8 @@ async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u3
         let mut m = model.lock().unwrap();
         let old = m.devices[dev].state;
         m.devices[dev].state = new;
-        let dropped = (new == 30 || new == 120) && m.devices[dev].active_ap.take().is_some();
+        let dropped =
+            (new == 30 || new == 120) && !m.ap_lag && m.devices[dev].active_ap.take().is_some();
         (old, dropped)
     };
     let os = conn.object_server();
@@ -603,6 +616,9 @@ fn clone_settings(s: &SettingsDict) -> SettingsDict {
 struct Ask {
     settings: SettingsDict,
     path: String,
+    /// The profile came with a password that is wrong: like the real thing,
+    /// NetworkManager asks the agent for a new one (`REQUEST_NEW`) at once.
+    wrong_inline: bool,
 }
 
 const AGENT_PATH: &str = "/org/freedesktop/NetworkManager/SecretAgent";
@@ -655,6 +671,9 @@ async fn negotiate(
     wanted: Option<&str>,
 ) -> Result<SettingsDict, u32> {
     let mut flags = ALLOW_INTERACTION;
+    if ask.wrong_inline {
+        flags |= REQUEST_NEW;
+    }
     loop {
         model.lock().unwrap().pending_secrets = Some((ask.path.clone(), SECURITY.to_owned()));
         let body = (
@@ -1095,6 +1114,7 @@ impl FakeNm {
             agent: None,
             agent_calls: Vec::new(),
             request_new: true,
+            ap_lag: false,
             pending_secrets: None,
             wifi_soft: true,
             wifi_hard_blocked: false,
@@ -1501,6 +1521,12 @@ impl FakeNm {
             .unwrap()
             .join_failures
             .insert(ssid.as_bytes().to_vec(), (died_in, reason));
+    }
+
+    /// While on, a Device that drops its Link keeps reporting the old
+    /// `ActiveAccessPoint` (real NetworkManager lags a moment after Forget).
+    pub fn set_active_ap_lag(&self, yes: bool) {
+        self.model.lock().unwrap().ap_lag = yes;
     }
 
     /// Whether a secret agent is registered with the fake AgentManager.
