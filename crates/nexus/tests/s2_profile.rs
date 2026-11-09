@@ -290,6 +290,27 @@ fn a_change_made_elsewhere_meanwhile_is_reported_and_nothing_is_lost() {
 }
 
 #[test]
+fn keeping_a_profile_in_the_keyring_without_one_is_explained_in_the_form() {
+    let mut rig = Rig::start();
+    rig.open("Parents House");
+    // Keyring is the last row (after Priority); this profile is static.
+    for _ in 0..8 {
+        rig.key(KeyCode::Tab);
+    }
+    rig.key(KeyCode::Char(' '));
+    assert!(rig.text(STANDARD).contains("yes, in your keyring"));
+    rig.key(KeyCode::Enter);
+    rig.pump_until("the complaint", |a| {
+        a.editor()
+            .is_some_and(|e| e.phase == Phase::Editing && e.message.is_some())
+    });
+    let text = rig.text(STANDARD);
+    assert!(text.contains("keyring"), "{text}");
+    assert_eq!(rig.profile("Parents House")["settings"]["keyring"], false);
+    rig.snap_all("profile_form_keyring_unavailable");
+}
+
+#[test]
 fn esc_closes_the_form_and_changes_nothing() {
     let mut rig = Rig::start();
     rig.open("Parents House");

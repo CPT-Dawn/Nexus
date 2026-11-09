@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod daemon;
 mod doctor;
+mod keyring;
 mod profile_cli;
 mod secrets;
 mod tether_view;

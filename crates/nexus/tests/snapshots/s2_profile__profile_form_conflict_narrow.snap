@@ -14,11 +14,11 @@ expression: self.text(size)
 │   MAC address  random per Network                        │
 │   Metered      yes                                       │
 │   Priority     10                                        │
+│   Keyring      no, system store                          │
 │  Parents House was changed elsewhere while you were      │
 │  editing. Nothing was saved; open its settings again.    │
 │ tab next  space change  enter apply  esc cancel          │
 ╰──────────────────────────────────────────────────────────╯
-│                                                          │
 │                                                          │
 ╰──────────────────────────────────────────────────────────╯
  tab next  space change  enter apply  esc cancel
