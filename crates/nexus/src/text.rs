@@ -16,6 +16,15 @@ pub struct Failure {
     pub message: String,
 }
 
+impl From<Failure> for nexus_ipc::Failure {
+    fn from(f: Failure) -> Self {
+        Self {
+            code: f.code,
+            message: f.message,
+        }
+    }
+}
+
 fn fail(code: ErrorCode, message: impl Into<String>) -> Failure {
     Failure {
         code,
@@ -935,6 +944,64 @@ pub fn ago(secs: u64) -> String {
         3600..=86_399 => format!("{} h ago", secs / 3600),
         _ => format!("{} d ago", secs / 86_400),
     }
+}
+
+// ---- Doctor fixes, config and notifications ---------------------------------
+
+pub fn fix_not_confirmed() -> Failure {
+    fail(
+        ErrorCode::NotConfirmed,
+        "A fix runs only after an explicit yes: send `confirm: true`.",
+    )
+}
+
+pub fn nothing_to_fix(id: &str) -> Failure {
+    fail(
+        ErrorCode::UnknownFinding,
+        format!("There is nothing to fix for `{id}` right now."),
+    )
+}
+
+pub fn fix_not_started(command: &str, why: &std::io::Error) -> Failure {
+    fail(
+        ErrorCode::FixFailed,
+        format!("Could not start `{command}`: {why}. Run it yourself in a terminal."),
+    )
+}
+
+/// A fix command that ran and did not work; `detail` says how.
+pub fn fix_failed(detail: &str) -> Failure {
+    fail(ErrorCode::FixFailed, detail)
+}
+
+pub fn config_invalid(why: &str) -> Failure {
+    fail(ErrorCode::BadRequest, why)
+}
+
+pub fn config_unwritable(path: &std::path::Path, why: &std::io::Error) -> Failure {
+    fail(
+        ErrorCode::Internal,
+        format!("Could not write {}: {why}.", path.display()),
+    )
+}
+
+pub fn unknown_config_key(key: &str) -> Failure {
+    fail(
+        ErrorCode::BadRequest,
+        format!("There is no config key `{key}`."),
+    )
+}
+
+pub fn nmcli_failed(why: &std::io::Error) -> Failure {
+    fail(ErrorCode::Internal, format!("Could not run nmcli: {why}."))
+}
+
+/// The title and body of the Portal notification.
+pub fn login_required(network: &str) -> (String, &'static str) {
+    (
+        format!("Login required for {network}"),
+        "This Network wants you to sign in before it gives internet access.",
+    )
 }
 
 #[cfg(test)]

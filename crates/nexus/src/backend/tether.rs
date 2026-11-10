@@ -17,7 +17,8 @@ use nexus_ipc::{Bluetooth, Phone, Tethered, Tethers, Untethered};
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
-use super::wifi::{new_uuid, variant};
+use super::proxies::{DeviceProxy, SettingsConnectionProxy, StateChangedStream, variant};
+use super::wifi::new_uuid;
 use crate::text::{self, Failure};
 
 /// `NM_DEVICE_TYPE_BT`.
@@ -35,21 +36,6 @@ const REASON_NEW_ACTIVATION: u32 = 60;
 const LINK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
 
 const BLUEZ: &str = "org.bluez";
-
-#[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Device",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-trait PhoneDevice {
-    #[zbus(property)]
-    fn device_type(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn state(&self) -> zbus::Result<u32>;
-    fn disconnect(&self) -> zbus::Result<()>;
-    #[zbus(signal, name = "StateChanged")]
-    fn device_state_changed(&self, new_state: u32, old_state: u32, reason: u32)
-    -> zbus::Result<()>;
-}
 
 #[zbus::proxy(
     interface = "org.freedesktop.NetworkManager.Device.Bluetooth",
@@ -71,28 +57,6 @@ trait PhoneBluetooth {
 )]
 trait PhoneSettings {
     fn list_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
-}
-
-#[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Settings.Connection",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-trait PhoneProfile {
-    #[zbus(property)]
-    fn unsaved(&self) -> zbus::Result<bool>;
-    fn get_settings(&self) -> zbus::Result<HashMap<String, HashMap<String, OwnedVariant>>>;
-    fn save(&self) -> zbus::Result<()>;
-    fn delete(&self) -> zbus::Result<()>;
-}
-
-macro_rules! no_cache {
-    ($proxy:ident, $conn:expr, $path:expr) => {
-        $proxy::builder($conn)
-            .path($path)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?
-    };
 }
 
 /// A paired phone as NetworkManager sees it.
@@ -146,6 +110,85 @@ async fn bluetooth(conn: &Connection) -> Bluetooth {
     }
 }
 
+/// Powers BlueZ adapters for airplane mode. Leaving (`on`) restores the
+/// adapters in `before` (those that were powered when it was entered), or
+/// every adapter when nothing is remembered; entering powers all off and
+/// returns the ones that were on. Best effort: a machine without Bluetooth,
+/// or a refusing adapter, is not an error.
+pub async fn airplane_adapters(
+    conn: &Connection,
+    on: bool,
+    before: Option<Vec<OwnedObjectPath>>,
+) -> Vec<OwnedObjectPath> {
+    use zbus::fdo::{DBusProxy, ObjectManagerProxy};
+    let Ok(bus) = DBusProxy::new(conn).await else {
+        return Vec::new();
+    };
+    let Ok(name) = zbus::names::BusName::try_from(BLUEZ) else {
+        return Vec::new();
+    };
+    // Never start the Bluetooth service by D-Bus activation.
+    if !bus.name_has_owner(name).await.unwrap_or(false) {
+        return Vec::new();
+    }
+    let managed = async {
+        ObjectManagerProxy::builder(conn)
+            .destination(BLUEZ)
+            .path("/")
+            .cache_properties(CacheProperties::No)
+            .build()
+            .await?
+            .get_managed_objects()
+            .await
+    }
+    .await;
+    let Ok(objects) = managed else {
+        return Vec::new();
+    };
+    let mut was_on = Vec::new();
+    for (path, interfaces) in objects {
+        let Some(props) = interfaces.get("org.bluez.Adapter1") else {
+            continue;
+        };
+        let powered = props
+            .get("Powered")
+            .and_then(|v| bool::try_from(v.try_clone().ok()?).ok())
+            .unwrap_or(false);
+        let want = if on {
+            before.as_ref().is_none_or(|b| b.contains(&path))
+        } else {
+            false
+        };
+        if !on && powered {
+            was_on.push(path.clone());
+        }
+        if powered == want {
+            continue;
+        }
+        let Ok(adapter) = no_cache_adapter(conn, path.as_str()).await else {
+            continue;
+        };
+        if let Err(e) = adapter.set_powered(want).await {
+            tracing::debug!("Bluetooth adapter refused airplane mode: {e}");
+        }
+    }
+    was_on
+}
+
+async fn no_cache_adapter(conn: &Connection, path: &str) -> zbus::Result<AdapterProxy<'static>> {
+    AdapterProxy::builder(conn)
+        .path(path.to_owned())
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await
+}
+
+#[zbus::proxy(interface = "org.bluez.Adapter1", default_service = "org.bluez")]
+trait Adapter {
+    #[zbus(property)]
+    fn set_powered(&self, on: bool) -> zbus::Result<()>;
+}
+
 async fn phones(conn: &Connection) -> zbus::Result<Vec<Found>> {
     let nm = super::nm::NetworkManagerProxy::builder(conn)
         .cache_properties(CacheProperties::No)
@@ -156,7 +199,7 @@ async fn phones(conn: &Connection) -> zbus::Result<Vec<Found>> {
     let mut saved: Option<Vec<String>> = None;
     let mut out = Vec::new();
     for path in nm.get_devices().await? {
-        let device = no_cache!(PhoneDeviceProxy, conn, path.as_str());
+        let device = no_cache!(DeviceProxy, conn, path.as_str());
         // A Device can vanish between the two calls: skip it.
         if device.device_type().await.ok() != Some(DEVICE_TYPE_BT) {
             continue;
@@ -233,7 +276,7 @@ async fn saved_profiles(conn: &Connection) -> zbus::Result<Vec<Saved>> {
         .await?;
     let mut out = Vec::new();
     for path in settings.list_connections().await? {
-        let proxy = no_cache!(PhoneProfileProxy, conn, path.as_str());
+        let proxy = no_cache!(SettingsConnectionProxy, conn, path.as_str());
         // A Profile only in memory is a Link still coming up (or one that
         // failed): not something the person saved.
         if proxy.unsaved().await.unwrap_or(true) {
@@ -330,7 +373,7 @@ pub async fn connect(
         .cache_properties(CacheProperties::No)
         .build()
         .await?;
-    let device = no_cache!(PhoneDeviceProxy, conn, chosen.path.as_str());
+    let device = no_cache!(DeviceProxy, conn, chosen.path.as_str());
     // Subscribe before asking: the Device may move on before the call returns.
     let mut states = device.receive_device_state_changed().await?;
     let mut owner = zbus::fdo::DBusProxy::new(conn)
@@ -364,7 +407,7 @@ pub async fn connect(
     };
 
     let outcome = wait_for_link(&mut states, &mut owner, &phone.name).await;
-    let profile = no_cache!(PhoneProfileProxy, conn, profile.as_str());
+    let profile = no_cache!(SettingsConnectionProxy, conn, profile.as_str());
     match outcome {
         Ok(()) => {
             if created && let Err(e) = profile.save().await {
@@ -445,7 +488,7 @@ pub async fn disconnect(conn: &Connection) -> zbus::Result<Result<Untethered, Fa
         if !(found.phone.connected || found.phone.connecting) {
             continue;
         }
-        let device = no_cache!(PhoneDeviceProxy, conn, found.path.as_str());
+        let device = no_cache!(DeviceProxy, conn, found.path.as_str());
         if device.disconnect().await.is_ok() {
             dropped.get_or_insert(found.phone.name);
         }

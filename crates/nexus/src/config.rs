@@ -6,8 +6,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use nexus_ipc::{ErrorCode, Event, Failure};
+use nexus_ipc::{Event, Failure};
 use serde::{Deserialize, Serialize};
+
+use crate::text;
 use serde_json::Value;
 use tokio::sync::broadcast;
 
@@ -374,10 +376,7 @@ impl Settings {
     /// Sets `key` (`null` resets it to the default) by editing the file in
     /// place, so comments and ordering survive.
     pub fn set(&self, key: &str, value: &Value) -> Result<Value, Failure> {
-        let bad = |message: String| Failure {
-            code: ErrorCode::BadRequest,
-            message,
-        };
+        let bad = |message: String| Failure::from(text::config_invalid(&message));
         let path = self
             .path
             .as_deref()
@@ -399,10 +398,8 @@ impl Settings {
         edit(&mut doc, key, value).map_err(bad)?;
         let new = doc.to_string();
         let config = parse(&new).map_err(|p| bad(format!("cannot set `{key}`: {p}")))?;
-        write_atomically(path, &new).map_err(|e| Failure {
-            code: ErrorCode::Internal,
-            message: format!("cannot write {}: {e}", path.display()),
-        })?;
+        crate::sysutil::write_atomically(path, &new)
+            .map_err(|e| Failure::from(text::config_unwritable(path, &e)))?;
         *state = Loaded {
             raw: Some(new),
             config,
@@ -423,10 +420,10 @@ fn to_value(config: &Config) -> Value {
 fn answer(state: &Loaded, key: Option<&str>) -> Result<Value, Failure> {
     let mut value = to_value(&state.config);
     for part in key.into_iter().flat_map(|k| k.split('.')) {
-        value = value.get(part).cloned().ok_or_else(|| Failure {
-            code: ErrorCode::BadRequest,
-            message: format!("unknown config key `{}`", key.unwrap_or_default()),
-        })?;
+        value = value
+            .get(part)
+            .cloned()
+            .ok_or_else(|| Failure::from(text::unknown_config_key(key.unwrap_or_default())))?;
     }
     let mut out = serde_json::json!({ "value": value });
     if let Some(w) = &state.warning {
@@ -474,14 +471,6 @@ fn edit(doc: &mut toml_edit::DocumentMut, key: &str, value: &Value) -> Result<()
         }
     }
     Ok(())
-}
-
-fn write_atomically(path: &Path, text: &str) -> io::Result<()> {
-    let dir = path.parent().expect("config path has a parent");
-    std::fs::create_dir_all(dir)?;
-    let tmp = dir.join(".config.toml.nexus-tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
 }
 
 /// Reloads the config whenever its directory changes. Watching the directory

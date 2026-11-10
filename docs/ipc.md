@@ -419,7 +419,7 @@ echo '{"v":1,"id":1,"on":true,"op":"wifi_power"}' | socat -t1 - UNIX-CONNECT:"$S
 
 #### `airplane`
 
-Airplane mode: every radio the Backend controls off (`on`) or back on. Result: `Radios`. `hard_blocked` when a hardware switch prevents it.
+Airplane mode: every radio the Backend controls off (`on`) or back on: Wi-Fi, mobile broadband and Bluetooth. Bluetooth is powered off through BlueZ and, on leaving, back to what it was before. Result: `Radios`. `hard_blocked` when a hardware switch prevents it.
 
 Command line: `nexus airplane on|off`.
 
@@ -1186,7 +1186,7 @@ echo '{"v":1,"id":1,"confirm":true,"finding":"no-such-finding","op":"doctor_fix"
   "id": 1,
   "err": {
     "code": "unknown_finding",
-    "message": "nothing to fix for `no-such-finding` right now"
+    "message": "There is nothing to fix for `no-such-finding` right now."
   }
 }
 ```
@@ -1197,7 +1197,7 @@ The effective config, and the event stream.
 
 #### `config_get`
 
-Read the effective config, or one value by dotted key (`theme`, `connectivity.url`). The result is `{"value": ..., "warning"?: ...}`; `warning` is present while the file on disk is being ignored.
+Read the effective config, or one value by dotted key (`theme`, `connectivity.url`). The result is `{"value": ..., "warning"?: ...}`; `warning` is present while the file on disk is being ignored. While the Backend reports the address it probes for connectivity (NetworkManager's `ConnectivityCheckUri`), the result also carries `connectivity_uri`: read-only, set in `NetworkManager.conf`, not by Nexus. `connectivity.enabled` switches the Backend's own check (NetworkManager's `ConnectivityCheckEnabled`, which NetworkManager remembers) on or off when it changes; `connectivity.url` is only what the Doctor looks up and the Portal login opens.
 
 Command line: `nexus config get [key] [--json]`.
 
@@ -1256,6 +1256,8 @@ Command line: `nexus status --waybar --follow (and the TUI)`.
 ## Events
 
 After `subscribe` the connection also receives event lines, interleaved with the responses to later requests. An event carries `v`, `event` and its payload. Events are pushed after a change settles (a burst of Backend changes yields one event per Daemon tick), so a Front end can keep its picture current without polling.
+
+A subscriber that stops reading is not buffered forever: the Daemon queues up to 1024 lines per connection, and a connection that falls further behind is closed. A Front end that sees the stream end re-connects, re-subscribes and re-reads what it shows.
 
 ### `status_changed`
 

@@ -22,6 +22,12 @@ use crate::config::TrustConfig;
 
 /// `$XDG_STATE_HOME/nexus/trust.json`, else `~/.local/state/nexus/trust.json`.
 pub fn default_path() -> Option<PathBuf> {
+    Some(state_dir()?.join("trust.json"))
+}
+
+/// `$XDG_STATE_HOME/nexus`, else `~/.local/state/nexus`: where the Daemon keeps
+/// what it remembers.
+pub fn state_dir() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_STATE_HOME")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
@@ -30,7 +36,7 @@ pub fn default_path() -> Option<PathBuf> {
                 .filter(|v| !v.is_empty())
                 .map(|h| PathBuf::from(h).join(".local/state"))
         })?;
-    Some(base.join("nexus").join("trust.json"))
+    Some(base.join("nexus"))
 }
 
 /// What the user marked, by `WifiNetwork.id`.
@@ -56,7 +62,9 @@ impl Marks {
 
     /// The default for a Network nobody marked.
     pub fn default_for(security: Security) -> Trust {
-        if security == Security::Open {
+        // OWE encrypts the air but does not say who is on the other end: like
+        // an Open Network, it starts Untrusted.
+        if matches!(security, Security::Open | Security::Owe) {
             Trust::Untrusted
         } else {
             Trust::Trusted
@@ -86,15 +94,8 @@ impl Marks {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
         let text = serde_json::to_string_pretty(&*marks).expect("marks serialize");
-        // Written whole beside the file and renamed over it, so a crash never
-        // leaves half a file.
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, text)?;
-        std::fs::rename(&tmp, path)
+        crate::sysutil::write_atomically(path, &text)
     }
 }
 
@@ -232,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn unmarked_open_networks_are_untrusted_and_the_rest_trusted() {
+    fn unmarked_open_and_owe_networks_are_untrusted_and_the_rest_trusted() {
         let marks = Marks::default();
         assert_eq!(
             marks.trust_of(&net("a", Security::Open, false)),
@@ -244,7 +245,7 @@ mod tests {
         );
         assert_eq!(
             marks.trust_of(&net("c", Security::Owe, false)),
-            Trust::Trusted
+            Trust::Untrusted
         );
     }
 

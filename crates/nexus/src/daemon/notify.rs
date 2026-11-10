@@ -112,17 +112,9 @@ impl Terminal for SystemTerminal {
             return;
         };
         let mut command = std::process::Command::new(&argv[0]);
-        command
-            .args(&argv[1..])
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null());
-        match command.spawn() {
-            // Reaped on a thread, so a closed terminal leaves no zombie.
-            Ok(mut child) => {
-                std::thread::spawn(move || child.wait());
-            }
-            Err(e) => tracing::warn!("cannot open a terminal ({}): {e}", argv[0]),
+        command.args(&argv[1..]);
+        if let Err(e) = crate::sysutil::spawn_detached(&mut command) {
+            tracing::warn!("cannot open a terminal ({}): {e}", argv[0]);
         }
     }
 }
@@ -333,10 +325,11 @@ impl Task {
         let Some(portal) = portal.filter(|_| wanted) else {
             return;
         };
+        let (title, body) = crate::text::login_required(&portal.network);
         let id = self
             .show(
-                &format!("Login required for {}", portal.network),
-                "This network wants you to sign in before it gives internet access.",
+                &title,
+                body,
                 URGENCY_CRITICAL,
                 &[OPEN_LOGIN, "Open login page"],
                 0,

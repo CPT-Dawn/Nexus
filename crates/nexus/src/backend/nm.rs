@@ -26,7 +26,7 @@ use zbus::fdo::DBusProxy;
 use zbus::names::BusName;
 use zbus::proxy::CacheProperties;
 
-use super::{Backend, BackendError, Capabilities, Counters, JoinTarget, NetFacts};
+use super::{Backend, BackendError, Counters, JoinTarget, NetFacts};
 use crate::secrets::Broker;
 use crate::text::{self, Failure};
 
@@ -58,6 +58,10 @@ pub(super) trait NetworkManager {
     fn set_wwan_enabled(&self, on: bool) -> zbus::Result<()>;
     #[zbus(property)]
     fn connectivity_check_enabled(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn set_connectivity_check_enabled(&self, on: bool) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn connectivity_check_uri(&self) -> zbus::Result<String>;
     #[zbus(property)]
     fn active_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
     fn deactivate_connection(&self, active: &OwnedObjectPath) -> zbus::Result<()>;
@@ -161,6 +165,13 @@ pub struct NetworkManager {
     conn: Mutex<Option<Connection>>,
     /// Every signal NetworkManager sends, plus it appearing and vanishing.
     watch: Mutex<Option<Signals>>,
+    /// A signal was read from `watch` but its burst has not been reported
+    /// yet. Lives outside `changed()` so that cancelling it mid-wait loses
+    /// nothing.
+    burst: std::sync::atomic::AtomicBool,
+    /// The Bluetooth adapters that were powered when airplane mode went on,
+    /// to power again when it goes off.
+    bt_before: std::sync::Mutex<Option<Vec<OwnedObjectPath>>>,
     /// logind's `PrepareForSleep`, for noticing a resume.
     sleep_watch: Mutex<Option<Signals>>,
 }
@@ -177,6 +188,8 @@ impl NetworkManager {
             broker,
             conn: Mutex::default(),
             watch: Mutex::default(),
+            burst: std::sync::atomic::AtomicBool::new(false),
+            bt_before: std::sync::Mutex::default(),
             sleep_watch: Mutex::default(),
         }
     }
@@ -365,13 +378,6 @@ impl NetworkManager {
 }
 
 impl Backend for NetworkManager {
-    fn capabilities(&self) -> Capabilities {
-        Capabilities {
-            connectivity_check: true,
-            portal_detection: true,
-        }
-    }
-
     async fn wifi_list(&self) -> Result<WifiList, BackendError> {
         self.with_bus(|c| async move { super::wifi::list(&c).await })
             .await
@@ -632,10 +638,55 @@ impl Backend for NetworkManager {
             .map_err(BackendError::Refused)
     }
 
+    async fn set_connectivity_check(&self, on: bool) -> Result<(), BackendError> {
+        self.with_bus(|c| async move {
+            let nm = NetworkManagerProxy::builder(&c)
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await?;
+            nm.set_connectivity_check_enabled(on).await
+        })
+        .await
+    }
+
+    async fn connectivity_uri(&self) -> Result<Option<String>, BackendError> {
+        self.with_bus(|c| async move {
+            let nm = NetworkManagerProxy::builder(&c)
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await?;
+            Ok(nm
+                .connectivity_check_uri()
+                .await
+                .ok()
+                .filter(|u| !u.is_empty()))
+        })
+        .await
+    }
+
     async fn airplane(&self, on: bool) -> Result<Radios, BackendError> {
-        self.with_bus(|c| async move { Self::set_radios(&c, !on, Some(!on)).await })
+        let radios = self
+            .with_bus(|c| async move { Self::set_radios(&c, !on, Some(!on)).await })
             .await?
-            .map_err(BackendError::Refused)
+            .map_err(BackendError::Refused)?;
+        // Bluetooth follows, through BlueZ: off on entering, and back to what
+        // it was on leaving. NetworkManager does not own that radio.
+        let conn = self.connection().await.ok();
+        if let Some(conn) = conn {
+            let before = self.bt_before.lock().expect("bt lock").take();
+            if on {
+                let mut was_on = super::tether::airplane_adapters(&conn, false, None).await;
+                if let Some(mut earlier) = before {
+                    // Entering twice must not forget what the first time found.
+                    earlier.retain(|p| !was_on.contains(p));
+                    was_on.extend(earlier);
+                }
+                *self.bt_before.lock().expect("bt lock") = Some(was_on);
+            } else {
+                super::tether::airplane_adapters(&conn, true, before).await;
+            }
+        }
+        Ok(radios)
     }
 
     async fn arm(&self) {
@@ -705,8 +756,18 @@ impl Backend for NetworkManager {
     }
 
     async fn changed(&self) {
+        use std::sync::atomic::Ordering;
         loop {
             let mut guard = self.watch.lock().await;
+            if self.burst.load(Ordering::Acquire) {
+                // A signal was taken (maybe by a cancelled call): finish its burst.
+                tokio::time::sleep(TICK).await;
+                if let Some(signals) = guard.as_mut() {
+                    while signals.next().now_or_never().flatten().is_some() {}
+                }
+                self.burst.store(false, Ordering::Release);
+                return;
+            }
             if guard.is_none() {
                 match self.open_watch().await {
                     Ok(s) => *guard = Some(s),
@@ -727,10 +788,9 @@ impl Backend for NetworkManager {
                 tokio::time::sleep(RETRY).await;
                 continue;
             }
-            // Let the burst land, then swallow it whole.
-            tokio::time::sleep(TICK).await;
-            while signals.next().now_or_never().flatten().is_some() {}
-            return;
+            // Remember the signal before any further await: the wait for the
+            // burst to land may be cancelled, the signal must not be.
+            self.burst.store(true, Ordering::Release);
         }
     }
 
@@ -770,6 +830,11 @@ async fn read_facts(conn: &Connection) -> zbus::Result<NetFacts> {
     let wireless_enabled = nm.wireless_enabled().await?;
     let wireless_hw_enabled = nm.wireless_hardware_enabled().await?;
     let connectivity_check = nm.connectivity_check_enabled().await?;
+    let connectivity_uri = nm
+        .connectivity_check_uri()
+        .await
+        .ok()
+        .filter(|u| !u.is_empty());
     let mut gateway4 = None;
     let mut ipv6 = false;
     let primary = nm.primary_connection().await?;
@@ -806,6 +871,7 @@ async fn read_facts(conn: &Connection) -> zbus::Result<NetFacts> {
         wireless_enabled,
         wireless_hw_enabled,
         connectivity_check,
+        connectivity_uri,
         gateway4,
         ipv6,
     })

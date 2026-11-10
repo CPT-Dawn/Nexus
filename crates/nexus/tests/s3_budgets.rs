@@ -22,7 +22,8 @@ use serde_json::json;
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
 
 /// Performance budgets (spec #2). Resident memory is the peak (`VmHWM`).
-const DAEMON_RSS_BUDGET_KIB: u64 = 15 * 1024;
+/// The spec says 15 MB, not 15 MiB.
+const DAEMON_RSS_BUDGET_BYTES: u64 = 15_000_000;
 const TUI_FIRST_FRAME_BUDGET: Duration = Duration::from_millis(50);
 /// "0%": anything the scheduler charges above this over the window fails.
 /// The Daemon does nothing when idle (measured 0.000%). The TUI redraws the
@@ -141,14 +142,14 @@ fn the_daemon_stays_under_its_memory_budget() {
     let peak = status_kib(pid, "VmHWM");
     let now = status_kib(pid, "VmRSS");
     report(&format!(
-        "Daemon resident memory: peak {:.1} MiB, now {:.1} MiB (budget < {} MiB)",
+        "Daemon resident memory: peak {:.1} MiB, now {:.1} MiB (budget < {} MB)",
         peak as f64 / 1024.0,
         now as f64 / 1024.0,
-        DAEMON_RSS_BUDGET_KIB / 1024
+        DAEMON_RSS_BUDGET_BYTES / 1_000_000
     ));
     assert!(
-        peak < DAEMON_RSS_BUDGET_KIB,
-        "Daemon peak RSS {peak} KiB exceeds the {DAEMON_RSS_BUDGET_KIB} KiB budget"
+        peak * 1024 < DAEMON_RSS_BUDGET_BYTES,
+        "Daemon peak RSS {peak} KiB exceeds the {DAEMON_RSS_BUDGET_BYTES} byte budget"
     );
 }
 

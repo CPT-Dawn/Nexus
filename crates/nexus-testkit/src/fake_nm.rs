@@ -328,6 +328,8 @@ struct Model {
     scan_requests: u32,
     /// Refuse every `RequestScan`, whatever `LastScan` says.
     refuse_scans: bool,
+    /// Refuse to activate any wired Profile, like a cable pulled mid-join.
+    refuse_wired_activation: bool,
     /// Reads of `Statistics.RxBytes`/`TxBytes`.
     statistics_reads: u32,
     /// What the Daemon wrote to `Statistics.RefreshRateMs`.
@@ -359,6 +361,8 @@ struct Model {
     before_sleep: NmState,
     /// `ConnectivityCheckEnabled`.
     check_enabled: bool,
+    /// `ConnectivityCheckUri`.
+    check_uri: String,
     /// The primary connection's IPv4 gateway; `None` means no `Ip4Config`.
     gateway4: Option<String>,
     /// Whether the primary connection has an IPv6 address.
@@ -477,6 +481,16 @@ impl Manager {
     #[zbus(property)]
     fn connectivity_check_enabled(&self) -> bool {
         self.0.lock().unwrap().check_enabled
+    }
+
+    #[zbus(property)]
+    fn set_connectivity_check_enabled(&mut self, on: bool) {
+        self.0.lock().unwrap().check_enabled = on;
+    }
+
+    #[zbus(property)]
+    fn connectivity_check_uri(&self) -> String {
+        self.0.lock().unwrap().check_uri.clone()
     }
 
     fn get_devices(&self) -> Vec<OwnedObjectPath> {
@@ -1438,6 +1452,7 @@ impl FakeNm {
             hotspot_fails: false,
             scan_requests: 0,
             refuse_scans: false,
+            refuse_wired_activation: false,
             statistics_reads: 0,
             refresh_rate_ms: 0,
             agent: None,
@@ -1451,6 +1466,7 @@ impl FakeNm {
             tasks: Vec::new(),
             before_sleep: NmState::Disconnected,
             check_enabled: true,
+            check_uri: "http://nm-check.example/check.txt".into(),
             gateway4: None,
             ipv6: false,
             checkpoints: Vec::new(),
@@ -1674,6 +1690,16 @@ impl FakeNm {
         m.wifi_hard_blocked = !hard;
     }
 
+    /// `ConnectivityCheckEnabled` as clients (or the user) last left it.
+    pub fn connectivity_check(&self) -> bool {
+        self.model.lock().unwrap().check_enabled
+    }
+
+    /// `ConnectivityCheckUri`.
+    pub fn set_connectivity_uri(&self, uri: &str) {
+        self.model.lock().unwrap().check_uri = uri.to_owned();
+    }
+
     /// `ConnectivityCheckEnabled`.
     pub fn set_connectivity_check(&self, enabled: bool) {
         self.model.lock().unwrap().check_enabled = enabled;
@@ -1825,6 +1851,22 @@ impl FakeNm {
     /// What was last written to `Statistics.RefreshRateMs` (0 = never).
     pub fn refresh_rate_ms(&self) -> u32 {
         self.model.lock().unwrap().refresh_rate_ms
+    }
+
+    /// Makes NetworkManager refuse to activate wired Profiles, as when the
+    /// cable is pulled between the carrier check and the activation.
+    pub fn refuse_wired_activation(&self, yes: bool) {
+        self.model.lock().unwrap().refuse_wired_activation = yes;
+    }
+
+    /// Whether the Profile `uuid` has a setting group `group` right now.
+    pub fn profile_has_group(&self, uuid: &str, group: &str) -> bool {
+        let m = self.model.lock().unwrap();
+        m.profiles
+            .iter()
+            .flatten()
+            .find(|p| p.uuid == uuid)
+            .is_some_and(|p| p.settings.contains_key(group))
     }
 
     /// Makes NetworkManager refuse every `RequestScan`.

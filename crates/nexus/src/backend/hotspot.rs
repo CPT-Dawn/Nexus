@@ -18,7 +18,8 @@ use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath};
 
 use super::nm::{ActiveConnectionProxy, NetworkManagerProxy};
-use super::wifi::{SettingsConnectionProxy, is_denial, new_uuid, variant};
+use super::proxies::{DeviceProxy, SettingsConnectionProxy, variant};
+use super::wifi::{is_denial, new_uuid};
 use crate::text::{self, Failure};
 
 /// `NM_DEVICE_TYPE_WIFI`.
@@ -39,17 +40,6 @@ const ALPHABET: &[u8; 32] = b"23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const PASSWORD_LEN: usize = 16;
 
 #[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Device",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-trait HotspotDevice {
-    #[zbus(property)]
-    fn interface(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn device_type(&self) -> zbus::Result<u32>;
-}
-
-#[zbus::proxy(
     interface = "org.freedesktop.NetworkManager.Device.Wireless",
     default_service = "org.freedesktop.NetworkManager"
 )]
@@ -65,16 +55,6 @@ trait HotspotWireless {
 trait HotspotActive {
     #[zbus(property)]
     fn connection(&self) -> zbus::Result<OwnedObjectPath>;
-}
-
-macro_rules! no_cache {
-    ($proxy:ident, $conn:expr, $path:expr) => {
-        $proxy::builder($conn)
-            .path($path)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?
-    };
 }
 
 fn random(n: usize) -> Vec<u8> {
@@ -140,7 +120,7 @@ async fn cards(conn: &Connection) -> zbus::Result<Vec<Card>> {
         .await?;
     let mut out = Vec::new();
     for path in nm.get_devices().await? {
-        let device = no_cache!(HotspotDeviceProxy, conn, path.as_str());
+        let device = no_cache!(DeviceProxy, conn, path.as_str());
         if device.device_type().await.ok() != Some(DEVICE_TYPE_WIFI) {
             continue;
         }
@@ -269,7 +249,7 @@ pub async fn state(conn: &Connection) -> zbus::Result<Hotspot> {
     if let Some(run) = running(conn).await? {
         let devices = match &run.device {
             Some(path) if run.state == ACTIVATED => {
-                let device = no_cache!(HotspotDeviceProxy, conn, path.as_str());
+                let device = no_cache!(DeviceProxy, conn, path.as_str());
                 match device.interface().await {
                     Ok(interface) => count_stations(&interface).await,
                     Err(_) => None,
