@@ -403,3 +403,55 @@ fn a_portal_is_detected_and_signing_in_clears_it() {
     let portal = world.wire().call(json!({"op": "portal"}));
     assert!(portal["ok"]["portal"].is_null(), "{portal}");
 }
+
+/// Turns Wi-Fi back on when a test ends, however it ends: the rig is shared.
+struct WifiOnAtEnd<'a>(&'a RealWorld);
+
+impl Drop for WifiOnAtEnd<'_> {
+    fn drop(&mut self) {
+        let _ = self.0.wire().call(json!({"op": "wifi_power", "on": true}));
+    }
+}
+
+fn link_name(world: &RealWorld) -> Option<String> {
+    let status = world.wire().call(json!({"op": "status"}));
+    status["ok"]["link"]["name"].as_str().map(str::to_owned)
+}
+
+#[test]
+fn turning_wifi_off_drops_the_link_and_on_brings_it_back() {
+    let Some(world) = world() else { return };
+    let _restore = WifiOnAtEnd(&world);
+    let resp = join(&world, WPA2, Some(WPA2_PSK));
+    assert_eq!(resp["ok"]["ssid"], WPA2, "{resp}\n{}", world.daemon_log());
+    eventually("the Link is the joined network", || {
+        (link_name(&world).as_deref() == Some(WPA2)).then_some(())
+    });
+
+    let off = world.wire().call(json!({"op": "wifi_power", "on": false}));
+    assert_eq!(off["ok"]["wifi"]["enabled"], false, "{off}");
+    eventually("the Link is gone", || {
+        link_name(&world).is_none().then_some(())
+    });
+    let status = world.wire().call(json!({"op": "status"}));
+    assert_ne!(status["ok"]["state"], "online", "{status}");
+
+    let on = world.wire().call(json!({"op": "wifi_power", "on": true}));
+    assert_eq!(on["ok"]["wifi"]["enabled"], true, "{on}");
+    // NetworkManager puts the Device back to `disconnected` and autoconnects
+    // the saved Profile, which the CI log shows it doing. The virtual radios
+    // then often never find the access point again (the supplicant restarts
+    // with an empty scan list), so the Link coming back is waited for but not
+    // required; what is required is that the Daemon reports Wi-Fi on.
+    let status = world.wire().call(json!({"op": "status"}));
+    assert_eq!(status["ok"]["radios"]["wifi"]["enabled"], true, "{status}");
+    let start = Instant::now();
+    while link_name(&world).as_deref() != Some(WPA2) && start.elapsed() < Duration::from_secs(30) {
+        let _ = world.wire().call(json!({"op": "wifi_scan"}));
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    let _ = world
+        .wire()
+        .call(json!({"op": "wifi_forget", "network": id(WPA2)}));
+}

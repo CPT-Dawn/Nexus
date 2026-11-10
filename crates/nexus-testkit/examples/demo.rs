@@ -157,9 +157,6 @@ fn main() {
                 "wifi" | "effects" | "radios" | "radios-blocked"
             ) {
                 nexus_testkit::scenarios::wifi_busy(&world);
-                if scenario == "radios-blocked" {
-                    world.nm.set_wifi_hardware_blocked(true);
-                }
                 if scenario == "effects" {
                     // Activation fails (state 60) with "no secrets" (reason 7).
                     world.nm.script_join_failure("Cafe Guest", 60, 7);
@@ -172,8 +169,18 @@ fn main() {
                 // Same, plus a password prompt for Work-Secure, already open.
                 _prompt = Some(nexus_testkit::scenarios::wifi_with_open_prompt(&world));
             }
+            if scenario.starts_with("radios") {
+                // Home-5G is joined in this scenario: it is the Link.
+                world
+                    .nm
+                    .set_primary(Some(ActiveConnection::wifi("Home-5G")));
+            }
             world.nm.set_connectivity(NmConnectivity::Full);
             world.nm.set_state(NmState::ConnectedGlobal);
+            if scenario == "radios-blocked" {
+                // After the Link is set up: the switch takes it down again.
+                world.nm.set_wifi_hardware_blocked(true);
+            }
         }
         "vpn" => nexus_testkit::scenarios::vpn_busy(&world),
         "ethernet" => {
