@@ -127,9 +127,18 @@ In Wi-Fi context, a Device. When a machine has several, the person can pin joins
 _Avoid_: adapter (user-facing), interface
 
 **Theme**:
-A named set of semantic colour tokens (bg, fg, muted, dim, accent, ok, warn, err, border, selection) the TUI paints with; views never name a colour. Seven are built in (Midnight Bloom, Catppuccin, Gruvbox, Nord, Tokyo Night, Rose Pine, High contrast). A custom Theme is a `[themes.<name>]` table of `#rrggbb` tokens, optionally on a built-in `base`; one with a mistake falls back to Midnight Bloom with a warning, it never stops the TUI or the Daemon. The focused-pane gradient and glow are derived from the accent, so every Theme gets them.
+A named set of semantic colour tokens (bg, fg, muted, dim, accent, ok, warn, err, border, selection) the TUI paints with; views never name a colour. Seven are built in (Midnight Bloom, Catppuccin, Gruvbox, Nord, Tokyo Night, Rose Pine, High contrast). A custom Theme is a `[themes.<name>]` table of `#rrggbb` tokens, optionally on a built-in `base`; one with a mistake falls back to Midnight Bloom with a warning, it never stops the TUI or the Daemon. The focused-pane gradient and glow are derived from the accent, so every Theme gets them. One exception: a QR code is always black on white, whatever the Theme, so a phone can read it.
 _Avoid_: skin, colour scheme, palette (the palette is the `:` Verb search)
 
 **Settings tab**:
 The TUI tab that edits `config.toml` through the Daemon (`config_set`), so the user's comments and ordering survive. It changes nothing on screen itself: the Daemon's `config_reloaded` event does, which means an edit by hand and an edit from the tab take the same path.
 _Avoid_: preferences, options screen
+
+**Radio**:
+A transmitter Nexus can switch: Wi-Fi (`w` in the TUI, `nexus wifi on|off`) and, through airplane mode, Bluetooth. A Radio can be off by software (Nexus or the desktop switched it) or held off by a hardware switch, which software cannot undo; the TUI says which, and never offers a key that cannot help.
+
+**Airplane mode**:
+Every Radio the Backend controls off at once (`A`, `nexus airplane on|off`). Turning it off puts each Radio back as it was before.
+
+**Filter**:
+`/` on the Wi-Fi and VPN lists narrows the rows to names containing what you type, ignoring case; Enter keeps it, Esc clears it. Each list remembers its own.

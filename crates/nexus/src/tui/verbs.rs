@@ -553,7 +553,7 @@ static HOTSPOT: &[Verb] = &[
         "Start Hotspot",
         "share connection access point password",
         "n",
-        "Share this connection with a made-up password",
+        "Share this internet with a made-up password",
         KeyCode::Char('n'),
         Hint::Core("hotspot"),
         can_start,
@@ -813,7 +813,7 @@ static ETHERNET: &[Verb] = &[
         "Sign in to Ethernet",
         "wired 802.1x enterprise office campus identity password certificate",
         "s",
-        "Sign in to an 802.1X port",
+        "Sign in to an Enterprise port",
         KeyCode::Char('s'),
         Hint::Core("sign in"),
         |app| {

@@ -129,3 +129,38 @@ fn turn_hue(c: (u8, u8, u8), degrees: f32) -> (u8, u8, u8) {
     let to = |v: f32| ((v + m) * 255.0).round().clamp(0.0, 255.0) as u8;
     (to(r), to(g), to(b))
 }
+
+// ---- small helpers the views share ------------------------------------------
+
+/// `text` safe to show in a terminal: control and direction-override
+/// characters (which could reorder the text around them) become U+FFFD.
+pub(super) fn printable(text: &str) -> String {
+    nexus_ipc::display_ssid(text.as_bytes())
+}
+
+/// `n` mask characters for a hidden password.
+pub(super) fn dots(n: usize, sym: &super::view::Sym) -> String {
+    let dot = if sym.glyphs == super::caps::Glyphs::Ascii {
+        '*'
+    } else {
+        '\u{2022}'
+    };
+    std::iter::repeat_n(dot, n).collect()
+}
+
+/// A `width` by `height` rectangle in the middle of `area` (smaller if
+/// `area` is).
+pub(super) fn centered(
+    area: ratatui::layout::Rect,
+    width: u16,
+    height: u16,
+) -> ratatui::layout::Rect {
+    let width = width.min(area.width);
+    let height = height.min(area.height);
+    ratatui::layout::Rect {
+        x: area.x + (area.width - width) / 2,
+        y: area.y + (area.height - height) / 2,
+        width,
+        height,
+    }
+}

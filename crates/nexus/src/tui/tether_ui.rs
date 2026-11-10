@@ -10,6 +10,7 @@ use ratatui::widgets::{HighlightSpacing, List, ListItem, ListState, Paragraph, W
 use super::app::App;
 use super::caps::Glyphs;
 use super::hits::Hit;
+use super::surface;
 use super::theme::Look;
 use super::view::Sym;
 
@@ -25,13 +26,6 @@ fn fit(text: &str, width: usize, sym: &Sym) -> String {
     };
     let keep: String = text.chars().take(width.saturating_sub(1)).collect();
     format!("{keep}{dots}")
-}
-
-/// A phone's name is the phone's to choose: no control characters on screen.
-fn clean(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_control() { '\u{fffd}' } else { c })
-        .collect()
 }
 
 fn state_word(p: &Phone, busy: bool) -> &'static str {
@@ -76,7 +70,7 @@ fn row_line(p: &Phone, busy: bool, avail: usize, look: &Look, sym: &Sym) -> Line
     Line::from(vec![
         Span::styled(marker, style),
         Span::raw(" "),
-        Span::raw(fit(&clean(&p.name), name_w, sym)),
+        Span::raw(fit(&surface::printable(&p.name), name_w, sym)),
         Span::styled(format!(" {state:>10}"), look.muted()),
     ])
 }
@@ -139,7 +133,7 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
 pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     let tether = app.tether();
     let selected = tether.selected();
-    let title = selected.map_or_else(|| "Tethering".to_owned(), |p| clean(&p.name));
+    let title = selected.map_or_else(|| "Tethering".to_owned(), |p| surface::printable(&p.name));
     let block = sym.block(look, &title, false);
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -154,7 +148,7 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
                 look.warn(),
             ),
             (true, Bluetooth::Absent) => (
-                "No Bluetooth adapter was found, or the Bluetooth service is not running \
+                "No Bluetooth Device was found, or the Bluetooth service is not running \
                  (systemctl start bluetooth).",
                 look.err(),
             ),

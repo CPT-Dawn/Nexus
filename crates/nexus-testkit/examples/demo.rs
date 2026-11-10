@@ -26,6 +26,17 @@
 //!   `tab` to move, `←`/`→` change the method, `space` toggles the server
 //!   check, `ctrl-r` shows passwords, `enter` joins, `esc` cancels. The right
 //!   login is `you@uni.example` / `correct-horse`, server name `radius.uni.example`.
+//! - `radios`: `wifi`, for the radio keys and the list filter. Press `2`, then
+//!   `w` turns Wi-Fi off (the list says so and how to turn it on; the
+//!   Overview's Wi-Fi card reads Off) and `u` takes it back; `A` is airplane
+//!   mode (Wi-Fi and Bluetooth off), `u` undoes it. `/` then a few letters
+//!   (try `ho`) filters the list by name, `enter` keeps the filter, `esc`
+//!   clears it; `/` works on the VPN tab (`4`) too. `r` rescans: the list keeps
+//!   its order while the scan runs and is only re-sorted when it ends, if you
+//!   have not moved the cursor.
+//! - `radios-blocked`: `radios` with a hardware switch holding Wi-Fi off. The
+//!   Wi-Fi tab explains it, and `w` (or `:` turn wifi on) says software cannot
+//!   help instead of trying.
 //! - `wifi-prompt`: `wifi` with a password prompt for Work-Secure already open.
 //! - `wifi-edge`: the awkward cases, two Wi-Fi cards, nothing joined. Press `2`.
 //!   `n` opens the hidden-network form: type `Ghost-Net`, `tab`, `←`/`→` pick
@@ -138,11 +149,17 @@ fn main() {
         // two saved ones out of range; r rescans, f forgets, a toggles
         // autoconnect, x disconnects, u undoes.
         "wifi" | "wifi-prompt" | "wifi-enterprise" | "wifi-edge" | "profile"
-        | "profile-keyring" | "effects" => {
+        | "profile-keyring" | "effects" | "radios" | "radios-blocked" => {
             if scenario == "wifi-edge" {
                 nexus_testkit::scenarios::wifi_edge(&world);
-            } else if scenario == "wifi" || scenario == "effects" {
+            } else if matches!(
+                scenario.as_str(),
+                "wifi" | "effects" | "radios" | "radios-blocked"
+            ) {
                 nexus_testkit::scenarios::wifi_busy(&world);
+                if scenario == "radios-blocked" {
+                    world.nm.set_wifi_hardware_blocked(true);
+                }
                 if scenario == "effects" {
                     // Activation fails (state 60) with "no secrets" (reason 7).
                     world.nm.script_join_failure("Cafe Guest", 60, 7);

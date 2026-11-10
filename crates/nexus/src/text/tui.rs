@@ -130,3 +130,45 @@ pub fn filter_title(filter: &str, typing: bool) -> String {
 pub fn no_match(what: &str, filter: &str) -> String {
     format!("No {what} match “{filter}”.\nEsc clears the filter.")
 }
+
+// ---- toasts ---------------------------------------------------------------------
+
+pub const ONLINE: &str = "You're online.";
+pub const LOST_DAEMON_REVERTS: &str =
+    "Lost the daemon. NetworkManager reverts the change on its own.";
+pub const PROMPT_TIMED_OUT: &str = "The password prompt timed out.";
+pub const SCAN_FRESH: &str = "Scanned a moment ago; the list is fresh.";
+pub const PORTAL_OPENED: &str = "Opened the login page in your browser.";
+pub const NO_HOTSPOT_RUNNING: &str = "No Hotspot is running.";
+pub const NO_HOTSPOT_TO_SHARE: &str = "No Hotspot is up to share.";
+
+pub fn autoconnect(ssid: &str, on: bool) -> String {
+    if on {
+        format!("{ssid} will join automatically.")
+    } else {
+        format!("{ssid} will not join automatically.")
+    }
+}
+
+pub fn trust(ssid: &str, trusted: bool) -> String {
+    format!(
+        "{ssid} is now {}.",
+        if trusted { "trusted" } else { "untrusted" }
+    )
+}
+
+pub fn signed_in(port: &str) -> String {
+    format!("Signed in. {port} is up.")
+}
+
+pub fn hotspot_on(ssid: &str) -> String {
+    format!("Hotspot {ssid} is on. Press s for its QR code and password.")
+}
+
+pub fn vpn_saved(name: &str) -> String {
+    format!("Saved {name}.")
+}
+
+pub fn vpn_is(name: &str, up: bool) -> String {
+    format!("{name} is {}.", if up { "up" } else { "down" })
+}

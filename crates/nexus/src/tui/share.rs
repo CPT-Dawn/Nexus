@@ -10,6 +10,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::caps::{ColorTier, Glyphs};
+use super::surface::{centered, dots};
 use super::theme::Look;
 use super::view::Sym;
 use crate::qr::{self, Drawing};
@@ -87,16 +88,9 @@ impl Share {
     }
 }
 
-fn dots(n: usize, sym: &Sym) -> String {
-    let dot = if sym.glyphs == Glyphs::Ascii {
-        '*'
-    } else {
-        '\u{2022}'
-    };
-    std::iter::repeat_n(dot, n).collect()
-}
-
-/// QR cells are black on white so a phone reads them on any theme.
+/// QR cells are black on white so a phone reads them on any theme. This is
+/// the one place a view names a colour: the GLOSSARY's Theme entry records the
+/// exception (a code must keep its contrast whatever the Theme paints).
 pub(super) fn code_style(look: &Look) -> Style {
     if look.caps.color == ColorTier::None {
         Style::new()
@@ -210,16 +204,5 @@ pub(super) fn draw(f: &mut Frame, share: &Share, body: Rect, look: &Look, sym: &
             lines.push(info.centered());
             f.render_widget(Paragraph::new(lines), inner);
         }
-    }
-}
-
-pub(super) fn centered(area: Rect, width: u16, height: u16) -> Rect {
-    let width = width.min(area.width);
-    let height = height.min(area.height);
-    Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + (area.height - height) / 2,
-        width,
-        height,
     }
 }

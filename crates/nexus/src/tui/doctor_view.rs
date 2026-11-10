@@ -125,7 +125,7 @@ pub fn panel_height(app: &App) -> u16 {
 
 /// The Diagnostics panel: trouble first, each with what to do about it.
 pub fn panel(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
-    let block = sym.block(look, "Diagnostics", false);
+    let block = sym.block(look, "Doctor", false);
     let inner = block.inner(area);
     f.render_widget(block, area);
     let mut trouble: Vec<&Finding> = app.findings().iter().filter(|f| f.is_trouble()).collect();

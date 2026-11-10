@@ -4,6 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use nexus_ipc::EthernetState;
 
 use super::{App, Msg};
+use crate::text;
 use crate::tui::eap_form::EapForm;
 use crate::tui::ethernet::{Cmd, Done};
 use crate::tui::profile::Editor;
@@ -80,13 +81,13 @@ impl App {
             self.ethernet.busy = None;
         }
         match (cmd, result) {
-            (Cmd::Connect { port }, Ok(())) => self.say(format!("{port} is up."), false, None),
+            (Cmd::Connect { port }, Ok(())) => self.say(text::ethernet_joined(&port), false, None),
             (Cmd::SignIn { port, .. }, Ok(())) => {
-                self.say(format!("Signed in. {port} is up."), false, None);
+                self.say(text::tui::signed_in(&port), false, None);
             }
             (Cmd::Disconnect { port }, Ok(())) => {
                 let undo = Cmd::Connect { port: port.clone() };
-                self.say(format!("Dropped {port}."), false, Some(undo.into()));
+                self.say(text::ethernet_dropped(&port), false, Some(undo.into()));
             }
             // Back to the form, nothing typed lost, to try again.
             (Cmd::SignIn { port, eap }, Err(message)) => {

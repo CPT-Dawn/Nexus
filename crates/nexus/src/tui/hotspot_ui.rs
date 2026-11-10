@@ -7,22 +7,13 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::app::App;
-use super::caps::Glyphs;
 use super::hotspot::{Busy, Field, Form};
-use super::share::centered;
+use super::surface::{self, centered, dots};
 use super::theme::Look;
 use super::view::Sym;
 
 /// Rows the panel takes in the Hotspot tab's list column, borders included.
 pub(super) const PANEL_HEIGHT: u16 = 6;
-
-/// A name is the owner's to choose, but a stranger's Hotspot is not: no
-/// control characters on screen.
-fn clean(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_control() { '\u{fffd}' } else { c })
-        .collect()
-}
 
 /// How tall the panel wants to be at `width`: an explanation of why this
 /// machine cannot host a Hotspot needs room to wrap.
@@ -62,7 +53,7 @@ pub(super) fn panel(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym
             Line::styled("Waiting for NetworkManager.", look.dim()),
         ],
         Some(h) if h.on => {
-            let ssid = clean(h.ssid.as_deref().unwrap_or(""));
+            let ssid = surface::printable(h.ssid.as_deref().unwrap_or(""));
             let state = if h.starting {
                 Line::from(vec![
                     Span::styled("~ ", look.warn()),
@@ -105,15 +96,6 @@ pub(super) fn panel(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym
         ],
     };
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
-}
-
-fn dots(n: usize, sym: &Sym) -> String {
-    let dot = if sym.glyphs == Glyphs::Ascii {
-        '*'
-    } else {
-        '\u{2022}'
-    };
-    std::iter::repeat_n(dot, n).collect()
 }
 
 /// The form over the tab.

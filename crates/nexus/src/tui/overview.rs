@@ -394,7 +394,7 @@ pub fn cards_panel(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym,
     if area.height < MIN_BLOCK {
         return;
     }
-    let block = sym.block(look, "Connections", true);
+    let block = sym.block(look, "Networks", true);
     let inner = block.inner(area);
     f.render_widget(block, area);
     let roomy = roomy && inner.height >= 8;

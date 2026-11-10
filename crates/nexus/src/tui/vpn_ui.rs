@@ -10,17 +10,11 @@ use ratatui::widgets::{Clear, HighlightSpacing, List, ListItem, ListState, Parag
 use super::app::{App, Tab};
 use super::caps::Glyphs;
 use super::hits::Hit;
-use super::share::{centered, code_style};
+use super::share::code_style;
+use super::surface::{centered, printable};
 use super::theme::Look;
 use super::view::Sym;
 use super::vpn::{Form, Layer, Stage};
-
-/// A Profile name is untrusted text: control characters would drive the terminal.
-fn printable(text: &str) -> String {
-    text.chars()
-        .map(|c| if c.is_control() { '\u{fffd}' } else { c })
-        .collect()
-}
 
 fn state_word(state: VpnState) -> &'static str {
     match state {
@@ -72,7 +66,7 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
                 crate::text::tui::no_match("VPNs", vpn.filter()),
             );
         } else if vpn.has_list() {
-            "No VPNs yet.\nPress i to import a .conf or .ovpn,\nor c to create a tunnel."
+            "No VPNs yet.\nPress i to import a .conf or .ovpn,\nor c to create a VPN."
         } else {
             "Looking for VPNs..."
         };
@@ -270,7 +264,7 @@ fn share_view(f: &mut Frame, view: &super::vpn::ShareView, body: Rect, look: &Lo
             vec![
                 Line::styled("Show this config's QR code?", look.text()),
                 Line::styled(
-                    "It contains the PRIVATE key. Anyone who can see this screen can use the tunnel.",
+                    "It contains the PRIVATE key. Anyone who can see this screen can use the VPN.",
                     look.warn(),
                 ),
                 Line::default(),

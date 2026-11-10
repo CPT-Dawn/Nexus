@@ -527,24 +527,17 @@ impl App {
             .as_ref()
             .is_some_and(Editor::is_pending)
             .then_some(Duration::from_secs(1));
-        let sweep = match (sweep, countdown) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
         let toast = self
             .toast
             .as_ref()
             .map(|t| t.until.saturating_duration_since(Instant::now()));
-        let wait = match (sweep, toast) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
         // A running effect wants its next frame; once the last one ends this
         // is None again and the loop sleeps (ADR-0003).
-        match (wait, self.fx.running().then_some(fx::FRAME)) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
+        let effect = self.fx.running().then_some(fx::FRAME);
+        [sweep, countdown, toast, effect]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     /// Whether an effect is still running (frames are being asked for).
@@ -642,7 +635,7 @@ impl App {
             Msg::Happened(entry) => {
                 let online = entry.kind == ActivityKind::Online;
                 if online {
-                    self.say("You're online.", false, None);
+                    self.say(text::tui::ONLINE, false, None);
                     self.bloom();
                 }
                 self.activity.insert(0, entry);
@@ -741,11 +734,7 @@ impl App {
                     || self.vpn.drop_secrets();
                 match self.editor.take() {
                     Some(e) if e.is_pending() => {
-                        self.say(
-                            "Lost the daemon. NetworkManager reverts the change on its own.",
-                            true,
-                            None,
-                        );
+                        self.say(text::tui::LOST_DAEMON_REVERTS, true, None);
                         changed = true;
                     }
                     Some(_) => changed = true,
@@ -819,7 +808,7 @@ impl App {
                 if ours {
                     self.field = None;
                     if reason == PromptClosed::Expired {
-                        self.say("The password prompt timed out.", true, None);
+                        self.say(text::tui::PROMPT_TIMED_OUT, true, None);
                     }
                 }
                 ours
@@ -834,7 +823,7 @@ impl App {
             (Cmd::Scan, Ok(outcome)) => {
                 self.wifi.scan_answered(outcome.as_ref());
                 if outcome.is_some_and(|o| o.requested == 0) {
-                    self.say("Scanned a moment ago; the list is fresh.", false, None);
+                    self.say(text::tui::SCAN_FRESH, false, None);
                 }
             }
             (Cmd::Scan, Err(message)) => {
@@ -845,7 +834,7 @@ impl App {
                 self.wifi.busy = None;
                 match result {
                     Ok(_) => {
-                        self.say(format!("Joined {ssid}."), false, None);
+                        self.say(text::joined(ssid), false, None);
                         self.bloom();
                     }
                     Err(message) => self.say(message, true, None),
@@ -863,7 +852,7 @@ impl App {
                 self.wifi.busy = None;
                 match result {
                     Ok(_) => {
-                        self.say(format!("Joined {ssid}."), false, None);
+                        self.say(text::joined(ssid), false, None);
                         self.bloom();
                     }
                     // Back to the form, nothing typed lost, to try again.
@@ -886,7 +875,7 @@ impl App {
                 self.wifi.busy = None;
                 match result {
                     Ok(_) => {
-                        self.say(format!("Joined {ssid}."), false, None);
+                        self.say(text::joined(ssid), false, None);
                         self.bloom();
                     }
                     // Back to the form, nothing typed lost, to try again.
@@ -906,11 +895,7 @@ impl App {
                     ssid: ssid.clone(),
                     device: None,
                 };
-                self.say(
-                    format!("Disconnected from {ssid}."),
-                    false,
-                    Some(undo.into()),
-                );
+                self.say(text::disconnected(ssid), false, Some(undo.into()));
             }
             (Cmd::Tether { phone, name }, result) => {
                 self.tether.busy = None;
@@ -920,11 +905,7 @@ impl App {
                             phone: phone.clone(),
                             name: name.clone(),
                         };
-                        self.say(
-                            format!("Tethered through {name}."),
-                            false,
-                            Some(undo.into()),
-                        );
+                        self.say(text::tethered(name), false, Some(undo.into()));
                     }
                     Err(message) => self.say(message, true, None),
                 }
@@ -934,14 +915,10 @@ impl App {
                     phone: phone.clone(),
                     name: name.clone(),
                 };
-                self.say(
-                    format!("Dropped the tether to {name}."),
-                    false,
-                    Some(undo.into()),
-                );
+                self.say(text::untethered(name), false, Some(undo.into()));
             }
             (Cmd::Forget { ssid, .. }, Ok(_)) => {
-                self.say(format!("Forgot {ssid}."), false, None);
+                self.say(text::forgot(ssid), false, None);
             }
             (
                 Cmd::Autoconnect {
@@ -957,8 +934,8 @@ impl App {
                     enabled: !enabled,
                 };
                 let text = match enabled {
-                    true => format!("{ssid} will join automatically."),
-                    false => format!("{ssid} will not join automatically."),
+                    true => text::tui::autoconnect(ssid, true),
+                    false => text::tui::autoconnect(ssid, false),
                 };
                 self.say(text, false, Some(undo.into()));
             }
@@ -980,8 +957,8 @@ impl App {
                     trust: other,
                 };
                 let text = match trust {
-                    Trust::Untrusted => format!("{ssid} is now untrusted."),
-                    _ => format!("{ssid} is now trusted."),
+                    Trust::Untrusted => text::tui::trust(ssid, false),
+                    _ => text::tui::trust(ssid, true),
                 };
                 self.say(text, false, Some(undo.into()));
             }
@@ -994,7 +971,7 @@ impl App {
                 self.say(text::tui::airplane(*on), false, Some(undo.into()));
             }
             (Cmd::OpenPortal, Ok(_)) => {
-                self.say("Opened the login page in your browser.", false, None);
+                self.say(text::tui::PORTAL_OPENED, false, None);
             }
             (_, Err(message)) => self.say(message, true, None),
             _ => return false,
@@ -1555,7 +1532,7 @@ impl App {
                         None => {
                             let ssid = editor.ssid.clone();
                             self.editor = None;
-                            self.say(format!("Saved the settings of {ssid}."), false, None);
+                            self.say(text::profile_saved(&ssid), false, None);
                         }
                     },
                 }

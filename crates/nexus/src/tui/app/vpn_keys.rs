@@ -4,6 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nexus_ipc::VpnState;
 
 use super::App;
+use crate::text;
 use crate::tui::vpn::{Cmd, Done, Form, Layer, Reply, ShareView, Stage};
 
 impl App {
@@ -139,21 +140,17 @@ impl App {
     pub(super) fn vpn_done(&mut self, done: Done) -> bool {
         let Done { cmd, result } = done;
         match (cmd, result) {
-            (Cmd::Toggle { id, name, up }, result) => {
+            (Cmd::Toggle { id, name, .. }, result) => {
                 self.vpn.busy = None;
                 match result {
                     Ok(Reply::Toggled(t)) => {
-                        let word = if t.state == VpnState::Up {
-                            "up"
-                        } else {
-                            "down"
-                        };
+                        let up = t.state == VpnState::Up;
                         let undo = Cmd::Toggle {
                             id,
                             name: name.clone(),
                             up: !up,
                         };
-                        self.say(format!("{name} is {word}."), false, Some(undo.into()));
+                        self.say(text::tui::vpn_is(&name, up), false, Some(undo.into()));
                     }
                     Ok(_) => {}
                     Err(message) => self.say(message, true, None),
@@ -163,7 +160,7 @@ impl App {
                 if added.public_key.is_empty() {
                     // A plugin VPN has no key to hand over.
                     self.vpn.layer = None;
-                    self.say(format!("Saved {}.", added.name), false, None);
+                    self.say(text::tui::vpn_saved(&added.name), false, None);
                     return true;
                 }
                 // The new tunnel's public key is the next thing the person needs.

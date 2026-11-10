@@ -12,6 +12,7 @@ use ratatui::widgets::{Clear, HighlightSpacing, List, ListItem, ListState, Parag
 use super::app::App;
 use super::caps::Glyphs;
 use super::hits::Hit;
+use super::surface::centered;
 use super::theme::Look;
 use super::view::Sym;
 use super::wifi::Entry;
@@ -60,7 +61,7 @@ fn bars(look: &Look, sym: &Sym, signal: u8) -> Vec<Span<'static>> {
 
 fn short_security(s: Security) -> &'static str {
     match s {
-        Security::Enterprise => "802.1x",
+        Security::Enterprise => "ent",
         other => other.label(),
     }
 }
@@ -74,7 +75,7 @@ fn security_words(s: Security) -> &'static str {
         Security::Wpa2 => "WPA2 personal",
         Security::Wpa3 => "WPA3 personal",
         Security::Wpa3Transition => "WPA2 and WPA3 personal",
-        Security::Enterprise => "Enterprise (802.1X)",
+        Security::Enterprise => "Enterprise",
         _ => "Unknown",
     }
 }
@@ -179,7 +180,7 @@ pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
         let msg = if !wifi.has_list() {
             "Looking for networks..."
         } else if !wifi.has_adapter() {
-            "No Wi-Fi adapter found."
+            "No Wi-Fi card found."
         } else if !wifi.filter().is_empty() {
             return super::view::empty_filter(
                 f,
@@ -326,7 +327,7 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
             lines.push(row("Band", text(n.band.label().into())));
             lines.push(row("Access points", text(n.access_points.to_string())));
             if let Some(name) = wifi.adapter_name(&n.device) {
-                lines.push(row("Adapter", text(name.into())));
+                lines.push(row("Card", text(name.into())));
             }
             lines.push(row("Trust", text(n.trust.label().into())));
             if !wifi.cards().is_empty() {
@@ -363,17 +364,6 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
         }
     }
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
-}
-
-fn centered(area: Rect, width: u16, height: u16) -> Rect {
-    let width = width.min(area.width);
-    let height = height.min(area.height);
-    Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + (area.height - height) / 2,
-        width,
-        height,
-    }
 }
 
 /// Where a toast sits in `body`: bottom right, one column and one row clear of

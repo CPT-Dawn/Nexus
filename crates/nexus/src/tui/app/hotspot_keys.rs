@@ -9,6 +9,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nexus_ipc::{Op, Secret};
 
 use super::{App, Msg};
+use crate::text;
 use crate::tui::hotspot::{Busy, Done, Field, Form};
 use crate::tui::share::Share;
 
@@ -78,7 +79,7 @@ impl App {
 
     pub(in crate::tui) fn hotspot_stop(&mut self) -> bool {
         if !self.hotspot.on() {
-            self.say("No Hotspot is running.", true, None);
+            self.say(text::tui::NO_HOTSPOT_RUNNING, true, None);
             return true;
         }
         if self.hotspot.busy != Busy::No {
@@ -97,7 +98,7 @@ impl App {
     /// Opens the QR view; it only asks, the reveal key reads.
     pub(in crate::tui) fn hotspot_share(&mut self) -> bool {
         if !self.hotspot.ready() {
-            self.say("No Hotspot is up to share.", true, None);
+            self.say(text::tui::NO_HOTSPOT_TO_SHARE, true, None);
             return true;
         }
         let ssid = self.hotspot.ssid().unwrap_or_default().to_owned();
@@ -156,11 +157,7 @@ impl App {
         match done {
             Done::Started(Ok(ssid)) => {
                 self.hotspot.form = None;
-                self.say(
-                    format!("Hotspot {ssid} is on. Press s for its QR code and password."),
-                    false,
-                    None,
-                );
+                self.say(text::tui::hotspot_on(&ssid), false, None);
             }
             Done::Started(Err(message)) => match self.hotspot.form.as_mut() {
                 Some(form) => {
@@ -174,7 +171,7 @@ impl App {
                 if self.share.as_ref().is_some_and(|s| s.hotspot) {
                     self.share = None;
                 }
-                self.say(format!("Hotspot {ssid} stopped."), false, None);
+                self.say(text::hotspot_stopped(&ssid), false, None);
             }
             Done::Stopped(Err(message)) => self.say(message, true, None),
         }
