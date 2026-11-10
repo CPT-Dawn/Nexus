@@ -468,3 +468,27 @@ fn the_cli_speaks_json() {
         "{report}"
     );
 }
+
+#[test]
+fn iwd_as_networkmanagers_wifi_backend_is_no_conflict() {
+    // The layout `nexus-switch.sh` leaves: NetworkManager drives iwd, and no
+    // wpa_supplicant runs because NetworkManager never started one.
+    let world = healthy();
+    world.systemd.set_unit("iwd.service", Unit::Active);
+    world
+        .systemd
+        .set_unit("wpa_supplicant.service", Unit::Inactive);
+    let all = findings(&world);
+    assert!(!has(&all, "conflict-iwd"), "iwd is the backend here");
+}
+
+#[test]
+fn iwd_next_to_networkmanagers_wpa_supplicant_still_fights_over_the_radio() {
+    let world = healthy();
+    world.systemd.set_unit("iwd.service", Unit::Active);
+    world
+        .systemd
+        .set_unit("wpa_supplicant.service", Unit::Active);
+    let all = findings(&world);
+    assert!(has(&all, "conflict-iwd"));
+}

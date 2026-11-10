@@ -300,7 +300,10 @@ fn conflicts(i: &Inputs, running: bool, out: &mut Vec<Finding>) {
             )
         });
     }
-    if units.get(IWD).active {
+    // NetworkManager starts wpa_supplicant for Wi-Fi unless iwd is its backend,
+    // so iwd running beside it with no wpa_supplicant means iwd is the backend.
+    let iwd_is_backend = running && !units.get(WPA_SUPPLICANT).active;
+    if units.get(IWD).active && !iwd_is_backend {
         let f = finding(
             "conflict-iwd",
             Severity::Info,
