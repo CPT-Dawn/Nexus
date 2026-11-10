@@ -138,13 +138,17 @@ jobs:
           fi
 
           ssh-keyscan -t rsa,ed25519 aur.archlinux.org >> "$HOME/.ssh/known_hosts"
-          cat > "$HOME/.ssh/config" << 'EOF'
+          # In a container job $HOME is /github/home, but ssh takes ~ from
+          # the passwd entry (/root): name every file by its full path.
+          cat > "$HOME/.ssh/config" << EOF
           Host aur.archlinux.org
             User aur
-            IdentityFile ~/.ssh/aur
+            IdentityFile $HOME/.ssh/aur
             IdentitiesOnly yes
             StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/known_hosts
           EOF
+          echo "GIT_SSH_COMMAND=ssh -F $HOME/.ssh/config" >> "$GITHUB_ENV"
 
       - name: Render and push both packages
         shell: bash
