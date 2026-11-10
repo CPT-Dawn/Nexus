@@ -1,10 +1,11 @@
-//! Premium surfaces (ADR-0003): focused panes get a gradient border, and on a
-//! truecolor terminal a faint glow around it. A post-pass over the drawn
+//! Premium surfaces (ADR-0003): focused panes get a gradient border. Only
+//! foreground colours change, never a cell's background, so a transparent
+//! terminal stays transparent. A post-pass over the drawn
 //! frame, so views keep asking the theme for one border style; the focused
 //! border is recognised by its token (the accent) on a border glyph.
 //!
-//! Tiers: truecolor gets the smooth gradient and the glow; 256 colours get
-//! the same gradient stepped to the nearest palette index and no glow; 16
+//! Tiers: truecolor gets the smooth gradient; 256 colours get the same
+//! gradient stepped to the nearest palette index; 16
 //! colours, no colour and the ASCII glyph set keep the plain accent border
 //! (bold where there is no colour).
 
@@ -24,9 +25,6 @@ const HUE_SWING: f32 = 58.0;
 /// Gradient bands across the screen.
 const STEPS: f32 = 12.0;
 
-/// How strongly the glow tints the cells beside a focused border.
-const GLOW: f32 = 0.10;
-
 pub(super) fn finish(buf: &mut Buffer, look: &Look) {
     let tier = look.caps.color;
     if !matches!(tier, ColorTier::TrueColor | ColorTier::Ansi256) {
@@ -42,7 +40,6 @@ pub(super) fn finish(buf: &mut Buffer, look: &Look) {
         return;
     }
     let span = f32::from(area.width) + 2.0 * f32::from(area.height);
-    let mut ring: Vec<(u16, u16, (u8, u8, u8))> = Vec::new();
     for y in area.top()..area.bottom() {
         for x in area.left()..area.right() {
             let cell = &buf[(x, y)];
@@ -58,38 +55,8 @@ pub(super) fn finish(buf: &mut Buffer, look: &Look) {
                 ColorTier::TrueColor => Color::Rgb(shade.0, shade.1, shade.2),
                 _ => Color::Indexed(nearest_xterm(shade)),
             };
-            ring.push((x, y, shade));
         }
     }
-    if tier != ColorTier::TrueColor {
-        return;
-    }
-    // Glow: the plain cells beside a focused border take a hint of its colour.
-    let base = look.theme.bg.rgb;
-    for (x, y, shade) in ring {
-        let beside = [
-            (x.wrapping_sub(1), y),
-            (x + 1, y),
-            (x, y.wrapping_sub(1)),
-            (x, y + 1),
-        ];
-        for (nx, ny) in beside {
-            if nx >= area.right() || ny >= area.bottom() || nx < area.left() || ny < area.top() {
-                continue;
-            }
-            let cell = &mut buf[(nx, ny)];
-            if cell.bg != Color::Reset || BORDER_GLYPHS.contains(&cell.symbol()) {
-                continue;
-            }
-            let tint = mix(base, shade, GLOW);
-            cell.bg = Color::Rgb(tint.0, tint.1, tint.2);
-        }
-    }
-}
-
-fn mix(a: (u8, u8, u8), b: (u8, u8, u8), t: f32) -> (u8, u8, u8) {
-    let m = |x: u8, y: u8| (f32::from(x) + (f32::from(y) - f32::from(x)) * t).round() as u8;
-    (m(a.0, b.0), m(a.1, b.1), m(a.2, b.2))
 }
 
 /// `c` with its hue turned by `degrees` (HSL, lightness and saturation kept).

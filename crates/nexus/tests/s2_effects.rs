@@ -302,17 +302,14 @@ fn a_failed_join_shakes_its_toast_once_and_it_settles() {
 
     assert!(rig.app.animating(), "an error toast moves");
     let (w, h) = STANDARD;
-    // Frames across the effect: the toast's columns move left and right.
+    // Frames across the effect: the toast fades in (colour only, so a
+    // transparent terminal stays clear), then its columns shake.
     let mut texts = std::collections::BTreeSet::new();
     for _ in 0..12 {
         let frame = tui::render_fx(&mut rig.app, w, h, Duration::from_millis(40));
         texts.insert(text_of(&frame));
     }
-    assert!(
-        texts.len() > 3,
-        "the toast slid and shook: {} frames",
-        texts.len()
-    );
+    assert!(texts.len() > 1, "the toast shook: {} frames", texts.len());
     settle(&mut rig.app, STANDARD);
     let plain = tui::render(&rig.app, w, h);
     let after = tui::render_fx(&mut rig.app, w, h, LONG);
@@ -493,7 +490,7 @@ fn border_cells(buf: &Buffer) -> Vec<(u16, u16, Color)> {
 }
 
 #[test]
-fn truecolor_borders_run_a_gradient_and_glow() {
+fn truecolor_borders_run_a_gradient() {
     let app = app_at(truecolor(), STANDARD, State::Online);
     let buf = tui::render(&app, STANDARD.0, STANDARD.1);
     let focused: std::collections::BTreeSet<_> = border_cells(&buf)
@@ -504,12 +501,32 @@ fn truecolor_borders_run_a_gradient_and_glow() {
         focused.len() > 6,
         "the focused border shifts hue across the screen: {focused:?}"
     );
-    let glowing = buf
-        .content()
-        .iter()
-        .filter(|c| matches!(c.bg, Color::Rgb(..)) && c.symbol() == " ")
-        .count();
-    assert!(glowing > 0, "cells beside the focused border glow");
+}
+
+#[test]
+fn a_transparent_terminal_shows_through_everywhere_but_the_selection() {
+    // kitty's background_opacity, foot's alpha and compositor blur only apply
+    // to cells left on the default background: any other cell is opaque. The
+    // selection tint (the active tab and the selected row) is the one exception.
+    for state in [State::Online, State::Offline] {
+        let app = app_at(truecolor(), STANDARD, state);
+        let buf = tui::render(&app, STANDARD.0, STANDARD.1);
+        let painted: Vec<(u16, u16, Color)> = (0..buf.area.height)
+            .flat_map(|y| (0..buf.area.width).map(move |x| (x, y)))
+            .filter_map(|(x, y)| {
+                let bg = buf[(x, y)].bg;
+                (bg != Color::Reset).then_some((x, y, bg))
+            })
+            .collect();
+        let colours: std::collections::BTreeSet<_> =
+            painted.iter().map(|(_, _, c)| color_name(*c)).collect();
+        let rows: std::collections::BTreeSet<_> = painted.iter().map(|(_, y, _)| *y).collect();
+        assert!(
+            colours.len() <= 1 && rows.len() <= 3,
+            "{state:?}: only the selection may paint a background, \
+             got {colours:?} on rows {rows:?}"
+        );
+    }
 }
 
 #[test]

@@ -12,8 +12,8 @@ use std::time::{Duration as Wall, Instant};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
-use tachyonfx::pattern::RadialPattern;
-use tachyonfx::{CellFilter, Duration, Effect, EffectManager, Interpolation, Motion, fx};
+use tachyonfx::pattern::{RadialPattern, SweepPattern};
+use tachyonfx::{CellFilter, Duration, Effect, EffectManager, Interpolation, fx};
 
 use super::caps::ColorTier;
 use super::theme::{Look, nearest_xterm};
@@ -124,13 +124,10 @@ impl Fx {
         if self.motion != Movement::Full {
             return;
         }
-        let glide = fx::sweep_in(
-            Motion::LeftToRight,
-            14,
-            0,
-            self.bg,
-            (280, Interpolation::QuadOut),
-        );
+        // Text only: a sweep that fades the background too would leave
+        // opaque cells on a transparent terminal while it runs.
+        let glide = fx::fade_from_fg(self.bg, (280, Interpolation::QuadOut))
+            .with_pattern(SweepPattern::left_to_right(14));
         self.add(Slot::Tab, glide.with_area(body));
     }
 
@@ -175,13 +172,8 @@ impl Fx {
         if self.motion != Movement::Full {
             return;
         }
-        let slide = fx::slide_in(
-            Motion::RightToLeft,
-            10,
-            0,
-            self.bg,
-            (200, Interpolation::QuadOut),
-        );
+        let slide = fx::fade_from_fg(self.bg, (200, Interpolation::QuadOut))
+            .with_pattern(SweepPattern::right_to_left(10));
         let effect = if bad {
             fx::sequence(&[slide, shake(240)])
         } else {
