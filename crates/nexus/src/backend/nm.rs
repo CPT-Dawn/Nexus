@@ -30,6 +30,9 @@ use super::{Backend, BackendError, Counters, JoinTarget, NetFacts};
 use crate::secrets::Broker;
 use crate::text::{self, Failure};
 
+/// How long a radio switch may take to show in NetworkManager's properties.
+const RADIO_SETTLE: Duration = Duration::from_secs(3);
+
 const SERVICE: &str = "org.freedesktop.NetworkManager";
 
 #[zbus::proxy(
@@ -280,7 +283,16 @@ impl NetworkManager {
         if let Some(on) = wwan {
             nm.set_wwan_enabled(on).await?;
         }
-        Ok(Ok(Self::read_radios(&nm).await?))
+        // NetworkManager applies the switch through rfkill and updates the
+        // property a moment later: reading at once can report the old state.
+        let deadline = tokio::time::Instant::now() + RADIO_SETTLE;
+        loop {
+            let radios = Self::read_radios(&nm).await?;
+            if radios.wifi.enabled == wifi || tokio::time::Instant::now() >= deadline {
+                return Ok(Ok(radios));
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
     }
 
     /// Runs `read` on the bus; a failure becomes `Unavailable` when
