@@ -9,6 +9,7 @@ use ratatui::widgets::{HighlightSpacing, List, ListItem, ListState, Paragraph, W
 
 use super::app::App;
 use super::hits::Hit;
+use super::surface;
 use super::theme::Look;
 use super::view::Sym;
 
@@ -177,24 +178,23 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
         lines.push(row("MAC", Span::styled(mac.clone(), look.text()), look));
     }
     if let Some(profile) = &p.profile {
-        let tag = if profile.enterprise { "  (802.1X)" } else { "" };
+        let tag = if profile.enterprise {
+            "  (Enterprise)"
+        } else {
+            ""
+        };
         lines.push(row(
             "Profile",
-            Span::styled(format!("{}{tag}", clean(&profile.name)), look.text()),
+            Span::styled(
+                format!("{}{tag}", surface::printable(&profile.name)),
+                look.text(),
+            ),
             look,
         ));
     }
     lines.push(Line::default());
     lines.push(Line::styled(hint(p, busy), look.dim()));
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
-}
-
-/// A Profile's name is the person's (or the office's) to choose: no control
-/// characters on screen.
-fn clean(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_control() { '\u{fffd}' } else { c })
-        .collect()
 }
 
 fn hint(p: &EthernetPort, busy: bool) -> &'static str {
@@ -204,12 +204,12 @@ fn hint(p: &EthernetPort, busy: bool) -> &'static str {
     match p.state {
         EthernetState::Unplugged => "Nothing to join until a cable is in.",
         EthernetState::Connected => {
-            "x drops the Link. s signs in (802.1X). e changes the Profile settings."
+            "x drops the Link. s signs in to an Enterprise port. e changes the Profile settings."
         }
         EthernetState::Misconfigured => {
-            "Enter tries again. s signs in (802.1X). e changes the Profile settings."
+            "Enter tries again. s signs in to an Enterprise port. e changes the Profile settings."
         }
         EthernetState::Connecting => "x cancels.",
-        _ => "Enter joins. s signs in (802.1X). e changes the Profile settings.",
+        _ => "Enter joins. s signs in to an Enterprise port. e changes the Profile settings.",
     }
 }

@@ -10,17 +10,11 @@ use ratatui::widgets::{Clear, HighlightSpacing, List, ListItem, ListState, Parag
 use super::app::{App, Tab};
 use super::caps::Glyphs;
 use super::hits::Hit;
-use super::share::{centered, code_style};
+use super::share::code_style;
+use super::surface::{centered, printable};
 use super::theme::Look;
 use super::view::Sym;
 use super::vpn::{Form, Layer, Stage};
-
-/// A Profile name is untrusted text: control characters would drive the terminal.
-fn printable(text: &str) -> String {
-    text.chars()
-        .map(|c| if c.is_control() { '\u{fffd}' } else { c })
-        .collect()
-}
 
 fn state_word(state: VpnState) -> &'static str {
     match state {
@@ -54,12 +48,26 @@ fn fit(text: &str, width: usize, sym: &Sym) -> String {
 
 pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     let vpn = app.vpn();
-    let block = sym.block(look, "VPN", true);
+    let mut title = "VPN".to_owned();
+    if app.filtering() || !vpn.filter().is_empty() {
+        title.push_str(&crate::text::tui::filter_title(
+            vpn.filter(),
+            app.filtering(),
+        ));
+    }
+    let block = sym.block(look, &title, true);
     let inner = block.inner(area);
     f.render_widget(block, area);
     if vpn.is_empty() {
-        let msg = if vpn.has_list() {
-            "No VPNs yet.\nPress i to import a .conf or .ovpn,\nor c to create a tunnel."
+        let msg = if !vpn.filter().is_empty() && vpn.has_list() {
+            return super::view::empty_filter(
+                f,
+                inner,
+                look,
+                crate::text::tui::no_match("VPNs", vpn.filter()),
+            );
+        } else if vpn.has_list() {
+            "No VPNs yet.\nPress i to import a .conf or .ovpn,\nor c to create a VPN."
         } else {
             "Looking for VPNs..."
         };
@@ -256,7 +264,7 @@ fn share_view(f: &mut Frame, view: &super::vpn::ShareView, body: Rect, look: &Lo
             vec![
                 Line::styled("Show this config's QR code?", look.text()),
                 Line::styled(
-                    "It contains the PRIVATE key. Anyone who can see this screen can use the tunnel.",
+                    "It contains the PRIVATE key. Anyone who can see this screen can use the VPN.",
                     look.warn(),
                 ),
                 Line::default(),

@@ -259,7 +259,7 @@ fn signing_in_brings_the_link_up_and_shows_its_details() {
         "10.20.30.1",
         "10.20.30.2",
         "Office wall socket",
-        "(802.1X)",
+        "(Enterprise)",
     ] {
         assert!(frame.contains(want), "{want}:\n{frame}");
     }
@@ -332,6 +332,24 @@ fn x_drops_the_link_and_enter_brings_it_back() {
         a.ethernet().ports()[0].state == EthernetState::Connected
     });
     assert_eq!(rig.toast(), "enp3s0 is up.");
+}
+
+#[test]
+fn u_takes_a_dropped_link_back() {
+    let mut rig = Rig::busy();
+    rig.sign_in("alice@office.example", "hunter2");
+    rig.pump_until("the connected port", |a| {
+        a.ethernet().ports()[0].state == EthernetState::Connected
+    });
+    rig.key(KeyCode::Char('x'));
+    rig.pump_until("the Link to drop", |a| {
+        a.ethernet().ports()[0].state == EthernetState::Disconnected
+            && a.toast().is_some_and(|t| t.undo.is_some())
+    });
+    rig.key(KeyCode::Char('u'));
+    rig.pump_until("the Link back", |a| {
+        a.ethernet().ports()[0].state == EthernetState::Connected
+    });
 }
 
 // ---- Profile settings -----------------------------------------------------------

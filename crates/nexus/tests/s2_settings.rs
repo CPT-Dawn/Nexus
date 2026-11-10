@@ -426,6 +426,52 @@ fn each_notification_switch_edits_its_key() {
 }
 
 #[test]
+fn the_connectivity_row_shows_networkmanagers_address_read_only() {
+    let mut rig = Rig::new(false);
+    rig.go_to("Connectivity check");
+    rig.pump_until("the address", |a| a.settings().connectivity_uri().is_some());
+    let frame = rig.text(STANDARD);
+    let uri = rig.app.settings().connectivity_uri().unwrap().to_owned();
+    assert!(frame.contains(&uri), "{frame}");
+    assert!(frame.contains("NetworkManager.conf"), "{frame}");
+    assert!(frame.contains("ConnectivityCheckEnabled"), "{frame}");
+}
+
+#[test]
+fn u_puts_a_switch_back_and_a_reset_too() {
+    let mut rig = Rig::new(false);
+    rig.go_to("Notify: joined");
+    rig.key(KeyCode::Enter);
+    rig.pump_until("joined off", |a| {
+        a.settings()
+            .config()
+            .is_some_and(|c| c["notifications"]["joined"] == false)
+    });
+    assert!(rig.app.toast().is_some_and(|t| t.undo.is_some()));
+    rig.key(KeyCode::Char('u'));
+    rig.pump_until("joined back on", |a| {
+        a.settings()
+            .config()
+            .is_some_and(|c| c["notifications"]["joined"] != false)
+    });
+
+    // Reset undoes too: "Notify: lost" starts switched off in this world.
+    rig.go_to("Notify: lost");
+    rig.key(KeyCode::Char('r'));
+    rig.pump_until("lost reset", |a| {
+        a.settings()
+            .config()
+            .is_some_and(|c| c["notifications"]["lost"] != false)
+    });
+    rig.key(KeyCode::Char('u'));
+    rig.pump_until("lost off again", |a| {
+        a.settings()
+            .config()
+            .is_some_and(|c| c["notifications"]["lost"] == false)
+    });
+}
+
+#[test]
 fn a_hand_edit_changes_the_running_tui() {
     let mut rig = Rig::new(false);
     rig.world.write_config("theme = \"tokyo-night\"\n");

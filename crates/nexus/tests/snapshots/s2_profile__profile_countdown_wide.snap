@@ -10,7 +10,7 @@ expression: self.text(size)
 │     Neighbour-2G    ▂▄▆█ wpa2   2.4G ││ Security      WPA2 personal                                                                      │
 │     A very long ne… ▂▄▆█ wpa2   2.4G ││ Band          5 GHz                                                                              │
 │     Rooftop-6E      ▂▄▆█ wpa2     6G ││ Access points 1                                                                                  │
-│   ── Saved, out of range             ││ Adapter       wlan0                                                                              │
+│   ── Saved, out of range             ││ Card          wlan0                                                                              │
 │     Parents House               auto ││ Trust         Trusted                                                                            │
 │     Hotel Lobby               manual ││ Autoconnect   on                                                                                 │
 │                                      ││                                                                                                  │

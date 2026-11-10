@@ -21,7 +21,6 @@ use super::hits::Hit;
 use super::layout::{Areas, Mode};
 use super::theme::Look;
 use super::view::{Sym, state_style};
-use super::words;
 
 /// A block is only drawn when it has room for a border and a line.
 const MIN_BLOCK: u16 = 3;
@@ -122,7 +121,7 @@ pub fn hero_rect(status: &Status, a: &Areas, look: &Look) -> Rect {
 pub fn draw(f: &mut Frame, app: &App, status: &Status, a: &Areas, look: &Look, sym: &Sym) {
     let p = plan(status, a, look);
     cards_panel(f, app, p.cards, look, sym, p.roomy);
-    hero(f, status, p.hero, look, sym);
+    hero(f, status, app.doctor_trouble(), p.hero, look, sym);
     traffic(f, app, p.traffic, look, sym);
     // Trouble the Doctor found takes the top of the activity strip's room.
     let want = doctor_view::panel_height(app);
@@ -144,7 +143,13 @@ pub fn draw(f: &mut Frame, app: &App, status: &Status, a: &Areas, look: &Look, s
 // ---- hero -----------------------------------------------------------------------
 
 fn sentence_rows(status: &Status, width: u16) -> u16 {
-    let len = words::sentence(status).chars().count() as u16;
+    // Room for the longer of the two wordings, so a Doctor finding appearing
+    // never moves the layout (and with it the graphs' gating).
+    let len = [false, true]
+        .into_iter()
+        .map(|t| crate::text::tui::sentence(status, t).chars().count())
+        .max()
+        .unwrap_or(0) as u16;
     len.div_ceil(width.max(1)).clamp(1, 3)
 }
 
@@ -166,14 +171,14 @@ fn hero_height(status: &Status, width: u16, budget: u16, look: &Look) -> u16 {
     let halo = wants_halo(look);
     let sentence = sentence_rows(status, width.saturating_sub(4));
     let big = 2 + bigtype::height(halo) + 1 + sentence + 1;
-    if big_scale(words::headline(status), width, halo).is_some() && big <= budget {
+    if big_scale(crate::text::tui::headline(status), width, halo).is_some() && big <= budget {
         big
     } else {
         2 + 1 + 1 + sentence + 1
     }
 }
 
-fn hero(f: &mut Frame, status: &Status, area: Rect, look: &Look, sym: &Sym) {
+fn hero(f: &mut Frame, status: &Status, trouble: bool, area: Rect, look: &Look, sym: &Sym) {
     if area.height < MIN_BLOCK {
         return;
     }
@@ -182,7 +187,7 @@ fn hero(f: &mut Frame, status: &Status, area: Rect, look: &Look, sym: &Sym) {
     f.render_widget(block, area);
     let style = state_style(look, status);
     let halo = wants_halo(look);
-    let text = words::headline(status);
+    let text = crate::text::tui::headline(status);
     let mut lines: Vec<Line> = Vec::new();
     let big_rows = bigtype::height(halo);
     let want_big = inner.height > big_rows + 2;
@@ -197,7 +202,10 @@ fn hero(f: &mut Frame, status: &Status, area: Rect, look: &Look, sym: &Sym) {
     if inner.height as usize > lines.len() + sentence {
         lines.push(Line::default());
     }
-    lines.push(Line::styled(words::sentence(status), look.text()));
+    lines.push(Line::styled(
+        crate::text::tui::sentence(status, trouble),
+        look.text(),
+    ));
     if inner.height as usize >= lines.len() + sentence {
         lines.push(Line::styled(facts(status), look.dim()));
     }
@@ -337,6 +345,13 @@ pub fn card(app: &App, row: usize) -> (&'static str, String, bool) {
             return (name, ssid.clone(), true);
         }
     }
+    if row == 0 && !app.radios().wifi.enabled {
+        return (
+            name,
+            crate::text::tui::wifi_card_off(&app.radios()).into(),
+            false,
+        );
+    }
     match link {
         Some(l) if kinds.contains(&l.kind) => (name, l.name.clone(), true),
         _ if app.status().is_none() => (name, "-".into(), false),
@@ -379,7 +394,7 @@ pub fn cards_panel(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym,
     if area.height < MIN_BLOCK {
         return;
     }
-    let block = sym.block(look, "Connections", true);
+    let block = sym.block(look, "Networks", true);
     let inner = block.inner(area);
     f.render_widget(block, area);
     let roomy = roomy && inner.height >= 8;

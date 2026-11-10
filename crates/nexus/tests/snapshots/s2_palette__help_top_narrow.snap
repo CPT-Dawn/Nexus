@@ -15,10 +15,10 @@ expression: top
 │  Esc                  Back out; never quits              │
 │  o                    Open a Portal's login page         │
 │  f                    Overview: run the fix (asks first) │
+│  /                    Filter the Wi-Fi or VPN list by na │
+│  w                    Turn Wi-Fi off or on (undo with u) │
+│  A                    Turn airplane mode on or off: ever │
 │  ?                    Show or hide this help             │
 │  q                    Quit (Ctrl-C works anywhere)       │
-│  Wi-Fi: Enter         Join the selected Network          │
-│  Wi-Fi: r             Rescan                             │
-│  Wi-Fi: x             Disconnect                         │
 ╰──────────────────────────────────────────────────────────╯
  j/k scroll  esc close

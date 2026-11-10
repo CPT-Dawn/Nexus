@@ -7,6 +7,7 @@ expression: frame
 │ ▸ Theme                                   Midnight Bloom │
 │   Nerd Font icons                                    off │
 │   Reduced motion                                     off │
+│   Connectivity check                                  on │
 │   Notify: joined                                      on │
 │   Notify: lost                                       off │
 │   Notify: bad password                                on │
@@ -19,11 +20,10 @@ expression: frame
 │                                                          │
 │                                                          │
 │                                                          │
-│                                                          │
 ╰──────────────────────────────────────────────────────────╯
  enter change  r reset  d details  : palette  ? help
 
-  760 cells  fg=Reset bg=Reset mods=[]
+  758 cells  fg=Reset bg=Reset mods=[]
     7 cells  fg=Reset bg=Rgb(24, 36, 41) mods=[]
    14 cells  fg=Reset bg=Rgb(24, 37, 41) mods=[]
    26 cells  fg=Reset bg=Rgb(24, 38, 41) mods=[]
@@ -56,7 +56,7 @@ expression: frame
     8 cells  fg=Rgb(157, 180, 181) bg=Rgb(24, 39, 39) mods=[]
     8 cells  fg=Rgb(157, 180, 181) bg=Rgb(24, 39, 40) mods=[]
     7 cells  fg=Rgb(157, 180, 181) bg=Rgb(24, 39, 41) mods=[]
-   12 cells  fg=Rgb(158, 206, 106) bg=Reset mods=[]
+   14 cells  fg=Rgb(158, 206, 106) bg=Reset mods=[]
     8 cells  fg=Rgb(228, 242, 240) bg=Reset mods=[bold]
    68 cells  fg=Rgb(228, 242, 240) bg=Rgb(23, 48, 47) mods=[bold]
     1 cells  fg=Rgb(228, 242, 240) bg=Rgb(24, 39, 36) mods=[bold]

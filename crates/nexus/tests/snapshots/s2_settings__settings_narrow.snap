@@ -7,6 +7,7 @@ expression: rig.text(NARROW)
 │ ▸ Theme                                   Midnight Bloom │
 │   Nerd Font icons                                    off │
 │   Reduced motion                                     off │
+│   Connectivity check                                  on │
 │   Notify: joined                                      on │
 │   Notify: lost                                       off │
 │   Notify: bad password                                on │
@@ -15,7 +16,6 @@ expression: rig.text(NARROW)
 │   Notify: VPN drop                                    on │
 │   Notify: untrusted                                   on │
 │   Untrusted: metered                                 off │
-│                                                          │
 │                                                          │
 │                                                          │
 │                                                          │

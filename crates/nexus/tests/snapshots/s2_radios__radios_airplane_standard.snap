@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_radios.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Wi-Fi · off ───────────────╮╭ Wi-Fi ─────────────────────────────────────────────────────────────╮
+│ Airplane mode is on, so    ││ Nothing to show while Wi-Fi is off.                                │
+│ Wi-Fi is off.              ││                                                                    │
+│ Press A to turn it off.    ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││      ╭ Done ─────────────────────────────────────────────────────╮ │
+│                            ││      │ Airplane mode is on. Wi-Fi and Bluetooth are off.  u undo │ │
+│                            ││      ╰───────────────────────────────────────────────────────────╯ │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ r scan  x disconnect  f forget  s share  a auto  t trust  e settings  n other  u undo  : palette  ?

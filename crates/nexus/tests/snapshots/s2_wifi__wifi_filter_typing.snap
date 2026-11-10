@@ -1,0 +1,32 @@
+---
+source: crates/nexus/tests/s2_wifi.rs
+expression: frame
+---
+ Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
+╭ Wi-Fi · /ho_ ──────────────╮╭ Home-5G ───────────────────────────────────────────────────────────╮
+│ ▸ ● Home-5G    ▂▄▆█ wpa2   ││ ● Connected                                                        │
+│   ── Saved, out of range   ││                                                                    │
+│     Parents House     auto ││ Signal         82%  ▂▄▆█                                           │
+│     Hotel Lobby     manual ││ Security      WPA2 personal                                        │
+│                            ││ Band          5 GHz                                                │
+│                            ││ Access points 1                                                    │
+│                            ││ Card          wlan0                                                │
+│                            ││ Trust         Trusted                                              │
+│                            ││ Autoconnect   on                                                   │
+│                            ││                                                                    │
+│                            ││ Press x to disconnect.                                             │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ type filter  enter keep  esc clear

@@ -15,7 +15,7 @@ expression: ask
 │                ╭ Share Work ────────────────────────────────────────────────────╮                │
 │                │ Show this config's QR code?                                    │                │
 │                │ It contains the PRIVATE key. Anyone who can see this screen    │                │
-│                │ can use the tunnel.                                            │                │
+│                │ can use the VPN.                                               │                │
 │                │                                                                │                │
 │                │ enter reveal   esc cancel                                      │                │
 │                │                                                                │                │

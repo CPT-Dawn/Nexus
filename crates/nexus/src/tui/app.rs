@@ -3,6 +3,7 @@
 //! I/O is [`Runner`] sending the commands the person asked for.
 
 mod eth_keys;
+mod filter_keys;
 mod hotspot_keys;
 mod settings_keys;
 mod vpn_keys;
@@ -32,8 +33,11 @@ use super::settings::SettingsTab;
 use super::share::{Share, Stage};
 use super::tether::TetherTab;
 use super::theme::{Look, Theme};
+use super::undo::Undo;
+use super::verbs;
 use super::vpn::{self, VpnTab};
 use super::wifi::{Cmd, Confirm, Done, Entry, PasswordField, Runner, SWEEP_FRAME, Toast, WifiTab};
+use crate::text;
 
 mod mouse;
 mod palette;
@@ -94,6 +98,8 @@ pub enum Msg {
         config: serde_json::Value,
         warning: Option<String>,
     },
+    /// NetworkManager's connectivity-check address (read-only).
+    ConnectivityUri(Option<String>),
     /// A setting the person changed was refused (`Err`) or taken.
     Setting(Result<(), String>),
     /// The Daemon cannot be reached (never connected, or the link dropped).
@@ -256,6 +262,8 @@ pub struct App {
     runner: Option<Runner>,
     /// The command palette, while open: it has the keys.
     palette: Option<Palette>,
+    /// The `/` filter of the list is being typed: it has the keys.
+    filtering: bool,
     /// First help row shown (the overlay scrolls).
     help_scroll: usize,
     /// Event-driven effects (ADR-0003); empty, and so silent, when idle.
@@ -303,6 +311,7 @@ impl App {
             toast: None,
             runner: None,
             palette: None,
+            filtering: false,
             help_scroll: 0,
             hits: std::cell::RefCell::new(Vec::new()),
         }
@@ -458,6 +467,11 @@ impl App {
         &self.findings
     }
 
+    /// Whether the Doctor found anything wrong.
+    pub fn doctor_trouble(&self) -> bool {
+        self.findings.iter().any(Finding::is_trouble)
+    }
+
     /// The first finding in trouble that has a fix the Daemon can run.
     pub fn runnable_fix(&self) -> Option<&Finding> {
         self.findings
@@ -515,24 +529,17 @@ impl App {
             .as_ref()
             .is_some_and(Editor::is_pending)
             .then_some(Duration::from_secs(1));
-        let sweep = match (sweep, countdown) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
         let toast = self
             .toast
             .as_ref()
             .map(|t| t.until.saturating_duration_since(Instant::now()));
-        let wait = match (sweep, toast) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
         // A running effect wants its next frame; once the last one ends this
         // is None again and the loop sleeps (ADR-0003).
-        match (wait, self.fx.running().then_some(fx::FRAME)) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
+        let effect = self.fx.running().then_some(fx::FRAME);
+        [sweep, countdown, toast, effect]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     /// Whether an effect is still running (frames are being asked for).
@@ -630,7 +637,7 @@ impl App {
             Msg::Happened(entry) => {
                 let online = entry.kind == ActivityKind::Online;
                 if online {
-                    self.say("You're online.", false, None);
+                    self.say(text::tui::ONLINE, false, None);
                     self.bloom();
                 }
                 self.activity.insert(0, entry);
@@ -689,6 +696,9 @@ impl App {
                 true
             }
             Msg::Setting(Ok(())) => false,
+            Msg::ConnectivityUri(uri) => {
+                self.settings.set_connectivity_uri(uri) && self.tab == Tab::Settings
+            }
             Msg::Ethernet(list) => self.ethernet.refresh(list),
             Msg::Wired(done) => self.eth_done(*done),
             Msg::Hotspot(info) => {
@@ -729,11 +739,7 @@ impl App {
                     || self.vpn.drop_secrets();
                 match self.editor.take() {
                     Some(e) if e.is_pending() => {
-                        self.say(
-                            "Lost the daemon. NetworkManager reverts the change on its own.",
-                            true,
-                            None,
-                        );
+                        self.say(text::tui::LOST_DAEMON_REVERTS, true, None);
                         changed = true;
                     }
                     Some(_) => changed = true,
@@ -767,7 +773,7 @@ impl App {
         }
     }
 
-    fn say(&mut self, text: impl Into<String>, bad: bool, undo: Option<Cmd>) {
+    fn say(&mut self, text: impl Into<String>, bad: bool, undo: Option<Undo>) {
         self.toast = Some(Toast {
             text: text.into(),
             bad,
@@ -807,7 +813,7 @@ impl App {
                 if ours {
                     self.field = None;
                     if reason == PromptClosed::Expired {
-                        self.say("The password prompt timed out.", true, None);
+                        self.say(text::tui::PROMPT_TIMED_OUT, true, None);
                     }
                 }
                 ours
@@ -822,7 +828,7 @@ impl App {
             (Cmd::Scan, Ok(outcome)) => {
                 self.wifi.scan_answered(outcome.as_ref());
                 if outcome.is_some_and(|o| o.requested == 0) {
-                    self.say("Scanned a moment ago; the list is fresh.", false, None);
+                    self.say(text::tui::SCAN_FRESH, false, None);
                 }
             }
             (Cmd::Scan, Err(message)) => {
@@ -833,7 +839,7 @@ impl App {
                 self.wifi.busy = None;
                 match result {
                     Ok(_) => {
-                        self.say(format!("Joined {ssid}."), false, None);
+                        self.say(text::joined(ssid), false, None);
                         self.bloom();
                     }
                     Err(message) => self.say(message, true, None),
@@ -851,7 +857,7 @@ impl App {
                 self.wifi.busy = None;
                 match result {
                     Ok(_) => {
-                        self.say(format!("Joined {ssid}."), false, None);
+                        self.say(text::joined(ssid), false, None);
                         self.bloom();
                     }
                     // Back to the form, nothing typed lost, to try again.
@@ -874,7 +880,7 @@ impl App {
                 self.wifi.busy = None;
                 match result {
                     Ok(_) => {
-                        self.say(format!("Joined {ssid}."), false, None);
+                        self.say(text::joined(ssid), false, None);
                         self.bloom();
                     }
                     // Back to the form, nothing typed lost, to try again.
@@ -894,7 +900,7 @@ impl App {
                     ssid: ssid.clone(),
                     device: None,
                 };
-                self.say(format!("Disconnected from {ssid}."), false, Some(undo));
+                self.say(text::disconnected(ssid), false, Some(undo.into()));
             }
             (Cmd::Tether { phone, name }, result) => {
                 self.tether.busy = None;
@@ -904,7 +910,7 @@ impl App {
                             phone: phone.clone(),
                             name: name.clone(),
                         };
-                        self.say(format!("Tethered through {name}."), false, Some(undo));
+                        self.say(text::tethered(name), false, Some(undo.into()));
                     }
                     Err(message) => self.say(message, true, None),
                 }
@@ -914,10 +920,10 @@ impl App {
                     phone: phone.clone(),
                     name: name.clone(),
                 };
-                self.say(format!("Dropped the tether to {name}."), false, Some(undo));
+                self.say(text::untethered(name), false, Some(undo.into()));
             }
             (Cmd::Forget { ssid, .. }, Ok(_)) => {
-                self.say(format!("Forgot {ssid}."), false, None);
+                self.say(text::forgot(ssid), false, None);
             }
             (
                 Cmd::Autoconnect {
@@ -933,10 +939,10 @@ impl App {
                     enabled: !enabled,
                 };
                 let text = match enabled {
-                    true => format!("{ssid} will join automatically."),
-                    false => format!("{ssid} will not join automatically."),
+                    true => text::tui::autoconnect(ssid, true),
+                    false => text::tui::autoconnect(ssid, false),
                 };
-                self.say(text, false, Some(undo));
+                self.say(text, false, Some(undo.into()));
             }
             (
                 Cmd::Trust {
@@ -956,13 +962,21 @@ impl App {
                     trust: other,
                 };
                 let text = match trust {
-                    Trust::Untrusted => format!("{ssid} is now untrusted."),
-                    _ => format!("{ssid} is now trusted."),
+                    Trust::Untrusted => text::tui::trust(ssid, false),
+                    _ => text::tui::trust(ssid, true),
                 };
-                self.say(text, false, Some(undo));
+                self.say(text, false, Some(undo.into()));
+            }
+            (Cmd::WifiPower { on }, Ok(_)) => {
+                let undo = Cmd::WifiPower { on: !on };
+                self.say(text::tui::wifi_power(*on), false, Some(undo.into()));
+            }
+            (Cmd::Airplane { on }, Ok(_)) => {
+                let undo = Cmd::Airplane { on: !on };
+                self.say(text::tui::airplane(*on), false, Some(undo.into()));
             }
             (Cmd::OpenPortal, Ok(_)) => {
-                self.say("Opened the login page in your browser.", false, None);
+                self.say(text::tui::PORTAL_OPENED, false, None);
             }
             (_, Err(message)) => self.say(message, true, None),
             _ => return false,
@@ -1049,6 +1063,9 @@ impl App {
         }
         if self.palette.is_some() {
             return self.palette_key(key);
+        }
+        if self.filtering && self.layer == Layer::Root {
+            return self.filter_key(key);
         }
         match self.layer {
             Layer::Help => self.help_key(key),
@@ -1203,6 +1220,11 @@ impl App {
                 self.fix = FixState::Asking;
                 true
             }
+            KeyCode::Char('/') => self.start_filter(),
+            // Esc backs out of a filter first; at the root it never quits.
+            KeyCode::Esc if !self.filter_text().is_empty() => self.clear_filter(),
+            KeyCode::Char('w') => self.toggle_wifi_radio(),
+            KeyCode::Char('A') => self.toggle_airplane(),
             KeyCode::Char('o') if self.portal().is_some() => {
                 self.send(Cmd::OpenPortal);
                 false
@@ -1241,27 +1263,68 @@ impl App {
 
     /// Keys that belong to the current tab (the sheet passes them through).
     fn tab_key(&mut self, key: KeyEvent) -> bool {
-        match self.tab {
+        if key.code == KeyCode::Char('u') {
+            return self.undo();
+        }
+        self.keys_of(self.tab, key)
+    }
+
+    /// Takes the toast's change back: one `u` for every list that offers it.
+    pub(in crate::tui) fn undo(&mut self) -> bool {
+        let Some(undo) = self.toast.take().and_then(|t| t.undo) else {
+            return false;
+        };
+        match undo {
+            Undo::Wifi(cmd @ (Cmd::Tether { .. } | Cmd::Untether { .. })) => self.run_tether(cmd),
+            Undo::Wifi(cmd) => self.run_wifi(cmd),
+            Undo::Ethernet(cmd) => self.run_eth(cmd),
+            Undo::Vpn(cmd) => self.run_vpn(cmd),
+            Undo::Setting { key, value } => {
+                self.set_setting(&key, value);
+            }
+        }
+        true
+    }
+
+    /// The radio switches the Daemon last reported (all on until it has).
+    pub fn radios(&self) -> nexus_ipc::Radios {
+        self.status.as_ref().map(|s| s.radios).unwrap_or_default()
+    }
+
+    fn toggle_wifi_radio(&mut self) -> bool {
+        let radios = self.radios();
+        if radios.wifi.enabled {
+            self.run_wifi(Cmd::WifiPower { on: false });
+        } else if radios.wifi.hardware_blocked {
+            self.say(text::HARD_BLOCKED, true, None);
+        } else {
+            self.run_wifi(Cmd::WifiPower { on: true });
+        }
+        true
+    }
+
+    fn toggle_airplane(&mut self) -> bool {
+        let on = !self.radios().airplane;
+        self.run_wifi(Cmd::Airplane { on });
+        true
+    }
+
+    /// Presses `key` as `tab`'s handler sees it. The one place that maps a
+    /// tab to its handler, so the palette cannot miss a tab: a new tab is a
+    /// compile error here, not a Verb that quietly does nothing.
+    pub(super) fn keys_of(&mut self, tab: Tab, key: KeyEvent) -> bool {
+        match tab {
             Tab::WiFi => self.wifi_key(key),
             Tab::Vpn => self.vpn_key(key),
             Tab::Ethernet => self.eth_key(key),
             Tab::Hotspot => self.hotspot_tab_key(key),
             Tab::Settings => self.settings_key(key),
-            _ => false,
+            Tab::Overview => false,
         }
     }
 
     /// Keys of the Tethering list: enter tethers, x drops it, u undoes.
     fn tether_key(&mut self, key: KeyEvent) -> bool {
-        if key.code == KeyCode::Char('u') {
-            return match self.toast.take().and_then(|t| t.undo) {
-                Some(undo) => {
-                    self.run_tether(undo);
-                    true
-                }
-                None => false,
-            };
-        }
         let Some(phone) = self.tether.selected().cloned() else {
             return false;
         };
@@ -1296,13 +1359,6 @@ impl App {
                 }
                 true
             }
-            KeyCode::Char('u') => match self.toast.take().and_then(|t| t.undo) {
-                Some(undo) => {
-                    self.run_wifi(undo);
-                    true
-                }
-                None => false,
-            },
             KeyCode::Char('n') => {
                 self.toast = None;
                 self.hidden = Some(HiddenForm::new());
@@ -1481,7 +1537,7 @@ impl App {
                         None => {
                             let ssid = editor.ssid.clone();
                             self.editor = None;
-                            self.say(format!("Saved the settings of {ssid}."), false, None);
+                            self.say(text::profile_saved(&ssid), false, None);
                         }
                     },
                 }
@@ -1554,6 +1610,7 @@ impl App {
     fn go_tab(&mut self, tab: Tab) -> bool {
         let changed = tab != self.tab;
         self.tab = tab;
+        self.filtering = false;
         self.selected = 0;
         if changed {
             self.fx.tab_changed(self.body_rect());
@@ -1575,6 +1632,9 @@ impl App {
     pub fn hints(&self, narrow: bool) -> Vec<(&'static str, &'static str)> {
         if self.palette.is_some() {
             return vec![("enter", "run"), ("esc", "close")];
+        }
+        if self.filtering && self.layer == Layer::Root {
+            return vec![("type", "filter"), ("enter", "keep"), ("esc", "clear")];
         }
         if self.eap.is_some() || self.hidden.is_some() {
             return vec![("tab", "next"), ("enter", "join"), ("esc", "cancel")];
@@ -1609,24 +1669,15 @@ impl App {
             return share.hints();
         }
         if self.tab == Tab::Vpn && self.vpn.layer.is_some() {
-            return self.vpn_hints(false);
+            return self.vpn_hints();
         }
         match self.layer {
             Layer::Help => vec![("j/k", "scroll"), ("esc", "close")],
             Layer::Confirm => vec![("y", "run"), ("n", "cancel")],
             Layer::Sheet => {
                 let mut v = vec![("esc", "back")];
-                if self.tab == Tab::WiFi {
-                    v.extend(self.wifi_hints(false));
-                } else if self.tab == Tab::Vpn {
-                    v.extend(self.vpn_hints(false));
-                } else if self.tab == Tab::Hotspot {
-                    v.extend(self.tether_hints());
-                } else if self.tab == Tab::Settings {
-                    v.extend(self.settings_hints());
-                } else if self.tab == Tab::Ethernet {
-                    v.extend(self.eth_hints());
-                }
+                v.extend(verbs::tab_hints(self, self.tab, false));
+                v.extend(verbs::global_hints(self));
                 v.push(("?", "help"));
                 v
             }
@@ -1635,38 +1686,18 @@ impl App {
                 if self.rows() > 0 && !self.needs_setup() {
                     v.push(("j/k", "move"));
                 }
-                if self.needs_setup() {
-                    // No list and nothing to open on the setup screen.
-                } else if self.tab == Tab::WiFi {
-                    v.extend(self.wifi_hints(!narrow));
-                } else if self.tab == Tab::Vpn {
-                    v.extend(self.vpn_hints(!narrow));
-                } else if self.tab == Tab::Settings {
-                    v.extend(self.settings_hints());
-                    if narrow && self.rows() > 0 {
+                if !self.needs_setup() {
+                    v.extend(verbs::tab_hints(self, self.tab, !narrow));
+                    let lists = matches!(self.tab, Tab::Settings | Tab::Hotspot | Tab::Ethernet);
+                    if self.tab == Tab::Overview {
+                        v.push(("enter", "open"));
+                    } else if lists && narrow && self.rows() > 0 {
                         v.push(("d", "details"));
                     }
-                } else if self.tab == Tab::Hotspot {
-                    v.extend(self.tether_hints());
-                    if narrow && self.rows() > 0 {
-                        v.push(("d", "details"));
-                    }
-                } else if self.tab == Tab::Ethernet {
-                    v.extend(self.eth_hints());
-                    if narrow && self.rows() > 0 {
-                        v.push(("d", "details"));
-                    }
-                } else if self.tab == Tab::Overview || (narrow && self.rows() > 0) {
-                    v.push(("enter", "open"));
                 }
-                if self.tab == Tab::Overview
-                    && self.fix != FixState::Running
-                    && self.runnable_fix().is_some()
-                {
-                    v.push(("f", "fix"));
-                }
-                if self.portal().is_some() {
-                    v.push(("o", "login"));
+                v.extend(verbs::global_hints(self));
+                if !self.filter_text().is_empty() {
+                    v.push(("esc", "clear filter"));
                 }
                 v.push(("h/l", "tab"));
                 v.push((":", "palette"));
@@ -1675,71 +1706,6 @@ impl App {
                 v
             }
         }
-    }
-
-    /// Hotspot keys, then the Tethering keys of the selected phone.
-    fn tether_hints(&self) -> Vec<(&'static str, &'static str)> {
-        let mut v = Vec::new();
-        if self.hotspot.on() {
-            if self.hotspot.ready() {
-                v.push(("s", "hotspot QR"));
-            }
-            v.push(("S", "stop hotspot"));
-        } else if self.hotspot.available() {
-            v.push(("n", "hotspot"));
-            v.push(("c", "custom"));
-        }
-        if let Some(phone) = self.tether.selected() {
-            if phone.connected {
-                v.push(("x", "drop tether"));
-            } else {
-                v.push(("enter", "tether"));
-            }
-        }
-        if self.toast.as_ref().is_some_and(|t| t.undo.is_some()) {
-            v.push(("u", "undo"));
-        }
-        v
-    }
-
-    /// Wi-Fi keys that apply to the selected row; `more` adds the less common ones.
-    fn wifi_hints(&self, more: bool) -> Vec<(&'static str, &'static str)> {
-        let mut v = Vec::new();
-        let selected: Option<&Entry> = self.wifi.selected();
-        if selected.is_some_and(|e| !e.joined()) {
-            v.push(("enter", "join"));
-        }
-        v.push(("r", "scan"));
-        if more && let Some(e) = selected {
-            if e.joined() {
-                v.push(("x", "disconnect"));
-            }
-            if e.saved() {
-                v.push(("f", "forget"));
-            }
-            if e.saved() {
-                v.push(("s", "share"));
-            }
-            if e.autoconnect().is_some() {
-                v.push(("a", "auto"));
-            }
-            if e.trust().is_some() {
-                v.push(("t", "trust"));
-            }
-            if e.saved() {
-                v.push(("e", "settings"));
-            }
-        }
-        if more {
-            v.push(("n", "other"));
-            if !self.wifi.cards().is_empty() {
-                v.push(("c", "card"));
-            }
-        }
-        if self.toast.as_ref().is_some_and(|t| t.undo.is_some()) {
-            v.push(("u", "undo"));
-        }
-        v
     }
 }
 

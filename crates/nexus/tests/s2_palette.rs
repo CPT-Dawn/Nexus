@@ -199,7 +199,7 @@ fn the_palette_lists_every_action_and_shows_its_key() {
     rig.key(KeyCode::Char(':'));
     let frame = rig.text();
     assert!(frame.contains("Command palette"), "{frame}");
-    assert!(frame.contains("Rescan Wi-Fi"), "{frame}");
+    assert!(frame.contains("Go to Overview"), "{frame}");
     for (name, size) in SIZES {
         rig.resize(size);
         insta::assert_snapshot!(format!("palette_open_{name}"), rig.text());
@@ -394,11 +394,12 @@ fn help_scrolls_by_key_page_and_wheel() {
     assert_eq!(rig.app.help_scroll(), 0);
     rig.key(KeyCode::PageDown);
     assert!(rig.app.help_scroll() > 1);
+    let before = rig.app.help_scroll();
     rig.mouse(MouseEventKind::ScrollUp, 50, 10);
     let after_up = rig.app.help_scroll();
+    assert!(after_up < before, "the wheel scrolls up");
     rig.mouse(MouseEventKind::ScrollDown, 50, 10);
-    rig.mouse(MouseEventKind::ScrollDown, 50, 10);
-    assert_eq!(rig.app.help_scroll(), after_up + 1);
+    assert_eq!(rig.app.help_scroll(), before, "and back down");
     rig.key(KeyCode::End);
     let end = rig.app.help_scroll();
     rig.key(KeyCode::Down);

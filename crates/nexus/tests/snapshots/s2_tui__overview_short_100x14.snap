@@ -3,7 +3,7 @@ source: crates/nexus/tests/s2_tui.rs
 expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
-╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+╭ Networks ──────────────────╮╭ Status ────────────────────────────────────────────────────────────╮
 │ ▸ ● Wi-Fi                  ││ ● Online                                                           │
 │     Home-5G                ││                                                                    │
 │   ○ Ethernet               ││ You're online via Wi-Fi (Home-5G). Everything looks healthy.       │

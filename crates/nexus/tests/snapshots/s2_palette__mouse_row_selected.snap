@@ -10,7 +10,7 @@ expression: rig.text()
 │     Neighbour… ▂▄▆█ wpa2   ││ Security      Open, no password                                    │
 │     A very lo… ▂▄▆█ wpa2   ││ Band          2.4 GHz                                              │
 │     Rooftop-6E ▂▄▆█ wpa2   ││ Access points 1                                                    │
-│   ── Saved, out of range   ││ Adapter       wlan0                                                │
+│   ── Saved, out of range   ││ Card          wlan0                                                │
 │     Parents House     auto ││ Trust         Untrusted                                            │
 │     Hotel Lobby     manual ││                                                                    │
 │                            ││ Press enter to join.                                               │

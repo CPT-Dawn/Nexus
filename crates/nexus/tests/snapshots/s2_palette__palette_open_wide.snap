@@ -3,7 +3,7 @@ source: crates/nexus/tests/s2_palette.rs
 expression: rig.text()
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
-╭ Connections ─────────────────────────╮╭ Status ──────────────────────────────────────────────────────────────────────────────────────────╮
+╭ Networks ────────────────────────────╮╭ Status ──────────────────────────────────────────────────────────────────────────────────────────╮
 │ ▸ ○ Wi-Fi                            ││     ░░░░    ░░░░╭ Command palette ─────────────────────────────────────────────╮                 │
 │     Not connected                    ││   ░░████░░░░████│ : ▏                                                          │                 │
 │   ○ Ethernet                         ││ ░░██░░░░██░░██░░│ ──────────────────────────────────────────────────────────── │                 │
@@ -13,10 +13,10 @@ expression: rig.text()
 │   ○ Hotspot                          ││     ░░░░    ░░  │   Go to VPN                                                4 │                 │
 │     Not started                      ││                 │   Go to Hotspot                                            5 │                 │
 │                                      ││ You're offline. │   Go to Settings                                           6 │                 │
-│                                      ││ Internet: none  │   Show all keys                                            ? │                 │
-│                                      │╰─────────────────│   Quit Nexus                                               q │─────────────────╯
-│                                      │╭ Traffic ────────│   Rescan Wi-Fi                                             r │─────────────────╮
-│                                      ││ ↓ 0 B/s         │   Open login page                                          o │sses, VPNs and   │
+│                                      ││ Internet: none  │   Turn Wi-Fi off                                           w │                 │
+│                                      │╰─────────────────│   Turn airplane mode on                                    A │─────────────────╯
+│                                      │╭ Traffic ────────│   Show all keys                                            ? │─────────────────╮
+│                                      ││ ↓ 0 B/s         │   Quit Nexus                                               q │sses, VPNs and   │
 │                                      ││ down            │                                                              │here.            │
 │                                      ││                 ╰──────────────────────────────────────────────────────────────╯                 │
 │                                      ││                  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ ││                                        │

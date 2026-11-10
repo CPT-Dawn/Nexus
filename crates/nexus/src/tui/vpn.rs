@@ -8,11 +8,11 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
 use nexus_ipc::{
-    Connection, NewTunnel, Op, Secret, Vpn, VpnAdded, VpnKey, VpnList, VpnShare, VpnState,
-    VpnToggled,
+    NewTunnel, Op, Secret, Vpn, VpnAdded, VpnKey, VpnList, VpnShare, VpnState, VpnToggled,
 };
 
 use super::app::Msg;
+use super::runner;
 use crate::qr::{self, Drawing};
 
 /// What the person asked of the Daemon.
@@ -57,7 +57,7 @@ impl Runner {
 
     pub fn run(&self, cmd: Cmd) {
         let (socket, tx) = (self.socket.clone(), self.tx.clone());
-        std::thread::spawn(move || {
+        runner::spawn("nexus-vpn", move || {
             let result = call(&socket, &cmd);
             let _ = tx.send(Msg::Vpn(Box::new(Done { cmd, result })));
         });
@@ -100,12 +100,7 @@ fn call(socket: &std::path::Path, cmd: &Cmd) -> Result<Reply, String> {
         Cmd::Key { id, .. } => Op::VpnKey { vpn: id.clone() },
         Cmd::Reveal { id, .. } => Op::VpnReveal { vpn: id.clone() },
     };
-    let mut conn =
-        Connection::connect_to(socket).map_err(|e| format!("Could not reach the daemon: {e}"))?;
-    let value = conn
-        .call(op)
-        .map_err(|e| format!("Could not reach the daemon: {e}"))?
-        .map_err(|f| f.message)?;
+    let value = runner::call(socket, op)?;
     match cmd {
         Cmd::Toggle { .. } => decode(value).map(Reply::Toggled),
         Cmd::Import { .. } | Cmd::Create(_) => decode(value).map(Reply::Added),
@@ -285,7 +280,11 @@ pub enum Layer {
 
 #[derive(Debug, Default)]
 pub struct VpnTab {
+    /// Every VPN the Daemon listed.
+    all: Vec<Vpn>,
+    /// What the list shows: `all` narrowed by the `/` filter.
     vpns: Vec<Vpn>,
+    filter: String,
     cursor: usize,
     loaded: bool,
     /// The VPN a toggle is in flight for.
@@ -325,21 +324,50 @@ impl VpnTab {
         changed
     }
 
+    /// The `/` filter as typed (empty: none).
+    pub fn filter(&self) -> &str {
+        &self.filter
+    }
+
+    /// Narrows the list to the VPNs whose name contains `text`, ignoring
+    /// case. The cursor stays on its row if that row is still shown.
+    pub fn set_filter(&mut self, text: &str) -> bool {
+        if self.filter == text {
+            return false;
+        }
+        let id = self.selected().map(|v| v.id.clone());
+        self.filter = text.to_owned();
+        self.show(id);
+        true
+    }
+
+    /// `vpns` from `all` through the filter; the cursor follows `keep`.
+    fn show(&mut self, keep: Option<String>) {
+        let want = self.filter.to_lowercase();
+        self.vpns = self
+            .all
+            .iter()
+            .filter(|v| want.is_empty() || v.name.to_lowercase().contains(&want))
+            .cloned()
+            .collect();
+        self.cursor = keep
+            .and_then(|id| self.vpns.iter().position(|v| v.id == id))
+            .unwrap_or(self.cursor)
+            .min(self.vpns.len().saturating_sub(1));
+    }
+
     /// Takes a fresh list. The cursor follows the VPN it was on. Returns
     /// whether anything changed.
     pub fn refresh(&mut self, list: VpnList) -> bool {
         let id = self.selected().map(|v| v.id.clone());
-        let changed = !self.loaded || self.vpns != list.vpns;
+        let changed = !self.loaded || self.all != list.vpns;
         self.loaded = true;
-        self.vpns = list.vpns;
-        self.cursor = id
-            .and_then(|id| self.vpns.iter().position(|v| v.id == id))
-            .unwrap_or(self.cursor)
-            .min(self.vpns.len().saturating_sub(1));
+        self.all = list.vpns;
+        self.show(id);
         if self
             .busy
             .as_ref()
-            .is_some_and(|b| self.vpns.iter().all(|v| &v.id != b))
+            .is_some_and(|b| self.all.iter().all(|v| &v.id != b))
         {
             self.busy = None;
         }

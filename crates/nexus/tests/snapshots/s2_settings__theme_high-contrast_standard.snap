@@ -7,15 +7,15 @@ expression: frame
 │ ▸ Theme      High contrast ││ The colours of the TUI. Enter picks the next one.                  │
 │   Nerd Font icons      off ││                                                                    │
 │   Reduced motion       off ││   ████████ Midnight Bloom                                          │
-│   Notify: joined        on ││   ████████ Catppuccin                                              │
-│   Notify: lost         off ││   ████████ Gruvbox                                                 │
-│   Notify: bad password  on ││   ████████ Nord                                                    │
-│   Notify: prompt        on ││   ████████ Tokyo Night                                             │
-│   Notify: login         on ││   ████████ Rosé Pine                                               │
-│   Notify: VPN drop      on ││ ● ████████ High contrast                                           │
-│   Notify: untrusted     on ││   broken (has a mistake, see below)                                │
-│   Untrusted: metered   off ││   ████████ sunrise (custom)                                        │
-│                            ││                                                                    │
+│   Connectivity check    on ││   ████████ Catppuccin                                              │
+│   Notify: joined        on ││   ████████ Gruvbox                                                 │
+│   Notify: lost         off ││   ████████ Nord                                                    │
+│   Notify: bad password  on ││   ████████ Tokyo Night                                             │
+│   Notify: prompt        on ││   ████████ Rosé Pine                                               │
+│   Notify: login         on ││ ● ████████ High contrast                                           │
+│   Notify: VPN drop      on ││   broken (has a mistake, see below)                                │
+│   Notify: untrusted     on ││   ████████ sunrise (custom)                                        │
+│   Untrusted: metered   off ││                                                                    │
 │                            ││ Make your own in config.toml:                                      │
 │                            ││   [themes.mine]                                                    │
 │                            ││   base = "nord"                                                    │
@@ -31,7 +31,7 @@ expression: frame
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
  j/k move  enter change  r reset  h/l tab  : palette  ? help  q quit
 
- 1818 cells  fg=Reset bg=Reset mods=[]
+ 1816 cells  fg=Reset bg=Reset mods=[]
     6 cells  fg=Reset bg=Rgb(26, 11, 0) mods=[]
    10 cells  fg=Reset bg=Rgb(26, 13, 0) mods=[]
    13 cells  fg=Reset bg=Rgb(26, 15, 0) mods=[]
@@ -87,4 +87,4 @@ expression: frame
     6 cells  fg=Rgb(255, 89, 0) bg=Reset mods=[]
     4 cells  fg=Rgb(255, 92, 71) bg=Reset mods=[bold]
     3 cells  fg=Rgb(255, 96, 96) bg=Reset mods=[bold]
-   14 cells  fg=Rgb(64, 255, 64) bg=Reset mods=[]
+   16 cells  fg=Rgb(64, 255, 64) bg=Reset mods=[]

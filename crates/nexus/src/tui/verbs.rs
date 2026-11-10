@@ -14,6 +14,7 @@ use crossterm::event::KeyCode;
 
 use super::app::{App, Tab};
 use super::wifi::Entry;
+use crate::text;
 
 /// Where a Verb's key works; shown in the help overlay as `Wi-Fi: r`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +37,19 @@ pub enum Run {
     Call(fn(&mut App) -> bool),
 }
 
+/// A Verb's place in the footer hint row. The footer is derived from the
+/// Verbs that can run right now, so it can never offer a key the palette
+/// would refuse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hint {
+    /// Not in the footer.
+    None,
+    /// Always shown while the Verb can run.
+    Core(&'static str),
+    /// Shown only when there is room for the less common keys.
+    More(&'static str),
+}
+
 #[derive(Debug)]
 pub struct Verb {
     /// Plain-English imperative, as listed: "Forget network".
@@ -48,6 +62,8 @@ pub struct Verb {
     pub help: &'static str,
     pub scope: Scope,
     pub run: Run,
+    /// Whether, and as what, it appears in the footer.
+    pub hint: Hint,
     /// `Ok` when it can run now, else the reason it cannot.
     pub ready: fn(&App) -> Result<(), &'static str>,
 }
@@ -71,6 +87,7 @@ const fn go(verb: &'static str, key: &'static str, tab: Tab) -> Verb {
         help: "",
         scope: Scope::Any,
         run: Run::Go(tab),
+        hint: Hint::None,
         ready: always,
     }
 }
@@ -89,6 +106,7 @@ static GLOBAL: &[Verb] = &[
         help: "Open a Portal's login page",
         scope: Scope::Any,
         run: Run::Root(KeyCode::Char('o')),
+        hint: Hint::Core("login"),
         ready: |app| app.portal().map(|_| ()).ok_or("No login page is waiting."),
     },
     Verb {
@@ -98,6 +116,7 @@ static GLOBAL: &[Verb] = &[
         help: "Overview: run the fix (asks first)",
         scope: Scope::Any,
         run: Run::Root(KeyCode::Char('f')),
+        hint: Hint::Core("fix"),
         ready: |app| {
             if app.tab() != Tab::Overview {
                 Err("Fixes are offered on the Overview.")
@@ -109,12 +128,96 @@ static GLOBAL: &[Verb] = &[
         },
     },
     Verb {
+        verb: "Filter the list",
+        words: "search find narrow type name networks vpns",
+        key: "/",
+        help: "Filter the Wi-Fi or VPN list by name (Esc clears)",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('/')),
+        hint: Hint::None,
+        ready: |app| {
+            if app.filterable() {
+                Ok(())
+            } else {
+                Err("Open the Wi-Fi or VPN tab to filter its list.")
+            }
+        },
+    },
+    Verb {
+        verb: "Turn Wi-Fi off",
+        words: "wifi wi-fi radio disable switch power",
+        key: "w",
+        help: "Turn Wi-Fi off or on (undo with u)",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('w')),
+        hint: Hint::None,
+        ready: |app| {
+            if app.radios().wifi.enabled {
+                Ok(())
+            } else {
+                Err(text::tui::WIFI_ALREADY_OFF)
+            }
+        },
+    },
+    Verb {
+        verb: "Turn Wi-Fi on",
+        words: "wifi wi-fi radio enable switch power hardware blocked",
+        key: "w",
+        help: "",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('w')),
+        hint: Hint::None,
+        ready: |app| {
+            let r = app.radios();
+            if r.wifi.hardware_blocked {
+                Err(text::HARD_BLOCKED)
+            } else if r.wifi.enabled {
+                Err(text::tui::WIFI_ALREADY_ON)
+            } else {
+                Ok(())
+            }
+        },
+    },
+    Verb {
+        verb: "Turn airplane mode on",
+        words: "flight radios offline wifi bluetooth off",
+        key: "A",
+        help: "Turn airplane mode on or off: every radio off (undo with u)",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('A')),
+        hint: Hint::None,
+        ready: |app| {
+            if app.radios().airplane {
+                Err(text::tui::AIRPLANE_ALREADY_ON)
+            } else {
+                Ok(())
+            }
+        },
+    },
+    Verb {
+        verb: "Turn airplane mode off",
+        words: "flight radios online wifi bluetooth on",
+        key: "A",
+        help: "",
+        scope: Scope::Any,
+        run: Run::Root(KeyCode::Char('A')),
+        hint: Hint::None,
+        ready: |app| {
+            if app.radios().airplane {
+                Ok(())
+            } else {
+                Err(text::tui::AIRPLANE_ALREADY_OFF)
+            }
+        },
+    },
+    Verb {
         verb: "Show all keys",
         words: "help shortcuts keyboard",
         key: "?",
         help: "Show or hide this help",
         scope: Scope::Any,
         run: Run::Root(KeyCode::Char('?')),
+        hint: Hint::None,
         ready: always,
     },
     Verb {
@@ -124,6 +227,7 @@ static GLOBAL: &[Verb] = &[
         help: "Quit (Ctrl-C works anywhere)",
         scope: Scope::Any,
         run: Run::Root(KeyCode::Char('q')),
+        hint: Hint::None,
         ready: always,
     },
 ];
@@ -151,6 +255,7 @@ const fn wifi(
     key: &'static str,
     help: &'static str,
     code: KeyCode,
+    hint: Hint,
     ready: fn(&App) -> Result<(), &'static str>,
 ) -> Verb {
     Verb {
@@ -160,6 +265,7 @@ const fn wifi(
         help,
         scope: Scope::Tab(Tab::WiFi),
         run: Run::Key(Tab::WiFi, code),
+        hint,
         ready,
     }
 }
@@ -171,6 +277,7 @@ static WIFI: &[Verb] = &[
         "Enter",
         "Join the selected Network",
         KeyCode::Enter,
+        Hint::Core("join"),
         |app| {
             let entry = picked(app)?;
             if entry.joined() {
@@ -188,6 +295,7 @@ static WIFI: &[Verb] = &[
         "r",
         "Rescan",
         KeyCode::Char('r'),
+        Hint::Core("scan"),
         always,
     ),
     wifi(
@@ -196,6 +304,7 @@ static WIFI: &[Verb] = &[
         "x",
         "Disconnect",
         KeyCode::Char('x'),
+        Hint::More("disconnect"),
         |app| {
             if picked(app)?.joined() {
                 Ok(())
@@ -210,6 +319,16 @@ static WIFI: &[Verb] = &[
         "f",
         "Forget (asks first)",
         KeyCode::Char('f'),
+        Hint::More("forget"),
+        saved,
+    ),
+    wifi(
+        "Share Wi-Fi",
+        "qr code password phone",
+        "s",
+        "Share as a QR code (asks first)",
+        KeyCode::Char('s'),
+        Hint::More("share"),
         saved,
     ),
     wifi(
@@ -218,6 +337,7 @@ static WIFI: &[Verb] = &[
         "a",
         "Toggle autoconnect",
         KeyCode::Char('a'),
+        Hint::More("auto"),
         |app| {
             if picked(app)?.autoconnect().is_some() {
                 Ok(())
@@ -232,6 +352,7 @@ static WIFI: &[Verb] = &[
         "t",
         "Mark Trusted or Untrusted",
         KeyCode::Char('t'),
+        Hint::More("trust"),
         |app| {
             if picked(app)?.trust().is_some() {
                 Ok(())
@@ -241,11 +362,21 @@ static WIFI: &[Verb] = &[
         },
     ),
     wifi(
+        "Edit network settings",
+        "profile ip dns address mac metered priority",
+        "e",
+        "Edit the Profile's settings",
+        KeyCode::Char('e'),
+        Hint::More("settings"),
+        saved,
+    ),
+    wifi(
         "Join hidden network",
         "other name ssid connect wifi wi-fi",
         "n",
         "Join a hidden Network by name",
         KeyCode::Char('n'),
+        Hint::More("other"),
         |app| {
             if app.tab() == Tab::WiFi {
                 Ok(())
@@ -255,22 +386,12 @@ static WIFI: &[Verb] = &[
         },
     ),
     wifi(
-        "Show access points",
-        "details info bssid channel frequency band rate",
-        "i",
-        "Access point details of the Network",
-        KeyCode::Char('i'),
-        |app| match picked(app)? {
-            Entry::Net(_) => Ok(()),
-            Entry::Saved(_) => Err("That Network is out of range."),
-        },
-    ),
-    wifi(
         "Choose Wi-Fi card",
         "adapter device interface radio",
         "c",
         "Pick the Wi-Fi card joins use",
         KeyCode::Char('c'),
+        Hint::More("card"),
         |app| {
             if app.tab() != Tab::WiFi {
                 Err("Open the Wi-Fi tab first.")
@@ -282,20 +403,16 @@ static WIFI: &[Verb] = &[
         },
     ),
     wifi(
-        "Edit network settings",
-        "profile ip dns address mac metered priority",
-        "e",
-        "Edit the Profile's settings",
-        KeyCode::Char('e'),
-        saved,
-    ),
-    wifi(
-        "Share Wi-Fi",
-        "qr code password phone",
-        "s",
-        "Share as a QR code (asks first)",
-        KeyCode::Char('s'),
-        saved,
+        "Show access points",
+        "details info bssid channel frequency band rate",
+        "i",
+        "Access point details of the Network",
+        KeyCode::Char('i'),
+        Hint::None,
+        |app| match picked(app)? {
+            Entry::Net(_) => Ok(()),
+            Entry::Saved(_) => Err("That Network is out of range."),
+        },
     ),
 ];
 
@@ -328,6 +445,7 @@ const fn vpn(
     key: &'static str,
     help: &'static str,
     code: KeyCode,
+    hint: Hint,
     ready: fn(&App) -> Result<(), &'static str>,
 ) -> Verb {
     Verb {
@@ -337,20 +455,40 @@ const fn vpn(
         help,
         scope: Scope::Tab(Tab::Vpn),
         run: Run::Key(Tab::Vpn, code),
+        hint,
         ready,
     }
 }
 
 static VPN: &[Verb] = &[
     vpn(
-        "Toggle VPN",
-        "vpn up down connect disconnect start stop wireguard",
+        "Bring VPN up",
+        "toggle vpn connect start wireguard",
         "Enter",
         "Bring the VPN up or down",
         KeyCode::Enter,
+        Hint::Core("up"),
         |app| {
-            vpn_picked(app)?;
-            if app.vpn().busy.is_some() {
+            if vpn_picked(app)?.state != nexus_ipc::VpnState::Down {
+                Err("That VPN is already up.")
+            } else if app.vpn().busy.is_some() {
+                Err("A VPN is already changing.")
+            } else {
+                Ok(())
+            }
+        },
+    ),
+    vpn(
+        "Bring VPN down",
+        "toggle vpn disconnect stop wireguard",
+        "Enter",
+        "",
+        KeyCode::Enter,
+        Hint::Core("down"),
+        |app| {
+            if vpn_picked(app)?.state == nexus_ipc::VpnState::Down {
+                Err("That VPN is already down.")
+            } else if app.vpn().busy.is_some() {
                 Err("A VPN is already changing.")
             } else {
                 Ok(())
@@ -363,6 +501,7 @@ static VPN: &[Verb] = &[
         "i",
         "Import a WireGuard .conf",
         KeyCode::Char('i'),
+        Hint::Core("import"),
         vpn_open,
     ),
     vpn(
@@ -371,6 +510,7 @@ static VPN: &[Verb] = &[
         "c",
         "Create a WireGuard VPN with new keys",
         KeyCode::Char('c'),
+        Hint::Core("create"),
         vpn_open,
     ),
     vpn(
@@ -379,6 +519,7 @@ static VPN: &[Verb] = &[
         "p",
         "Show a VPN's public key",
         KeyCode::Char('p'),
+        Hint::More("key"),
         vpn_wireguard,
     ),
     vpn(
@@ -387,6 +528,7 @@ static VPN: &[Verb] = &[
         "s",
         "Share a VPN's config as a QR code (asks first)",
         KeyCode::Char('s'),
+        Hint::More("share"),
         vpn_wireguard,
     ),
 ];
@@ -411,8 +553,9 @@ static HOTSPOT: &[Verb] = &[
         "Start Hotspot",
         "share connection access point password",
         "n",
-        "Share this connection with a made-up password",
+        "Share this internet with a made-up password",
         KeyCode::Char('n'),
+        Hint::Core("hotspot"),
         can_start,
     ),
     hotspot(
@@ -421,21 +564,8 @@ static HOTSPOT: &[Verb] = &[
         "c",
         "Start a Hotspot with a name and password you choose",
         KeyCode::Char('c'),
+        Hint::Core("custom"),
         can_start,
-    ),
-    hotspot(
-        "Stop Hotspot",
-        "share connection access point end",
-        "S",
-        "Stop the Hotspot",
-        KeyCode::Char('S'),
-        |app| {
-            if app.hotspot().on() {
-                Ok(())
-            } else {
-                Err("No Hotspot is running.")
-            }
-        },
     ),
     hotspot(
         "Share Hotspot as QR code",
@@ -443,11 +573,27 @@ static HOTSPOT: &[Verb] = &[
         "s",
         "Show the Hotspot's QR code and password (asks first)",
         KeyCode::Char('s'),
+        Hint::Core("hotspot QR"),
         |app| {
             if app.hotspot().ready() {
                 Ok(())
             } else {
                 Err("No Hotspot is up to share.")
+            }
+        },
+    ),
+    hotspot(
+        "Stop Hotspot",
+        "share connection access point end",
+        "S",
+        "Stop the Hotspot",
+        KeyCode::Char('S'),
+        Hint::Core("stop hotspot"),
+        |app| {
+            if app.hotspot().on() {
+                Ok(())
+            } else {
+                Err("No Hotspot is running.")
             }
         },
     ),
@@ -468,6 +614,7 @@ const fn hotspot(
     key: &'static str,
     help: &'static str,
     code: KeyCode,
+    hint: Hint,
     ready: fn(&App) -> Result<(), &'static str>,
 ) -> Verb {
     Verb {
@@ -477,6 +624,7 @@ const fn hotspot(
         help,
         scope: Scope::Tab(Tab::Hotspot),
         run: Run::Key(Tab::Hotspot, code),
+        hint,
         ready,
     }
 }
@@ -488,6 +636,7 @@ static TETHER: &[Verb] = &[
         "Enter",
         "Use the selected phone's data",
         KeyCode::Enter,
+        Hint::Core("tether"),
         |app| {
             if phone(app)?.connected {
                 Err("Already tethered to that phone.")
@@ -504,6 +653,7 @@ static TETHER: &[Verb] = &[
         "x",
         "Drop the phone's tether",
         KeyCode::Char('x'),
+        Hint::Core("drop tether"),
         |app| {
             if phone(app)?.connected {
                 Ok(())
@@ -532,6 +682,7 @@ static SETTINGS: &[Verb] = &[
         help: "Use the next theme",
         scope: Scope::Any,
         run: Run::Call(|app| app.change_setting_by_key("theme")),
+        hint: Hint::None,
         ready: loaded,
     },
     Verb {
@@ -541,6 +692,7 @@ static SETTINGS: &[Verb] = &[
         help: "",
         scope: Scope::Any,
         run: Run::Call(|app| app.change_setting_by_key("ui.nerd_font")),
+        hint: Hint::None,
         ready: loaded,
     },
     Verb {
@@ -550,6 +702,7 @@ static SETTINGS: &[Verb] = &[
         help: "",
         scope: Scope::Any,
         run: Run::Call(|app| app.change_setting_by_key("ui.reduce_motion")),
+        hint: Hint::None,
         ready: loaded,
     },
     Verb {
@@ -559,6 +712,7 @@ static SETTINGS: &[Verb] = &[
         help: "Change the selected setting",
         scope: Scope::Tab(Tab::Settings),
         run: Run::Key(Tab::Settings, KeyCode::Enter),
+        hint: Hint::Core("change"),
         ready: |app| {
             if app.tab() != Tab::Settings {
                 Err("Open the Settings tab and pick a setting first.")
@@ -574,6 +728,7 @@ static SETTINGS: &[Verb] = &[
         help: "Put the default back",
         scope: Scope::Tab(Tab::Settings),
         run: Run::Key(Tab::Settings, KeyCode::Char('r')),
+        hint: Hint::Core("reset"),
         ready: |app| {
             if app.tab() != Tab::Settings {
                 Err("Open the Settings tab and pick a setting first.")
@@ -601,6 +756,7 @@ const fn wired(
     key: &'static str,
     help: &'static str,
     code: KeyCode,
+    hint: Hint,
     ready: fn(&App) -> Result<(), &'static str>,
 ) -> Verb {
     Verb {
@@ -610,6 +766,7 @@ const fn wired(
         help,
         scope: Scope::Tab(Tab::Ethernet),
         run: Run::Key(Tab::Ethernet, code),
+        hint,
         ready,
     }
 }
@@ -621,6 +778,7 @@ static ETHERNET: &[Verb] = &[
         "Enter",
         "Join the selected port",
         KeyCode::Enter,
+        Hint::Core("connect"),
         |app| {
             use nexus_ipc::EthernetState::{Connected, Connecting, Unplugged};
             let p = port(app)?;
@@ -641,6 +799,7 @@ static ETHERNET: &[Verb] = &[
         "x",
         "Drop the port's Link",
         KeyCode::Char('x'),
+        Hint::Core("disconnect"),
         |app| {
             use nexus_ipc::EthernetState::{Connected, Connecting};
             if matches!(port(app)?.state, Connected | Connecting) {
@@ -654,8 +813,9 @@ static ETHERNET: &[Verb] = &[
         "Sign in to Ethernet",
         "wired 802.1x enterprise office campus identity password certificate",
         "s",
-        "Sign in to an 802.1X port",
+        "Sign in to an Enterprise port",
         KeyCode::Char('s'),
+        Hint::Core("sign in"),
         |app| {
             if port(app)?.state == nexus_ipc::EthernetState::Unplugged {
                 Err("No cable is plugged in.")
@@ -672,6 +832,7 @@ static ETHERNET: &[Verb] = &[
         "e",
         "Edit the port's Profile settings",
         KeyCode::Char('e'),
+        Hint::Core("settings"),
         |app| {
             port(app)?
                 .profile
@@ -691,6 +852,7 @@ static UNDO: &[Verb] = &[Verb {
     help: "Wi-Fi, Hotspot: undo the toast",
     scope: Scope::Any,
     run: Run::Call(App::undo),
+    hint: Hint::Core("undo"),
     ready: |app| {
         if app.toast().is_some_and(|t| t.undo.is_some()) {
             Ok(())
@@ -758,6 +920,41 @@ pub fn search(app: &App, query: &str) -> Vec<Found> {
     // wins so its reason can be read.
     found.sort_by_key(|(f, s)| -(s - if f.blocked.is_some() { 30 } else { 0 }));
     found.into_iter().map(|(f, _)| f).collect()
+}
+
+// ---- footer hints ---------------------------------------------------------------
+
+/// The footer key as shown ("Enter" reads "enter"; the rest are as written).
+fn shown(key: &'static str) -> &'static str {
+    if key == "Enter" { "enter" } else { key }
+}
+
+fn hint_of(app: &App, verb: &Verb, more: bool) -> Option<(&'static str, &'static str)> {
+    let text = match verb.hint {
+        Hint::None => return None,
+        Hint::More(_) if !more => return None,
+        Hint::Core(t) | Hint::More(t) => t,
+    };
+    (verb.ready)(app).ok()?;
+    Some((shown(verb.key), text))
+}
+
+/// The footer keys of `tab`'s own Verbs that can run now, in table order.
+/// `more` adds the less common ones.
+pub fn tab_hints(app: &App, tab: Tab, more: bool) -> Vec<(&'static str, &'static str)> {
+    all()
+        .filter(|v| v.scope == Scope::Tab(tab))
+        .filter_map(|v| hint_of(app, v, more))
+        .collect()
+}
+
+/// The footer keys of the Verbs that work on any tab and can run now (undo,
+/// the login page, the fix).
+pub fn global_hints(app: &App) -> Vec<(&'static str, &'static str)> {
+    all()
+        .filter(|v| v.scope == Scope::Any)
+        .filter_map(|v| hint_of(app, v, true))
+        .collect()
 }
 
 // ---- help -----------------------------------------------------------------------

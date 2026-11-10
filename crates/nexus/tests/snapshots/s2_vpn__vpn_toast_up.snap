@@ -25,8 +25,8 @@ expression: frame
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
-│                            ││                                                ╭ Done ───────────╮ │
-│                            ││                                                │ Home Lab is up. │ │
-│                            ││                                                ╰─────────────────╯ │
+│                            ││                                        ╭ Done ───────────────────╮ │
+│                            ││                                        │ Home Lab is up.  u undo │ │
+│                            ││                                        ╰─────────────────────────╯ │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter down  i import  c create  p key  s share  h/l tab  : palette  ? help  q quit
+ j/k move  enter down  i import  c create  p key  s share  u undo  h/l tab  : palette  ? help

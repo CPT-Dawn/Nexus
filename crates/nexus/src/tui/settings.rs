@@ -40,7 +40,7 @@ const fn switch(label: &'static str, key: &'static str, default: bool, help: &'s
 }
 
 /// Every setting, in the order the list shows them.
-pub const ITEMS: [Item; 11] = [
+pub const ITEMS: [Item; 12] = [
     Item {
         label: "Theme",
         key: "theme",
@@ -59,6 +59,12 @@ pub const ITEMS: [Item; 11] = [
         "ui.reduce_motion",
         false,
         "No gliding, sliding, shaking or pulsing. Colour changes stay.",
+    ),
+    switch(
+        "Connectivity check",
+        "connectivity.enabled",
+        true,
+        "Whether NetworkManager checks that it can reach the internet (its own ConnectivityCheckEnabled; it remembers the choice). Without the check, Nexus cannot tell a Portal or a dead uplink from a working one.",
     ),
     switch(
         "Notify: joined",
@@ -116,6 +122,8 @@ pub struct SettingsTab {
     config: Option<Value>,
     /// Why the Daemon is ignoring `config.toml`, if it is.
     warning: Option<String>,
+    /// The address NetworkManager probes (`ConnectivityCheckUri`), read-only.
+    connectivity_uri: Option<String>,
 }
 
 impl SettingsTab {
@@ -129,9 +137,31 @@ impl SettingsTab {
         true
     }
 
+    /// NetworkManager's connectivity-check address, if it reported one.
+    pub fn connectivity_uri(&self) -> Option<&str> {
+        self.connectivity_uri.as_deref()
+    }
+
+    /// Takes the address from the Daemon. Returns whether it changed.
+    pub fn set_connectivity_uri(&mut self, uri: Option<String>) -> bool {
+        let changed = self.connectivity_uri != uri;
+        self.connectivity_uri = uri;
+        changed
+    }
+
     /// Whether the Daemon has said anything yet.
     pub fn has_data(&self) -> bool {
         self.config.is_some()
+    }
+
+    /// What the config holds at the dotted `key`; `Null` when it is absent
+    /// (the default applies).
+    pub fn raw(&self, key: &str) -> Value {
+        let mut at = self.config.as_ref();
+        for part in key.split('.') {
+            at = at.and_then(|v| v.get(part));
+        }
+        at.cloned().unwrap_or(Value::Null)
     }
 
     pub fn config(&self) -> Option<&Value> {

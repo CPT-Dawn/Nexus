@@ -3,7 +3,7 @@ source: crates/nexus/tests/s2_tui.rs
 expression: connecting.text(STANDARD)
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                              ● Connecting
-╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+╭ Networks ──────────────────╮╭ Status ────────────────────────────────────────────────────────────╮
 │ ▸ ● Wi-Fi                  ││   ░░░  ░░  ░  ░ ░  ░ ░░░░  ░░░ ░░░░ ░░░  ░  ░  ░░░                 │
 │     Home-5G                ││  ░███░░██░░█░░█░█░░█░████░░███░████░███░░█░░█░░███░                │
 │   ○ Ethernet               ││ ░█░░░░█░░█░██░█░██░█░█░░░░█░░░ ░██░ ░█░ ░██░█░█░░░                 │

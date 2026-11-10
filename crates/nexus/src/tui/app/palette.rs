@@ -3,7 +3,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{App, Layer, Tab};
+use super::{App, Layer};
 use crate::tui::verbs::{self, Found, Run, Verb};
 
 /// The palette while it is open.
@@ -27,6 +27,7 @@ impl App {
 
     pub(super) fn open_palette(&mut self) -> bool {
         self.toast = None;
+        self.filtering = false;
         self.palette = Some(Palette::default());
         true
     }
@@ -87,26 +88,12 @@ impl App {
         }
     }
 
-    /// Undoes the toast's action: the lists share one toast.
-    pub(in crate::tui) fn undo(&mut self) -> bool {
-        let key = plain(KeyCode::Char('u'));
-        if self.tab == Tab::Hotspot {
-            self.hotspot_tab_key(key)
-        } else {
-            self.wifi_key(key)
-        }
-    }
-
     /// Does what `verb` says, as if its key had been pressed.
     fn run_verb(&mut self, verb: &'static Verb) -> bool {
         self.layer = Layer::Root;
         match verb.run {
             Run::Root(code) => self.root_key(plain(code)),
-            Run::Key(Tab::WiFi, code) => self.wifi_key(plain(code)),
-            Run::Key(Tab::Ethernet, code) => self.eth_key(plain(code)),
-            Run::Key(Tab::Hotspot, code) => self.hotspot_tab_key(plain(code)),
-            Run::Key(Tab::Settings, code) => self.settings_key(plain(code)),
-            Run::Key(..) => false,
+            Run::Key(tab, code) => self.keys_of(tab, plain(code)),
             Run::Go(tab) => self.go_tab(tab),
             Run::Call(f) => f(self),
         }

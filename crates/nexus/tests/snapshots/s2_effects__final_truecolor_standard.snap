@@ -3,7 +3,7 @@ source: crates/nexus/tests/s2_effects.rs
 expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                  ● Online
-╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+╭ Networks ──────────────────╮╭ Status ────────────────────────────────────────────────────────────╮
 │ ▸ ● Wi-Fi                  ││     ░░░░    ░░    ░░  ░░        ░░░░░░    ░░    ░░  ░░░░░░░░       │
 │     Home-5G                ││   ░░████░░░░██░░░░██░░██░░    ░░██████░░░░██░░░░██░░████████░░     │
 │   ○ Ethernet               ││ ░░██░░░░██░░████░░██░░██░░      ░░██░░  ░░████░░██░░██░░░░░░       │
@@ -34,7 +34,7 @@ expression: frame
   426 cells  fg=#2c4a4c bg=- mods=[]
   120 cells  fg=#5d7377 bg=- mods=[]
     6 cells  fg=#8de3b2 bg=- mods=[]
-   16 cells  fg=#8de3b9 bg=- mods=[]
+   19 cells  fg=#8de3b9 bg=- mods=[]
    16 cells  fg=#8de3c0 bg=- mods=[]
    13 cells  fg=#8de3c7 bg=- mods=[]
    19 cells  fg=#8de3ce bg=- mods=[]
@@ -53,7 +53,7 @@ expression: frame
     1 cells  fg=#e4f2f0 bg=#182724 mods=[bold]
     1 cells  fg=#e4f2f0 bg=#182725 mods=[bold]
    78 cells  fg=#e4f2f0 bg=- mods=[]
-   66 cells  fg=#e4f2f0 bg=- mods=[bold]
+   63 cells  fg=#e4f2f0 bg=- mods=[bold]
     5 cells  fg=- bg=#182724 mods=[]
    16 cells  fg=- bg=#182725 mods=[]
    13 cells  fg=- bg=#182726 mods=[]

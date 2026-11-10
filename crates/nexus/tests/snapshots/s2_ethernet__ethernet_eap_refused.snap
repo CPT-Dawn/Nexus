@@ -13,7 +13,7 @@ expression: frame
 │            │   Anonymous id   e.g. anonymous@uni.example (optional)                 │            │
 │            │   Password       ••••••••••••••                                        │            │
 │            │   CA certificate empty: use the system CAs                             │            │
-│            │   Server name    radius.office.example                                 │rofile      │
+│            │   Server name    radius.office.example                                 │changes the │
 │            │   Skip check     [ ] check the server (recommended)                    │            │
 │            │                                                                        │            │
 │            │                                                                        │            │

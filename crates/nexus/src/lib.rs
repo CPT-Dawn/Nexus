@@ -3,4 +3,5 @@
 
 pub mod plugin;
 pub mod qr;
+pub mod text;
 pub mod tui;

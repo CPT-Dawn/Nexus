@@ -9,6 +9,9 @@
 
 use nexus_ipc::ErrorCode;
 
+/// Sentences of the terminal Front end (its own file; see there).
+pub mod tui;
+
 /// Why a join (or other Backend action) failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failure {
@@ -376,12 +379,12 @@ pub fn not_connected() -> Failure {
     )
 }
 
+/// The sentence for a hardware-blocked radio (the TUI shows it too).
+pub const HARD_BLOCKED: &str = "Wi-Fi is blocked by a hardware switch (a key, slider or BIOS setting). \
+     Flip it off and Nexus will pick it up; software cannot turn it on.";
+
 pub fn wifi_hard_blocked() -> Failure {
-    fail(
-        ErrorCode::HardBlocked,
-        "Wi-Fi is blocked by a hardware switch (a key, slider or BIOS setting). \
-         Flip it off and Nexus will pick it up; software cannot turn it on.",
-    )
+    fail(ErrorCode::HardBlocked, HARD_BLOCKED)
 }
 
 /// A join that NetworkManager's restart cut short.
@@ -562,12 +565,12 @@ pub fn invalid_config(why: &str) -> Failure {
 pub fn missing_plugin(plugin: &str) -> Failure {
     fail(
         ErrorCode::MissingPlugin,
-        nexus_tui::plugin::install_hint(plugin),
+        crate::plugin::install_hint(plugin),
     )
 }
 
 pub fn invalid_provider_file(plugin: &str, why: &str) -> Failure {
-    let label = nexus_tui::plugin::by_name(plugin).map_or(plugin, |p| p.label);
+    let label = crate::plugin::by_name(plugin).map_or(plugin, |p| p.label);
     fail(
         ErrorCode::InvalidConfig,
         format!("That is not a {label} file I can use: {why}."),

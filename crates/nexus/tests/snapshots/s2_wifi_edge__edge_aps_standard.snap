@@ -10,7 +10,7 @@ expression: frame
 │     caf� �[2J… ▂▄▆█ open   ││ Security      WPA2 personal                                        │
 │                            ││ Band          5 GHz                                                │
 │                            ││ Access points 4                                                    │
-│                            ││ Adapter       wlan0                                                │
+│                            ││ Card          wlan0                                                │
 │              ╭ Access points of Mesh-Home ────────────────────────────────────────╮              │
 │              │   Address            Ch   MHz Band       Rate  Sig  Card           │              │
 │              │   AA:00:00:00:10:02  36  5180 5G     866 Mb/s  82%  wlan0          │              │

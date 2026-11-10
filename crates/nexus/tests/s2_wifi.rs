@@ -301,13 +301,13 @@ fn colour_tiers_each_have_a_wifi_frame() {
 }
 
 #[test]
-fn without_an_adapter_the_tab_says_so() {
+fn without_a_card_the_tab_says_so() {
     let world = World::start(NEXUS);
     let mut rig = Rig::start(world, None, truecolor());
     rig.key(KeyCode::Char('2'));
     rig.pump_until("the empty list", |a| a.wifi().has_list());
     let frame = rig.text(STANDARD);
-    assert!(frame.contains("No Wi-Fi adapter found."), "{frame}");
+    assert!(frame.contains("No Wi-Fi card found."), "{frame}");
 }
 
 // ---- the order never moves under the cursor -------------------------------------
@@ -343,17 +343,133 @@ fn a_network_that_appears_goes_to_the_end_of_its_section() {
     assert_eq!(rig.selected(), "Cafe Guest");
 }
 
+/// Plays the scan sweep out: the scan was answered, so quiet ticks end it.
+fn end_scan(rig: &mut Rig) {
+    for _ in 0..20 {
+        rig.app.update(Msg::Tick);
+    }
+    assert!(!rig.app.wifi().scanning(), "the scan ended");
+}
+
 #[test]
-fn a_rescan_is_when_the_order_is_redone_and_the_cursor_still_follows_its_row() {
+fn a_rescan_redoes_the_order_when_it_ends_and_the_cursor_still_follows_its_row() {
     let mut rig = Rig::busy();
     rig.world.nm.set_last_scan_ago(rig.dev(), 60_000);
     rig.select("Cafe Guest");
     rig.key(KeyCode::Char('r'));
     rig.world.nm.set_strength_of("Rooftop-6E", 99);
-    rig.pump_until("the resorted list", |a| {
-        a.wifi().rows()[0].name() == "Rooftop-6E"
+    rig.pump_until("the new signal", |a| {
+        a.wifi().signal_of("Rooftop-6E") == Some(99) && a.wifi().scan_acked()
     });
+    assert_ne!(
+        rig.app.wifi().rows()[0].name(),
+        "Rooftop-6E",
+        "no re-sort while the scan updates the list"
+    );
+    end_scan(&mut rig);
+    assert_eq!(rig.app.wifi().rows()[0].name(), "Rooftop-6E");
     assert_eq!(rig.selected(), "Cafe Guest");
+}
+
+#[test]
+fn a_rescan_never_resorts_under_a_cursor_the_person_moved() {
+    let mut rig = Rig::busy();
+    rig.world.nm.set_last_scan_ago(rig.dev(), 60_000);
+    rig.key(KeyCode::Char('r'));
+    rig.world.nm.set_strength_of("Rooftop-6E", 99);
+    rig.pump_until("the new signal", |a| {
+        a.wifi().signal_of("Rooftop-6E") == Some(99) && a.wifi().scan_acked()
+    });
+    let before = rig.names();
+    rig.key(KeyCode::Char('j')); // reading the list while the scan runs
+    let under_cursor = rig.selected();
+    end_scan(&mut rig);
+    assert_eq!(rig.names(), before, "the list stayed as the person saw it");
+    assert_eq!(rig.selected(), under_cursor);
+}
+
+// ---- the / filter ----------------------------------------------------------------------
+
+#[test]
+fn slash_filters_the_list_by_name_as_you_type() {
+    let mut rig = Rig::busy();
+    rig.key(KeyCode::Char('/'));
+    rig.type_str("ho"); // h and j/k are text while typing, not movement
+    assert_eq!(
+        rig.names(),
+        ["Home-5G", "Parents House", "Hotel Lobby"].map(String::from)
+    );
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("Wi-Fi · /ho_"), "{frame}");
+    insta::assert_snapshot!("wifi_filter_typing", frame);
+    assert_eq!(rig.footer(STANDARD), " type filter  enter keep  esc clear");
+
+    rig.key(KeyCode::Enter);
+    let frame = rig.text(STANDARD);
+    assert!(
+        frame.contains("Wi-Fi · /ho "),
+        "kept without the cursor: {frame}"
+    );
+    assert!(rig.footer(STANDARD).contains("esc clear filter"));
+    // The keys are the list's again.
+    rig.key(KeyCode::Char('j'));
+    assert_eq!(rig.selected(), "Parents House");
+
+    rig.key(KeyCode::Esc);
+    assert_eq!(rig.names().len(), 8, "Esc clears the filter");
+    assert!(!rig.text(STANDARD).contains("/ho"));
+}
+
+#[test]
+fn a_filter_with_no_match_says_so_and_esc_brings_the_list_back() {
+    let mut rig = Rig::busy();
+    rig.key(KeyCode::Char('/'));
+    rig.type_str("zzz");
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("No networks match “zzz”."), "{frame}");
+    rig.key(KeyCode::Esc);
+    assert_eq!(rig.names().len(), 8);
+    assert!(!rig.app.filtering());
+}
+
+#[test]
+fn the_filter_keeps_the_cursor_on_its_row_and_survives_new_lists() {
+    let mut rig = Rig::busy();
+    rig.select("Cafe Guest");
+    rig.key(KeyCode::Char('/'));
+    rig.type_str("caf");
+    assert_eq!(rig.selected(), "Cafe Guest");
+    rig.key(KeyCode::Enter);
+    // A Network appearing meanwhile respects the filter.
+    rig.world.nm.add_ap(
+        rig.dev(),
+        nexus_testkit::Ap::wpa2("Cafe Terrace", "AA:00:00:00:00:78", 70),
+    );
+    rig.pump_until("the new Network", |a| {
+        a.wifi().signal_of("Cafe Terrace").is_some()
+    });
+    assert_eq!(
+        rig.names(),
+        ["Cafe Guest", "Cafe Terrace"].map(String::from)
+    );
+    assert_eq!(rig.selected(), "Cafe Guest");
+}
+
+#[test]
+fn the_palette_and_help_know_the_filter() {
+    let mut rig = Rig::busy();
+    rig.key(KeyCode::Char(':'));
+    rig.type_str("filter");
+    rig.key(KeyCode::Enter);
+    assert!(rig.app.filtering(), "the palette started the filter");
+    rig.key(KeyCode::Esc);
+    rig.key(KeyCode::Char('?'));
+    let mut seen = String::new();
+    for _ in 0..12 {
+        seen.push_str(&rig.text(STANDARD));
+        rig.key(KeyCode::PageDown);
+    }
+    assert!(seen.contains("Filter the Wi-Fi or VPN list"), "{seen}");
 }
 
 // ---- scanning -------------------------------------------------------------------------

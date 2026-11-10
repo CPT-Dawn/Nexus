@@ -240,6 +240,12 @@ fn session(
                 .and_then(|w| w.as_str())
                 .map(String::from),
         })?;
+        // Read-only: NetworkManager's own address, set in NetworkManager.conf.
+        let uri = got
+            .get("connectivity_uri")
+            .and_then(|u| u.as_str())
+            .map(String::from);
+        send(Msg::ConnectivityUri(uri))?;
     }
     if let Ok(list) = conn.call(Op::EthernetList)?
         && let Ok(list) = serde_json::from_value(list)

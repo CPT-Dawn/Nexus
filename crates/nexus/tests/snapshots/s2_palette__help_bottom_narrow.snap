@@ -6,10 +6,10 @@ expression: bottom
 ╭ All keys (j/k scroll) ───────────────────────────────────╮
 │  VPN: p               Show a VPN's public key            │
 │  VPN: s               Share a VPN's config as a QR code  │
-│  Hotspot: n           Share this connection with a made- │
+│  Hotspot: n           Share this internet with a made-up │
 │  Hotspot: c           Start a Hotspot with a name and pa │
-│  Hotspot: S           Stop the Hotspot                   │
 │  Hotspot: s           Show the Hotspot's QR code and pas │
+│  Hotspot: S           Stop the Hotspot                   │
 │  Hotspot: Enter       Use the selected phone's data      │
 │  Hotspot: x           Drop the phone's tether            │
 │  Settings: Enter      Change the selected setting        █
