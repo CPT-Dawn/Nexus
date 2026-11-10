@@ -128,6 +128,33 @@ fn w_turns_wifi_off_and_u_turns_it_back_on() {
 }
 
 #[test]
+fn with_wifi_off_the_hidden_rows_take_no_keys() {
+    let mut rig = Rig::busy();
+    rig.key(KeyCode::Char('w'));
+    rig.radio_ready("Wi-Fi off", |r| !r.wifi.enabled);
+    rig.settle();
+    let frame = rig.text();
+    let footer = frame.lines().last().unwrap_or_default();
+    for word in ["disconnect", "forget", "share", "trust", "settings"] {
+        assert!(!footer.contains(word), "footer offers {word}: {footer}");
+    }
+    // Forget would ask first; with nothing on screen it must not.
+    rig.key(KeyCode::Char('f'));
+    let frame = rig.text();
+    assert!(!frame.contains("Forget"), "{frame}");
+    rig.key(KeyCode::Char(':'));
+    rig.type_text("forget network");
+    rig.key(KeyCode::Enter);
+    assert!(
+        rig.app
+            .toast()
+            .is_some_and(|t| t.text.contains("Wi-Fi is off")),
+        "{}",
+        rig.text()
+    );
+}
+
+#[test]
 fn the_palette_turns_wifi_off_and_on() {
     let mut rig = Rig::busy();
     rig.key(KeyCode::Char(':'));

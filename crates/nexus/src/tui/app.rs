@@ -1366,6 +1366,10 @@ impl App {
             }
             KeyCode::Char('c') => self.wifi.cycle_card(),
             _ => {
+                // The list is hidden while Wi-Fi is off: its rows take no keys.
+                if !self.radios().wifi.enabled {
+                    return false;
+                }
                 let Some(entry) = self.wifi.selected().cloned() else {
                     return false;
                 };

@@ -381,7 +381,7 @@ pub fn not_connected() -> Failure {
 
 /// The sentence for a hardware-blocked radio (the TUI shows it too).
 pub const HARD_BLOCKED: &str = "Wi-Fi is blocked by a hardware switch (a key, slider or BIOS setting). \
-     Flip it off and Nexus will pick it up; software cannot turn it on.";
+     Flip the switch back and Nexus will pick it up; software cannot turn it on.";
 
 pub fn wifi_hard_blocked() -> Failure {
     fail(ErrorCode::HardBlocked, HARD_BLOCKED)

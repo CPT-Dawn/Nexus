@@ -238,6 +238,9 @@ fn picked(app: &App) -> Result<&Entry, &'static str> {
     if app.tab() != Tab::WiFi {
         return Err("Open the Wi-Fi tab and pick a Network first.");
     }
+    if !app.radios().wifi.enabled {
+        return Err("Wi-Fi is off. Press w to turn it on.");
+    }
     app.wifi().selected().ok_or("No Network is selected.")
 }
 
