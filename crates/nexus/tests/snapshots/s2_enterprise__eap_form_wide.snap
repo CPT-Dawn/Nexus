@@ -5,7 +5,7 @@ expression: rig.text(WIDE)
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                                                         ● Offline
 ╭ Wi-Fi ───────────────────────────────╮╭ eduroam ─────────────────────────────────────────────────────────────────────────────────────────╮
 │   ● Home-5G         ▂▄▆█ wpa2     5G ││ Not saved                                                                                        │
-│ ▸   eduroam         ▂▄▆█ 802.1x╭ Sign in to eduroam ────────────────────────────────────────────────────╮                                │
+│ ▸   eduroam         ▂▄▆█ ent   ╭ Sign in to eduroam ────────────────────────────────────────────────────╮                                │
 │     Work-Secure     ▂▄▆█ wpa3  │   Method         ‹ PEAP ›                                              │                                │
 │     Cafe Guest      ▂▄▆█ open  │   Inner method   ‹ MSCHAPv2 ›                                          │                                │
 │     Neighbour-2G    ▂▄▆█ wpa2  │ ▸ Identity       _                                                     │                                │

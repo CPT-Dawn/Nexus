@@ -15,8 +15,8 @@ expression: frame
 │                            ││ MAC       52:54:00:00:00:00                                        │
 │                            ││ Profile   Office wall socket                                       │
 │                            ││                                                                    │
-│                            ││ Enter tries again. s signs in (802.1X). e changes the Profile      │
-│                            ││ settings.                                                          │
+│                            ││ Enter tries again. s signs in to an Enterprise port. e changes the │
+│                            ││ Profile settings.                                                  │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

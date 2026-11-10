@@ -7,15 +7,15 @@ expression: rig.text(STANDARD)
 │ ▸ Theme     Midnight Bloom ││ The colours of the TUI. Enter picks the next one.                  │
 │   Nerd Font icons      off ││                                                                    │
 │   Reduced motion       off ││ ● ████████ Midnight Bloom                                          │
-│   Notify: joined        on ││   ████████ Catppuccin                                              │
-│   Notify: lost          on ││   ████████ Gruvbox                                                 │
-│   Notify: bad password  on ││   ████████ Nord                                                    │
-│   Notify: prompt        on ││   ████████ Tokyo Night                                             │
-│   Notify: login         on ││   ████████ Rosé Pine                                               │
-│   Notify: VPN drop      on ││   ████████ High contrast                                           │
-│   Notify: untrusted     on ││                                                                    │
-│   Untrusted: metered   off ││ Make your own in config.toml:                                      │
-│                            ││   [themes.mine]                                                    │
+│   Connectivity check    on ││   ████████ Catppuccin                                              │
+│   Notify: joined        on ││   ████████ Gruvbox                                                 │
+│   Notify: lost          on ││   ████████ Nord                                                    │
+│   Notify: bad password  on ││   ████████ Tokyo Night                                             │
+│   Notify: prompt        on ││   ████████ Rosé Pine                                               │
+│   Notify: login         on ││   ████████ High contrast                                           │
+│   Notify: VPN drop      on ││                                                                    │
+│   Notify: untrusted     on ││ Make your own in config.toml:                                      │
+│   Untrusted: metered   off ││   [themes.mine]                                                    │
 │                            ││   base = "nord"                                                    │
 │                            ││   accent = "#ff8800"                                               │
 │                            ││                                                                    │

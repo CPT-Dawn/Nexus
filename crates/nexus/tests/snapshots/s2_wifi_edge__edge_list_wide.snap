@@ -10,7 +10,7 @@ expression: frame
 │     caf� �[2Jwifi   ▂▄▆█ open   2.4G ││ Security      WPA2 personal                                                                      │
 │                                      ││ Band          5 GHz                                                                              │
 │                                      ││ Access points 4                                                                                  │
-│                                      ││ Adapter       wlan0                                                                              │
+│                                      ││ Card          wlan0                                                                              │
 │                                      ││ Trust         Trusted                                                                            │
 │                                      ││ Joins via     any (press c)                                                                      │
 │                                      ││                                                                                                  │

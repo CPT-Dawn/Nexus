@@ -159,6 +159,18 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
                 Span::styled(format!("{:<12}", "Default"), look.muted()),
                 Span::styled(if item.default { "on" } else { "off" }, look.text()),
             ]));
+            if item.key == "connectivity.enabled" {
+                lines.push(Line::default());
+                let uri = tab.connectivity_uri().unwrap_or("not reported");
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{:<12}", "Checks"), look.muted()),
+                    Span::styled(super::surface::printable(uri), look.text()),
+                ]));
+                lines.push(Line::styled(
+                    crate::text::tui::CONNECTIVITY_URI_HINT,
+                    look.dim(),
+                ));
+            }
             if let Some(why) = app.setting_forced(&item) {
                 lines.push(Line::default());
                 lines.push(Line::styled(why, look.warn()));

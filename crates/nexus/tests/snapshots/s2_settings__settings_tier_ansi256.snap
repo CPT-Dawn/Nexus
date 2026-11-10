@@ -7,15 +7,15 @@ expression: "styled_of(&tui::render(&rig.app, STANDARD.0, STANDARD.1))"
 │ ▸ Theme     Midnight Bloom ││ The colours of the TUI. Enter picks the next one.                  │
 │   Nerd Font icons      off ││                                                                    │
 │   Reduced motion       off ││ ● ████████ Midnight Bloom                                          │
-│   Notify: joined        on ││   ████████ Catppuccin                                              │
-│   Notify: lost         off ││   ████████ Gruvbox                                                 │
-│   Notify: bad password  on ││   ████████ Nord                                                    │
-│   Notify: prompt        on ││   ████████ Tokyo Night                                             │
-│   Notify: login         on ││   ████████ Rosé Pine                                               │
-│   Notify: VPN drop      on ││   ████████ High contrast                                           │
-│   Notify: untrusted     on ││   broken (has a mistake, see below)                                │
-│   Untrusted: metered   off ││   ████████ sunrise (custom)                                        │
-│                            ││                                                                    │
+│   Connectivity check    on ││   ████████ Catppuccin                                              │
+│   Notify: joined        on ││   ████████ Gruvbox                                                 │
+│   Notify: lost         off ││   ████████ Nord                                                    │
+│   Notify: bad password  on ││   ████████ Tokyo Night                                             │
+│   Notify: prompt        on ││   ████████ Rosé Pine                                               │
+│   Notify: login         on ││   ████████ High contrast                                           │
+│   Notify: VPN drop      on ││   broken (has a mistake, see below)                                │
+│   Notify: untrusted     on ││   ████████ sunrise (custom)                                        │
+│   Untrusted: metered   off ││                                                                    │
 │                            ││ Make your own in config.toml:                                      │
 │                            ││   [themes.mine]                                                    │
 │                            ││   base = "nord"                                                    │
@@ -39,7 +39,7 @@ expression: "styled_of(&tui::render(&rig.app, STANDARD.0, STANDARD.1))"
     4 cells  fg=Indexed(142) bg=Reset mods=[]
     2 cells  fg=Indexed(144) bg=Reset mods=[]
   124 cells  fg=Indexed(145) bg=Reset mods=[]
-   16 cells  fg=Indexed(149) bg=Reset mods=[]
+   18 cells  fg=Indexed(149) bg=Reset mods=[]
     2 cells  fg=Indexed(151) bg=Reset mods=[]
     2 cells  fg=Indexed(152) bg=Reset mods=[]
     2 cells  fg=Indexed(168) bg=Reset mods=[bold]
@@ -64,4 +64,4 @@ expression: "styled_of(&tui::render(&rig.app, STANDARD.0, STANDARD.1))"
   142 cells  fg=Indexed(254) bg=Reset mods=[]
    32 cells  fg=Indexed(254) bg=Reset mods=[bold]
     2 cells  fg=Indexed(83) bg=Reset mods=[]
- 1893 cells  fg=Reset bg=Reset mods=[]
+ 1891 cells  fg=Reset bg=Reset mods=[]

@@ -301,13 +301,13 @@ fn colour_tiers_each_have_a_wifi_frame() {
 }
 
 #[test]
-fn without_an_adapter_the_tab_says_so() {
+fn without_a_card_the_tab_says_so() {
     let world = World::start(NEXUS);
     let mut rig = Rig::start(world, None, truecolor());
     rig.key(KeyCode::Char('2'));
     rig.pump_until("the empty list", |a| a.wifi().has_list());
     let frame = rig.text(STANDARD);
-    assert!(frame.contains("No Wi-Fi adapter found."), "{frame}");
+    assert!(frame.contains("No Wi-Fi card found."), "{frame}");
 }
 
 // ---- the order never moves under the cursor -------------------------------------

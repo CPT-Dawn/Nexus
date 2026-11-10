@@ -12,9 +12,9 @@ expression: rig.text(WIDE)
 │                                      ││ DNS       10.20.30.2                                                                             │
 │                                      ││           10.20.30.3                                                                             │
 │                                      ││ MAC       52:54:00:00:00:00                                                                      │
-│                                      ││ Profile   Office wall socket  (802.1X)                                                           │
+│                                      ││ Profile   Office wall socket  (Enterprise)                                                       │
 │                                      ││                                                                                                  │
-│                                      ││ x drops the Link. s signs in (802.1X). e changes the Profile settings.                           │
+│                                      ││ x drops the Link. s signs in to an Enterprise port. e changes the Profile settings.              │
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │
 │                                      ││                                                                                                  │

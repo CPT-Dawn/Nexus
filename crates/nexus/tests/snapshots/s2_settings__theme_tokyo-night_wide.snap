@@ -7,15 +7,15 @@ expression: frame
 │ ▸ Theme                  Tokyo Night ││ The colours of the TUI. Enter picks the next one.                                                │
 │   Nerd Font icons                off ││                                                                                                  │
 │   Reduced motion                 off ││   ████████ Midnight Bloom                                                                        │
-│   Notify: joined                  on ││   ████████ Catppuccin                                                                            │
-│   Notify: lost                   off ││   ████████ Gruvbox                                                                               │
-│   Notify: bad password            on ││   ████████ Nord                                                                                  │
-│   Notify: prompt                  on ││ ● ████████ Tokyo Night                                                                           │
-│   Notify: login                   on ││   ████████ Rosé Pine                                                                             │
-│   Notify: VPN drop                on ││   ████████ High contrast                                                                         │
-│   Notify: untrusted               on ││   broken (has a mistake, see below)                                                              │
-│   Untrusted: metered             off ││   ████████ sunrise (custom)                                                                      │
-│                                      ││                                                                                                  │
+│   Connectivity check              on ││   ████████ Catppuccin                                                                            │
+│   Notify: joined                  on ││   ████████ Gruvbox                                                                               │
+│   Notify: lost                   off ││   ████████ Nord                                                                                  │
+│   Notify: bad password            on ││ ● ████████ Tokyo Night                                                                           │
+│   Notify: prompt                  on ││   ████████ Rosé Pine                                                                             │
+│   Notify: login                   on ││   ████████ High contrast                                                                         │
+│   Notify: VPN drop                on ││   broken (has a mistake, see below)                                                              │
+│   Notify: untrusted               on ││   ████████ sunrise (custom)                                                                      │
+│   Untrusted: metered             off ││                                                                                                  │
 │                                      ││ Make your own in config.toml:                                                                    │
 │                                      ││   [themes.mine]                                                                                  │
 │                                      ││   base = "nord"                                                                                  │
@@ -35,7 +35,7 @@ expression: frame
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
  j/k move  enter change  r reset  h/l tab  : palette  ? help  q quit
 
- 3374 cells  fg=Reset bg=Reset mods=[]
+ 3372 cells  fg=Reset bg=Reset mods=[]
    20 cells  fg=Reset bg=Rgb(36, 42, 59) mods=[]
    25 cells  fg=Reset bg=Rgb(36, 43, 59) mods=[]
    20 cells  fg=Reset bg=Rgb(36, 44, 59) mods=[]
@@ -65,7 +65,7 @@ expression: frame
    16 cells  fg=Rgb(154, 165, 206) bg=Rgb(36, 46, 59) mods=[]
     4 cells  fg=Rgb(154, 165, 206) bg=Rgb(36, 47, 59) mods=[]
     2 cells  fg=Rgb(156, 207, 216) bg=Reset mods=[]
-   16 cells  fg=Rgb(158, 206, 106) bg=Reset mods=[]
+   18 cells  fg=Rgb(158, 206, 106) bg=Reset mods=[]
     2 cells  fg=Rgb(163, 190, 140) bg=Reset mods=[]
     2 cells  fg=Rgb(166, 227, 161) bg=Reset mods=[]
     4 cells  fg=Rgb(184, 187, 38) bg=Reset mods=[]

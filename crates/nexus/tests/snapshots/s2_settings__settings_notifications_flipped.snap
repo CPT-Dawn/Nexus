@@ -7,15 +7,15 @@ expression: rig.text(STANDARD)
 │   Theme     Midnight Bloom ││ A desktop notification when a VPN goes down without being asked    │
 │   Nerd Font icons      off ││ to.                                                                │
 │   Reduced motion       off ││                                                                    │
-│   Notify: joined       off ││ Now         off                                                    │
-│   Notify: lost          on ││ Default     on                                                     │
-│   Notify: bad password off ││                                                                    │
-│   Notify: prompt       off ││ enter changes it, r puts the default back.                         │
+│   Connectivity check    on ││ Now         off                                                    │
+│   Notify: joined       off ││ Default     on                                                     │
+│   Notify: lost          on ││                                                                    │
+│   Notify: bad password off ││ enter changes it, r puts the default back.                         │
+│   Notify: prompt       off ││                                                                    │
 │   Notify: login        off ││                                                                    │
 │ ▸ Notify: VPN drop     off ││                                                                    │
 │   Notify: untrusted     on ││                                                                    │
 │   Untrusted: metered   off ││                                                                    │
-│                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

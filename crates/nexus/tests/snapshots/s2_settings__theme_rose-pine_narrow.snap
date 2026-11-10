@@ -7,6 +7,7 @@ expression: frame
 │ ▸ Theme                                        Rosé Pine │
 │   Nerd Font icons                                    off │
 │   Reduced motion                                     off │
+│   Connectivity check                                  on │
 │   Notify: joined                                      on │
 │   Notify: lost                                       off │
 │   Notify: bad password                                on │
@@ -19,11 +20,10 @@ expression: frame
 │                                                          │
 │                                                          │
 │                                                          │
-│                                                          │
 ╰──────────────────────────────────────────────────────────╯
  enter change  r reset  d details  : palette  ? help
 
-  760 cells  fg=Reset bg=Reset mods=[]
+  758 cells  fg=Reset bg=Reset mods=[]
     3 cells  fg=Reset bg=Rgb(39, 38, 56) mods=[]
     8 cells  fg=Reset bg=Rgb(40, 37, 56) mods=[]
    27 cells  fg=Reset bg=Rgb(41, 37, 56) mods=[]
@@ -36,7 +36,7 @@ expression: frame
    16 cells  fg=Rgb(144, 140, 170) bg=Rgb(42, 37, 56) mods=[]
    14 cells  fg=Rgb(144, 140, 170) bg=Rgb(43, 37, 56) mods=[]
    14 cells  fg=Rgb(144, 140, 170) bg=Rgb(44, 37, 56) mods=[]
-   12 cells  fg=Rgb(156, 207, 216) bg=Reset mods=[]
+   14 cells  fg=Rgb(156, 207, 216) bg=Reset mods=[]
     4 cells  fg=Rgb(167, 169, 231) bg=Reset mods=[]
     8 cells  fg=Rgb(170, 167, 231) bg=Reset mods=[]
    12 cells  fg=Rgb(175, 167, 231) bg=Reset mods=[]

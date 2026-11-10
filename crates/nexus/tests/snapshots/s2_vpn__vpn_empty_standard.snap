@@ -7,7 +7,7 @@ expression: frame
 │ No VPNs yet.               ││ Nothing selected.                                                  │
 │ Press i to import a .conf  ││                                                                    │
 │ or .ovpn,                  ││                                                                    │
-│ or c to create a tunnel.   ││                                                                    │
+│ or c to create a VPN.      ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

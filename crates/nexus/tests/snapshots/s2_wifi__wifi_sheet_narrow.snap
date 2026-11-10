@@ -10,7 +10,7 @@ expression: sheet
     │ Security      WPA2 personal                          │
     │ Band          5 GHz                                  │
     │ Access points 1                                      │
-    │ Adapter       wlan0                                  │
+    │ Card          wlan0                                  │
     │ Trust         Trusted                                │
     │ Autoconnect   on                                     │
     │                                                      │

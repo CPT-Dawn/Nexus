@@ -4,7 +4,7 @@ expression: rig.text(STANDARD)
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
 ╭ Hotspot ───────────────────╮╭ Tethering ─────────────────────────────────────────────────────────╮
-│ ○ Not available            ││ No Bluetooth adapter was found, or the Bluetooth service is not    │
+│ ○ Not available            ││ No Bluetooth Device was found, or the Bluetooth service is not     │
 │ This machine has no Wi-Fi  ││ running (systemctl start bluetooth).                               │
 │ card, so it cannot host a  ││                                                                    │
 │ Hotspot.                   ││                                                                    │

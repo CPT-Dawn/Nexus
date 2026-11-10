@@ -7,6 +7,7 @@ expression: frame
 │ ▸ Theme                                          Gruvbox │
 │   Nerd Font icons                                    off │
 │   Reduced motion                                     off │
+│   Connectivity check                                  on │
 │   Notify: joined                                      on │
 │   Notify: lost                                       off │
 │   Notify: bad password                                on │
@@ -19,11 +20,10 @@ expression: frame
 │                                                          │
 │                                                          │
 │                                                          │
-│                                                          │
 ╰──────────────────────────────────────────────────────────╯
  enter change  r reset  d details  : palette  ? help
 
-  760 cells  fg=Reset bg=Reset mods=[]
+  758 cells  fg=Reset bg=Reset mods=[]
     7 cells  fg=Reset bg=Rgb(59, 61, 41) mods=[]
     3 cells  fg=Reset bg=Rgb(61, 45, 41) mods=[]
     4 cells  fg=Reset bg=Rgb(61, 47, 41) mods=[]
@@ -44,7 +44,7 @@ expression: frame
     7 cells  fg=Rgb(168, 153, 132) bg=Rgb(61, 58, 41) mods=[]
     8 cells  fg=Rgb(168, 153, 132) bg=Rgb(61, 60, 41) mods=[]
     6 cells  fg=Rgb(168, 153, 132) bg=Rgb(61, 61, 41) mods=[]
-   12 cells  fg=Rgb(184, 187, 38) bg=Reset mods=[]
+   14 cells  fg=Rgb(184, 187, 38) bg=Reset mods=[]
     5 cells  fg=Rgb(229, 250, 47) bg=Reset mods=[]
     8 cells  fg=Rgb(235, 219, 178) bg=Reset mods=[bold]
    68 cells  fg=Rgb(235, 219, 178) bg=Rgb(60, 56, 54) mods=[bold]

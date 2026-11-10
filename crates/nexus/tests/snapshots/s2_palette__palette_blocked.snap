@@ -3,7 +3,7 @@ source: crates/nexus/tests/s2_palette.rs
 expression: frame
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
-╭ Connections ───────────────╮╭ Status ────────────────────────────────────────────────────────────╮
+╭ Networks ──────────────────╮╭ Status ────────────────────────────────────────────────────────────╮
 │ ▸ ○ Wi-Fi                  ││  ╭ Command palette ─────────────────────────────────────────────╮  │
 │     Not connected          ││  │ : forget▏                                                    │  │
 │   ○ Ethernet               ││ ░│ ──────────────────────────────────────────────────────────── │  │

@@ -259,7 +259,7 @@ fn signing_in_brings_the_link_up_and_shows_its_details() {
         "10.20.30.1",
         "10.20.30.2",
         "Office wall socket",
-        "(802.1X)",
+        "(Enterprise)",
     ] {
         assert!(frame.contains(want), "{want}:\n{frame}");
     }

@@ -494,7 +494,7 @@ fn trouble_on_the_overview_gets_a_diagnostics_panel() {
     });
     for (name, size) in [("narrow", NARROW), ("standard", STANDARD), ("wide", WIDE)] {
         let frame = rig.text(size);
-        assert!(frame.contains("Diagnostics"), "{name}:\n{frame}");
+        assert!(frame.contains("Doctor"), "{name}:\n{frame}");
         insta::assert_snapshot!(format!("diagnostics_{name}"), frame);
     }
     // Nothing to run for a sign-in page: no `f`.
@@ -504,7 +504,7 @@ fn trouble_on_the_overview_gets_a_diagnostics_panel() {
 #[test]
 fn a_healthy_overview_has_no_diagnostics_panel() {
     let rig = Rig::online();
-    assert!(!rig.text(STANDARD).contains("Diagnostics"));
+    assert!(!rig.text(STANDARD).contains("Doctor"));
 }
 
 // ---- colour tiers, glyphs, transparency ----------------------------------------

@@ -15,7 +15,7 @@ expression: frame
 │                 │   IPv6         automatic                                     │                 │
 │                 │   DNS                                                        │                 │
 │                 │   MAC address  permanent (hardware)                          │                 │
-│                 │   Metered      no                                            │the Profile      │
+│                 │   Metered      no                                            │t. e changes the │
 │                 │   Priority     0                                             │                 │
 │                 │   Keyring      no, system store                              │                 │
 │                 │                                                              │                 │

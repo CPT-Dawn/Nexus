@@ -7,15 +7,15 @@ expression: rig.text(STANDARD)
 │ ▸ Theme     Midnight Bloom ││ The colours of the TUI. Enter picks the next one.                  │
 │   Nerd Font icons      off ││                                                                    │
 │   Reduced motion       off ││   ████████ Midnight Bloom                                          │
-│   Notify: joined        on ││   ████████ Catppuccin                                              │
-│   Notify: lost         off ││   ████████ Gruvbox                                                 │
-│   Notify: bad password  on ││   ████████ Nord                                                    │
-│   Notify: prompt        on ││   ████████ Tokyo Night                                             │
-│   Notify: login         on ││   ████████ Rosé Pine                                               │
-│   Notify: VPN drop      on ││   ████████ High contrast                                           │
-│   Notify: untrusted     on ││   broken (has a mistake, see below)                                │
-│   Untrusted: metered   off ││   ████████ sunrise (custom)                                        │
-│                            ││                                                                    │
+│   Connectivity check    on ││   ████████ Catppuccin                                              │
+│   Notify: joined        on ││   ████████ Gruvbox                                                 │
+│   Notify: lost         off ││   ████████ Nord                                                    │
+│   Notify: bad password  on ││   ████████ Tokyo Night                                             │
+│   Notify: prompt        on ││   ████████ Rosé Pine                                               │
+│   Notify: login         on ││   ████████ High contrast                                           │
+│   Notify: VPN drop      on ││   broken (has a mistake, see below)                                │
+│   Notify: untrusted     on ││   ████████ sunrise (custom)                                        │
+│   Untrusted: metered   off ││                                                                    │
 │                            ││ Make your own in config.toml:                                      │
 │                            ││   [themes.mine]                                                    │
 │                            ││   base = "nord"                                                    │

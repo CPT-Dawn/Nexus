@@ -3,7 +3,7 @@ source: crates/nexus/tests/s2_palette.rs
 expression: top
 ---
  Nexus  Overview  Wi-Fi  Ethernet  VPN  Hotspot  Settings                                 ● Offline
-╭ Connections ─────╭ All keys (j/k scroll) ─────────────────────────────────────╮──────────────────╮
+╭ Networks ────────╭ All keys (j/k scroll) ─────────────────────────────────────╮──────────────────╮
 │ ▸ ○ Wi-Fi        │  :                    Open the command palette             █                  │
 │     Not connected│  j / k, Down / Up     Move in the list                     █                  │
 │   ○ Ethernet     │  g / G                Jump to top / bottom                 █                  │

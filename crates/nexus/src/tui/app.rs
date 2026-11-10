@@ -98,6 +98,8 @@ pub enum Msg {
         config: serde_json::Value,
         warning: Option<String>,
     },
+    /// NetworkManager's connectivity-check address (read-only).
+    ConnectivityUri(Option<String>),
     /// A setting the person changed was refused (`Err`) or taken.
     Setting(Result<(), String>),
     /// The Daemon cannot be reached (never connected, or the link dropped).
@@ -694,6 +696,9 @@ impl App {
                 true
             }
             Msg::Setting(Ok(())) => false,
+            Msg::ConnectivityUri(uri) => {
+                self.settings.set_connectivity_uri(uri) && self.tab == Tab::Settings
+            }
             Msg::Ethernet(list) => self.ethernet.refresh(list),
             Msg::Wired(done) => self.eth_done(*done),
             Msg::Hotspot(info) => {

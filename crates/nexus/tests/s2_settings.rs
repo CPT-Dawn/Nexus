@@ -426,6 +426,18 @@ fn each_notification_switch_edits_its_key() {
 }
 
 #[test]
+fn the_connectivity_row_shows_networkmanagers_address_read_only() {
+    let mut rig = Rig::new(false);
+    rig.go_to("Connectivity check");
+    rig.pump_until("the address", |a| a.settings().connectivity_uri().is_some());
+    let frame = rig.text(STANDARD);
+    let uri = rig.app.settings().connectivity_uri().unwrap().to_owned();
+    assert!(frame.contains(&uri), "{frame}");
+    assert!(frame.contains("NetworkManager.conf"), "{frame}");
+    assert!(frame.contains("ConnectivityCheckEnabled"), "{frame}");
+}
+
+#[test]
 fn u_puts_a_switch_back_and_a_reset_too() {
     let mut rig = Rig::new(false);
     rig.go_to("Notify: joined");

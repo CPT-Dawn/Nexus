@@ -172,3 +172,9 @@ pub fn vpn_saved(name: &str) -> String {
 pub fn vpn_is(name: &str, up: bool) -> String {
     format!("{name} is {}.", if up { "up" } else { "down" })
 }
+
+// ---- connectivity check -----------------------------------------------------------
+
+/// Under the check address on the Settings tab.
+pub const CONNECTIVITY_URI_HINT: &str =
+    "The address is NetworkManager's. It is read-only here: change it in NetworkManager.conf.";
