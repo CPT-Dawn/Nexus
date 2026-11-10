@@ -9,10 +9,12 @@ use nexus_ipc::Op;
 use serde_json::{Value, json};
 
 use super::{App, Msg};
+use crate::text;
 use crate::tui::caps::Glyphs;
 use crate::tui::fx::{Fx, Movement};
 use crate::tui::settings::{ITEMS, Item, Kind};
 use crate::tui::theme::{Look, Theme};
+use crate::tui::undo::Undo;
 
 impl App {
     /// Keys of the Settings list: enter changes the row, r resets it.
@@ -22,17 +24,24 @@ impl App {
         };
         match key.code {
             KeyCode::Enter | KeyCode::Char(' ') => self.change_setting(&item),
-            KeyCode::Char('r') => self.set_setting(item.key, Value::Null),
+            KeyCode::Char('r') => {
+                let before = self.settings.raw(item.key);
+                self.set_setting(item.key, Value::Null);
+                if before.is_null() {
+                    return false; // already the default
+                }
+                self.say(
+                    text::tui::reset(item.label),
+                    false,
+                    Some(Undo::Setting {
+                        key: item.key.to_owned(),
+                        value: before,
+                    }),
+                );
+                true
+            }
             _ => false,
         }
-    }
-
-    /// Footer hints of the Settings list.
-    pub(super) fn settings_hints(&self) -> Vec<(&'static str, &'static str)> {
-        if !self.settings.has_data() {
-            return Vec::new();
-        }
-        vec![("enter", "change"), ("r", "reset")]
     }
 
     /// Enter on a row: the next theme, or the opposite switch.
@@ -47,7 +56,17 @@ impl App {
             }
             Kind::Switch => {
                 let now = self.settings.is_on(item);
-                self.set_setting(item.key, json!(!now))
+                let before = self.settings.raw(item.key);
+                self.set_setting(item.key, json!(!now));
+                self.say(
+                    text::tui::switched(item.label, !now),
+                    false,
+                    Some(Undo::Setting {
+                        key: item.key.to_owned(),
+                        value: before,
+                    }),
+                );
+                true
             }
         }
     }
@@ -60,7 +79,7 @@ impl App {
         }
     }
 
-    fn set_setting(&mut self, key: &str, value: Value) -> bool {
+    pub(super) fn set_setting(&mut self, key: &str, value: Value) -> bool {
         if let Some(runner) = &self.runner {
             let op = Op::ConfigSet {
                 key: key.to_owned(),

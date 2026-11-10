@@ -6,15 +6,14 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
-use std::thread;
 use std::time::{Duration, Instant};
 
-use nexus_ipc::{
-    Connection, Eap, Failure, Op, Prompt, SavedWifi, ScanOutcome, Secret, WifiList, WifiNetwork,
-};
+use nexus_ipc::{Eap, Op, Prompt, SavedWifi, ScanOutcome, Secret, WifiList, WifiNetwork};
 use zeroize::Zeroizing;
 
 use super::app::Msg;
+use super::runner;
+use super::undo::Undo;
 
 /// How long a scan sweep may run when the list never changes.
 const SCAN_PATIENCE: Duration = Duration::from_secs(8);
@@ -152,6 +151,14 @@ pub enum Cmd {
     },
     /// Open the Portal's login page in the browser.
     OpenPortal,
+    /// Wi-Fi radio on or off.
+    WifiPower {
+        on: bool,
+    },
+    /// Airplane mode on or off.
+    Airplane {
+        on: bool,
+    },
 }
 
 impl Cmd {
@@ -205,6 +212,8 @@ impl Cmd {
             },
             Cmd::Untether { .. } => Op::TetherDisconnect,
             Cmd::OpenPortal => Op::PortalOpen,
+            Cmd::WifiPower { on } => Op::WifiPower { on: *on },
+            Cmd::Airplane { on } => Op::Airplane { on: *on },
         }
     }
 
@@ -237,47 +246,35 @@ impl Runner {
     /// arrives as [`Msg::Shared`]. NetworkManager may wait for the person to
     /// authorize it, so it has its own connection and thread.
     pub fn reveal(&self, network: String) {
-        let (socket, tx) = (self.socket.clone(), self.tx.clone());
-        let spawned = thread::Builder::new()
-            .name("nexus-reveal".into())
-            .spawn(move || {
-                let _ = tx.send(Msg::Shared(fetch_share(&socket, network)));
-            });
-        if let Err(e) = spawned {
-            tracing::warn!("cannot spawn a reveal thread: {e}");
-        }
+        self.reveal_op(Op::WifiReveal { network });
     }
 
     /// Like [`Runner::reveal`], for the running Hotspot.
     pub fn reveal_hotspot(&self) {
+        self.reveal_op(Op::HotspotReveal);
+    }
+
+    fn reveal_op(&self, op: Op) {
         let (socket, tx) = (self.socket.clone(), self.tx.clone());
-        let spawned = thread::Builder::new()
-            .name("nexus-reveal".into())
-            .spawn(move || {
-                let _ = tx.send(Msg::Shared(fetch_hotspot_share(&socket)));
+        runner::spawn("nexus-reveal", move || {
+            let shared = runner::call(&socket, op).and_then(|value| {
+                serde_json::from_value(value)
+                    .map_err(|_| "The daemon sent details Nexus cannot read.".to_string())
             });
-        if let Err(e) = spawned {
-            tracing::warn!("cannot spawn a reveal thread: {e}");
-        }
+            let _ = tx.send(Msg::Shared(shared));
+        });
     }
 
     pub fn run(&self, cmd: Cmd) {
         let (socket, tx) = (self.socket.clone(), self.tx.clone());
-        let spawned = thread::Builder::new()
-            .name("nexus-command".into())
-            .spawn(move || {
-                let result = execute(&socket, &cmd);
-                if cmd.reports() {
-                    let _ = tx.send(Msg::Done(Done { cmd, result }));
-                }
-            });
-        if let Err(e) = spawned {
-            tracing::warn!("cannot spawn a command thread: {e}");
-        }
+        runner::spawn("nexus-command", move || {
+            let result = execute(&socket, &cmd);
+            if cmd.reports() {
+                let _ = tx.send(Msg::Done(Done { cmd, result }));
+            }
+        });
     }
-}
 
-impl Runner {
     /// Runs one op on its own connection and reports as the message `wrap`
     /// makes of the result (the Daemon's words on a refusal).
     pub fn call(
@@ -286,50 +283,14 @@ impl Runner {
         wrap: impl FnOnce(Result<serde_json::Value, String>) -> Msg + Send + 'static,
     ) {
         let (socket, tx) = (self.socket.clone(), self.tx.clone());
-        let spawned = thread::Builder::new()
-            .name("nexus-command".into())
-            .spawn(move || {
-                let result = Connection::connect_to(&socket)
-                    .map_err(|_| "Can't reach the Nexus daemon.".to_string())
-                    .and_then(|mut c| {
-                        c.call(op)
-                            .map_err(|_| "Lost the Nexus daemon.".to_string())?
-                            .map_err(|f: Failure| f.message)
-                    });
-                let _ = tx.send(wrap(result));
-            });
-        if let Err(e) = spawned {
-            tracing::warn!("cannot spawn a command thread: {e}");
-        }
+        runner::spawn("nexus-command", move || {
+            let _ = tx.send(wrap(runner::call(&socket, op)));
+        });
     }
 }
 
-fn fetch_share(socket: &std::path::Path, network: String) -> Result<nexus_ipc::WifiShare, String> {
-    fetch(socket, Op::WifiReveal { network })
-}
-
-fn fetch_hotspot_share(socket: &std::path::Path) -> Result<nexus_ipc::WifiShare, String> {
-    fetch(socket, Op::HotspotReveal)
-}
-
-fn fetch(socket: &std::path::Path, op: Op) -> Result<nexus_ipc::WifiShare, String> {
-    let mut conn =
-        Connection::connect_to(socket).map_err(|_| "Can't reach the Nexus daemon.".to_string())?;
-    let value = conn
-        .call(op)
-        .map_err(|_| "Lost the Nexus daemon.".to_string())?
-        .map_err(|f: Failure| f.message)?;
-    serde_json::from_value(value)
-        .map_err(|_| "The daemon sent details Nexus cannot read.".to_string())
-}
-
 fn execute(socket: &std::path::Path, cmd: &Cmd) -> Result<Option<ScanOutcome>, String> {
-    let mut conn =
-        Connection::connect_to(socket).map_err(|_| "Can't reach the Nexus daemon.".to_string())?;
-    let value = conn
-        .call(cmd.op())
-        .map_err(|_| "Lost the Nexus daemon.".to_string())?
-        .map_err(|f: Failure| f.message)?;
+    let value = runner::call(socket, cmd.op())?;
     Ok(match cmd {
         Cmd::Scan => serde_json::from_value(value).ok(),
         _ => None,
@@ -341,7 +302,7 @@ fn execute(socket: &std::path::Path, cmd: &Cmd) -> Result<Option<ScanOutcome>, S
 pub struct Toast {
     pub text: String,
     pub bad: bool,
-    pub undo: Option<Cmd>,
+    pub undo: Option<Undo>,
     pub until: Instant,
 }
 
@@ -400,10 +361,17 @@ pub struct Confirm {
 #[derive(Debug, Default)]
 pub struct WifiTab {
     list: Option<WifiList>,
+    /// Every row, in the order the person has been looking at.
+    all: Vec<Entry>,
+    /// What the list shows: `all` narrowed by the `/` filter.
     rows: Vec<Entry>,
+    filter: String,
     cursor: usize,
-    /// Take the Daemon's order (strongest first) while a rescan runs.
-    resort: bool,
+    /// A rescan the person asked for is running: when it ends, take the
+    /// Daemon's order (strongest first), unless the cursor has moved since.
+    reorder_after_scan: bool,
+    /// The cursor moved while the scan ran.
+    moved: bool,
     scanning: bool,
     /// The scan request was answered; the sweep ends once lists stop coming.
     scan_acked: bool,
@@ -520,23 +488,61 @@ impl WifiTab {
         let row = row.min(self.rows.len().saturating_sub(1));
         let changed = row != self.cursor;
         self.cursor = row;
+        self.moved |= changed && self.scanning;
         changed
+    }
+
+    /// The `/` filter as typed (empty: none).
+    pub fn filter(&self) -> &str {
+        &self.filter
+    }
+
+    /// Narrows the list to the Networks whose name contains `text`, ignoring
+    /// case. The cursor stays on its row if that row is still shown.
+    pub fn set_filter(&mut self, text: &str) -> bool {
+        if self.filter == text {
+            return false;
+        }
+        let keep = self.selected().map(Entry::key);
+        self.filter = text.to_owned();
+        self.show(keep);
+        true
+    }
+
+    /// `rows` from `all` through the filter; the cursor follows `keep`.
+    fn show(&mut self, keep: Option<String>) {
+        let want = self.filter.to_lowercase();
+        self.rows = self
+            .all
+            .iter()
+            .filter(|e| want.is_empty() || e.name().to_lowercase().contains(&want))
+            .cloned()
+            .collect();
+        self.cursor = keep
+            .and_then(|k| self.rows.iter().position(|e| e.key() == k))
+            .unwrap_or_else(|| self.cursor.min(self.rows.len().saturating_sub(1)));
+    }
+
+    /// `all` from `list`: in the Daemon's order when `resort`, else known
+    /// rows keep their place and new ones go to the end of their section.
+    fn arrange(&mut self, list: &WifiList, resort: bool) {
+        let nets: Vec<Entry> = list.networks.iter().cloned().map(Entry::Net).collect();
+        let saved: Vec<Entry> = list.saved.iter().cloned().map(Entry::Saved).collect();
+        let mut all = self.settle(nets, resort);
+        all.extend(self.settle(saved, resort));
+        self.all = all;
     }
 
     /// Takes a fresh list. Known rows keep their place and new ones go to
     /// the end of their section, so the list never reshuffles under the
-    /// cursor; the order is only redone after a rescan the person asked for.
+    /// cursor, scan or no scan (the order is only redone when a scan the
+    /// person asked for ends, see [`WifiTab::stop_scan`]).
     /// The cursor follows its row. Returns whether anything visible changed.
     pub fn refresh(&mut self, list: WifiList) -> bool {
         let before = (self.rows.clone(), self.cursor, self.scanning);
         let keep = self.selected().map(Entry::key);
-        let resort = self.resort || self.rows.is_empty();
-
-        let nets: Vec<Entry> = list.networks.iter().cloned().map(Entry::Net).collect();
-        let saved: Vec<Entry> = list.saved.iter().cloned().map(Entry::Saved).collect();
-        let mut rows = self.settle(nets, resort);
-        rows.extend(self.settle(saved, resort));
-        self.rows = rows;
+        let first = self.all.is_empty();
+        self.arrange(&list, first);
         // A card that went away no longer pins joins.
         if self
             .card
@@ -546,10 +552,7 @@ impl WifiTab {
             self.card = None;
         }
         self.list = Some(list);
-
-        self.cursor = keep
-            .and_then(|k| self.rows.iter().position(|e| e.key() == k))
-            .unwrap_or_else(|| self.cursor.min(self.rows.len().saturating_sub(1)));
+        self.show(keep);
         // Scan results trickle in: each list restarts the quiet count.
         self.quiet = 0;
         before != (self.rows.clone(), self.cursor, self.scanning)
@@ -563,7 +566,7 @@ impl WifiTab {
         let mut by_key: HashMap<String, Entry> =
             fresh.iter().map(|e| (e.key(), e.clone())).collect();
         let mut out: Vec<Entry> = self
-            .rows
+            .all
             .iter()
             .filter_map(|old| by_key.remove(&old.key()))
             .collect();
@@ -579,7 +582,8 @@ impl WifiTab {
         self.scanning = true;
         self.scan_acked = false;
         self.quiet = 0;
-        self.resort = true;
+        self.reorder_after_scan = true;
+        self.moved = false;
         self.scan_deadline = Some(Instant::now() + SCAN_PATIENCE);
         true
     }
@@ -594,10 +598,19 @@ impl WifiTab {
         }
     }
 
+    /// Ends the sweep. A scan the person asked for then puts the list in the
+    /// Daemon's order (strongest first), but only if the cursor stayed put
+    /// while it ran: nothing may re-sort under a cursor the person moved
+    /// (the order is offered again at the next scan they start).
     pub fn stop_scan(&mut self) {
         self.scanning = false;
         self.scan_acked = false;
-        self.resort = false;
+        let reorder = std::mem::take(&mut self.reorder_after_scan) && !self.moved;
+        if reorder && let Some(list) = self.list.clone() {
+            let keep = self.selected().map(Entry::key);
+            self.arrange(&list, true);
+            self.show(keep);
+        }
     }
 
     /// Advances the sweep. Returns whether to redraw.

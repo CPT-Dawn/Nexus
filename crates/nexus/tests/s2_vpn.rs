@@ -247,6 +247,54 @@ fn the_palette_runs_vpn_verbs_from_another_tab_only_when_ready() {
 }
 
 #[test]
+fn u_takes_a_vpn_toggle_back() {
+    let mut rig = Rig::busy();
+    rig.select("Home Lab");
+    rig.key(KeyCode::Enter);
+    rig.pump_until("Home Lab up", |a| {
+        a.vpn()
+            .rows()
+            .iter()
+            .any(|v| v.name == "Home Lab" && v.state == VpnState::Up)
+            && a.toast().is_some_and(|t| t.undo.is_some())
+    });
+    assert!(rig.footer(STANDARD).contains("u undo"));
+    rig.key(KeyCode::Char('u'));
+    rig.pump_until("Home Lab down again", |a| {
+        a.vpn()
+            .rows()
+            .iter()
+            .any(|v| v.name == "Home Lab" && v.state == VpnState::Down)
+    });
+}
+
+#[test]
+fn slash_filters_the_vpn_list_and_enter_acts_on_the_row_shown() {
+    let mut rig = Rig::busy();
+    rig.key(KeyCode::Char('/'));
+    rig.type_text("lab");
+    assert_eq!(rig.app.vpn().len(), 1);
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("VPN · /lab_"), "{frame}");
+    rig.key(KeyCode::Enter); // keep the filter
+    rig.key(KeyCode::Enter); // toggle the VPN under the cursor
+    rig.pump_until("Home Lab up", |a| {
+        a.vpn()
+            .rows()
+            .iter()
+            .any(|v| v.name == "Home Lab" && v.state == VpnState::Up)
+    });
+
+    rig.key(KeyCode::Esc);
+    assert_eq!(rig.app.vpn().len(), 3);
+    assert_eq!(rig.state_of("Work"), VpnState::Up, "Work was not touched");
+    rig.key(KeyCode::Char('/'));
+    rig.type_text("nope");
+    let frame = rig.text(STANDARD);
+    assert!(frame.contains("No VPNs match “nope”."), "{frame}");
+}
+
+#[test]
 fn a_failed_start_says_why() {
     let mut rig = Rig::busy();
     let uuid = rig.world.nm.vpn_uuid("Home Lab").unwrap();

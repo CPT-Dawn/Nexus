@@ -53,11 +53,25 @@ fn fit(text: &str, width: usize, sym: &Sym) -> String {
 
 pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     let vpn = app.vpn();
-    let block = sym.block(look, "VPN", true);
+    let mut title = "VPN".to_owned();
+    if app.filtering() || !vpn.filter().is_empty() {
+        title.push_str(&crate::text::tui::filter_title(
+            vpn.filter(),
+            app.filtering(),
+        ));
+    }
+    let block = sym.block(look, &title, true);
     let inner = block.inner(area);
     f.render_widget(block, area);
     if vpn.is_empty() {
-        let msg = if vpn.has_list() {
+        let msg = if !vpn.filter().is_empty() && vpn.has_list() {
+            return super::view::empty_filter(
+                f,
+                inner,
+                look,
+                crate::text::tui::no_match("VPNs", vpn.filter()),
+            );
+        } else if vpn.has_list() {
             "No VPNs yet.\nPress i to import a .conf or .ovpn,\nor c to create a tunnel."
         } else {
             "Looking for VPNs..."

@@ -26,9 +26,7 @@ impl App {
                 };
                 match key.code {
                     KeyCode::Enter if self.vpn.busy.is_none() => {
-                        self.toast = None;
-                        self.vpn.busy = Some(vpn.id.clone());
-                        self.vpn_send(Cmd::Toggle {
+                        self.run_vpn(Cmd::Toggle {
                             id: vpn.id,
                             name: vpn.name,
                             up: vpn.state == VpnState::Down,
@@ -56,6 +54,15 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Sends a VPN command, marking a toggle as in flight.
+    pub(super) fn run_vpn(&mut self, cmd: Cmd) {
+        if let Cmd::Toggle { id, .. } = &cmd {
+            self.vpn.busy = Some(id.clone());
+        }
+        self.toast = None;
+        self.vpn_send(cmd);
     }
 
     fn vpn_send(&self, cmd: Cmd) {
@@ -132,7 +139,7 @@ impl App {
     pub(super) fn vpn_done(&mut self, done: Done) -> bool {
         let Done { cmd, result } = done;
         match (cmd, result) {
-            (Cmd::Toggle { name, .. }, result) => {
+            (Cmd::Toggle { id, name, up }, result) => {
                 self.vpn.busy = None;
                 match result {
                     Ok(Reply::Toggled(t)) => {
@@ -141,7 +148,12 @@ impl App {
                         } else {
                             "down"
                         };
-                        self.say(format!("{name} is {word}."), false, None);
+                        let undo = Cmd::Toggle {
+                            id,
+                            name: name.clone(),
+                            up: !up,
+                        };
+                        self.say(format!("{name} is {word}."), false, Some(undo.into()));
                     }
                     Ok(_) => {}
                     Err(message) => self.say(message, true, None),
@@ -194,8 +206,8 @@ impl App {
         true
     }
 
-    /// Footer hints of the VPN tab. `more` adds the less common keys.
-    pub(super) fn vpn_hints(&self, more: bool) -> Vec<(&'static str, &'static str)> {
+    /// Footer hints of the VPN tab's open layer (the list's come from the Verbs).
+    pub(super) fn vpn_hints(&self) -> Vec<(&'static str, &'static str)> {
         match &self.vpn.layer {
             Some(Layer::Form(form)) => {
                 return if form.busy {
@@ -217,28 +229,6 @@ impl App {
             }
             None => {}
         }
-        let mut v = Vec::new();
-        if let Some(vpn) = self.vpn.selected() {
-            v.push((
-                "enter",
-                if vpn.state == VpnState::Down {
-                    "up"
-                } else {
-                    "down"
-                },
-            ));
-        }
-        v.push(("i", "import"));
-        v.push(("c", "create"));
-        if more
-            && self
-                .vpn
-                .selected()
-                .is_some_and(|v| v.kind == nexus_ipc::VpnKind::Wireguard)
-        {
-            v.push(("p", "key"));
-            v.push(("s", "share"));
-        }
-        v
+        Vec::new()
     }
 }

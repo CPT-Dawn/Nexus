@@ -7,12 +7,12 @@ expression: frame
 │ ▸ ○ Wi-Fi                  ││ ●╭ Command palette ─────────────────────────────────────────────╮  │
 │     Not connected          ││  │ : ▏                                                          │  │
 │   ○ Ethernet               ││ Y│ ──────────────────────────────────────────────────────────── │  │
-│     Not connected          ││ I│   Join network                                         Enter │  │
-│   ○ VPN                    │╰──│   Disconnect                                               x │──╯
-│     Not connected          │╭ T│   Forget network                                           f │──╮
-│   ○ Hotspot                ││ ↓│   Toggle autoconnect                                       a │⣀ │
-│     Not started            ││ ↑│ ▸ Trust or distrust network                                t │⣀ │
-│                            │╰──│   Open the Wi-Fi tab and pick a Network first.               │──╯
+│     Not connected          ││ I│   Open login page                                          o │  │
+│   ○ VPN                    │╰──│   Run the suggested fix                                    f │──╯
+│     Not connected          │╭ T│   Filter the list                                          / │──╮
+│   ○ Hotspot                ││ ↓│   Turn Wi-Fi on                                            w │⣀ │
+│     Not started            ││ ↑│ ▸ Turn airplane mode off                                   A │⣀ │
+│                            │╰──│   Airplane mode is already off.                              │──╯
 │                            │   ╰──────────────────────────────────────────────────────────────╯
 ╰────────────────────────────╯
  enter run  esc close

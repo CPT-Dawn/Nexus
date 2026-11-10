@@ -13,10 +13,10 @@ expression: rig.text()
 │   ○ Hotspot                ││  │   Go to VPN                                                4 │  │
 │     Not started            ││  │   Go to Hotspot                                            5 │  │
 │                            ││ Y│   Go to Settings                                           6 │  │
-│                            ││ I│   Show all keys                                            ? │  │
-│                            │╰──│   Quit Nexus                                               q │──╯
-│                            │╭ T│   Rescan Wi-Fi                                             r │──╮
-│                            ││ ↓│   Open login page                                          o │⠀ │
+│                            ││ I│   Turn Wi-Fi off                                           w │  │
+│                            │╰──│   Turn airplane mode on                                    A │──╯
+│                            │╭ T│   Show all keys                                            ? │──╮
+│                            ││ ↓│   Quit Nexus                                               q │⠀ │
 │                            ││ d│                                                              │⣀ │
 │                            ││ ↑╰──────────────────────────────────────────────────────────────╯⠀ │
 │                            ││ up               ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │

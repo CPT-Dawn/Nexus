@@ -196,6 +196,25 @@ fn overview_online_at_standard_width() {
 }
 
 #[test]
+fn the_overview_claims_health_only_while_the_doctor_is_clean() {
+    use nexus_ipc::{Finding, Severity};
+    let mut rig = Rig::online();
+    assert!(rig.text(STANDARD).contains("Everything looks healthy."));
+    rig.app.update(Msg::Findings(vec![Finding {
+        id: "dns".into(),
+        severity: Severity::Warning,
+        title: "DNS is slow".into(),
+        cause: "The resolver takes seconds to answer.".into(),
+        fix: None,
+    }]));
+    let frame = rig.text(STANDARD);
+    assert!(!frame.contains("Everything looks healthy."), "{frame}");
+    assert!(frame.contains("The Doctor has found a problem."), "{frame}");
+    rig.app.update(Msg::Findings(Vec::new()));
+    assert!(rig.text(STANDARD).contains("Everything looks healthy."));
+}
+
+#[test]
 fn overview_online_at_wide_width() {
     let rig = Rig::online();
     insta::assert_snapshot!("overview_online_wide", rig.text(WIDE));

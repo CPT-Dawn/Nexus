@@ -1,3 +1,5 @@
+use nexus_tui::text;
+
 mod backend;
 mod bar_cli;
 mod cli;
@@ -11,7 +13,6 @@ mod menu;
 mod profile_cli;
 mod secrets;
 mod tether_view;
-mod text;
 mod vpn_cli;
 mod waybar;
 mod wifi_view;

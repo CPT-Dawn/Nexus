@@ -6,7 +6,7 @@ use nexus_ipc::{PromptField, PromptKind, Security, WifiNetwork};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
-use ratatui::text::{Line, Span};
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Clear, HighlightSpacing, List, ListItem, ListState, Paragraph, Wrap};
 
 use super::app::App;
@@ -146,24 +146,52 @@ fn row_line(entry: &Entry, busy: bool, avail: usize, look: &Look, sym: &Sym) -> 
 pub(super) fn master(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     let wifi = app.wifi();
     // With several cards, say which one joins are pinned to.
-    let title = match wifi.card_name() {
-        Some(card) => format!("Wi-Fi · {card}"),
-        None => "Wi-Fi".to_owned(),
+    let radios = app.radios();
+    let mut title = match (wifi.card_name(), radios.wifi.enabled) {
+        (_, false) => "Wi-Fi · off".to_owned(),
+        (Some(card), true) => format!("Wi-Fi · {card}"),
+        (None, true) => "Wi-Fi".to_owned(),
     };
+    if app.filtering() || !wifi.filter().is_empty() {
+        title.push_str(&crate::text::tui::filter_title(
+            wifi.filter(),
+            app.filtering(),
+        ));
+    }
     let block = sym.block(look, &title, true);
     let inner = block.inner(area);
     f.render_widget(block, area);
     sweep(f, app, area, look, sym);
+    if !radios.wifi.enabled {
+        // Off (or held off by a switch): say so and how to change it, not
+        // "no networks", which would read as a quiet street.
+        f.render_widget(
+            Paragraph::new(Text::styled(
+                crate::text::tui::wifi_off(&radios),
+                look.warn(),
+            ))
+            .wrap(Wrap { trim: false }),
+            inner,
+        );
+        return;
+    }
     if wifi.len() == 0 {
         let msg = if !wifi.has_list() {
             "Looking for networks..."
         } else if !wifi.has_adapter() {
             "No Wi-Fi adapter found."
+        } else if !wifi.filter().is_empty() {
+            return super::view::empty_filter(
+                f,
+                inner,
+                look,
+                crate::text::tui::no_match("networks", wifi.filter()),
+            );
         } else {
             "No networks in range.\nPress r to scan."
         };
         f.render_widget(
-            Paragraph::new(Span::styled(msg, look.dim())).wrap(Wrap { trim: false }),
+            Paragraph::new(Text::styled(msg, look.dim())).wrap(Wrap { trim: false }),
             inner,
         );
         return;
@@ -245,10 +273,24 @@ fn sweep(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
 
 pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sym) {
     let wifi = app.wifi();
-    let title = wifi.selected().map_or("Wi-Fi", Entry::name);
+    let off = !app.radios().wifi.enabled;
+    let title = wifi
+        .selected()
+        .filter(|_| !off)
+        .map_or("Wi-Fi", Entry::name);
     let block = sym.block(look, title, false);
     let inner = block.inner(area);
     f.render_widget(block, area);
+    if off {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "Nothing to show while Wi-Fi is off.",
+                look.dim(),
+            )),
+            inner,
+        );
+        return;
+    }
     let Some(entry) = wifi.selected() else {
         f.render_widget(
             Paragraph::new(Span::styled("Nothing selected.", look.dim())),

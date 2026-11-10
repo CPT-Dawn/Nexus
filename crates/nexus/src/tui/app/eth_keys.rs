@@ -85,7 +85,8 @@ impl App {
                 self.say(format!("Signed in. {port} is up."), false, None);
             }
             (Cmd::Disconnect { port }, Ok(())) => {
-                self.say(format!("Dropped {port}."), false, None);
+                let undo = Cmd::Connect { port: port.clone() };
+                self.say(format!("Dropped {port}."), false, Some(undo.into()));
             }
             // Back to the form, nothing typed lost, to try again.
             (Cmd::SignIn { port, eap }, Err(message)) => {
@@ -96,27 +97,5 @@ impl App {
             (_, Err(message)) => self.say(message, true, None),
         }
         true
-    }
-
-    /// Footer hints of the Ethernet tab.
-    pub(super) fn eth_hints(&self) -> Vec<(&'static str, &'static str)> {
-        let mut v = Vec::new();
-        let Some(port) = self.ethernet.selected() else {
-            return v;
-        };
-        let busy = self.ethernet.busy.is_some();
-        match port.state {
-            EthernetState::Unplugged => {}
-            EthernetState::Connected | EthernetState::Connecting => v.push(("x", "disconnect")),
-            _ if !busy => v.push(("enter", "connect")),
-            _ => {}
-        }
-        if port.state != EthernetState::Unplugged && !busy {
-            v.push(("s", "sign in"));
-        }
-        if port.profile.is_some() {
-            v.push(("e", "settings"));
-        }
-        v
     }
 }

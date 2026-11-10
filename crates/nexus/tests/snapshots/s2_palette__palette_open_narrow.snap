@@ -12,10 +12,10 @@ expression: rig.text()
 ││   Go to VPN                                          4 ││
 ╰│   Go to Hotspot                                      5 │╯
 ╭│   Go to Settings                                     6 │╮
+││   Turn Wi-Fi off                                     w ││
+││   Turn airplane mode on                              A ││
 ││   Show all keys                                      ? ││
 ││   Quit Nexus                                         q ││
-││   Rescan Wi-Fi                                       r ││
-││   Open login page                                    o ││
 ╰│                                                        │╯
 ╭╰────────────────────────────────────────────────────────╯╮
 │ Nothing yet. Joins, losses, VPNs and sign-in pages show  │

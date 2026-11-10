@@ -334,6 +334,24 @@ fn x_drops_the_link_and_enter_brings_it_back() {
     assert_eq!(rig.toast(), "enp3s0 is up.");
 }
 
+#[test]
+fn u_takes_a_dropped_link_back() {
+    let mut rig = Rig::busy();
+    rig.sign_in("alice@office.example", "hunter2");
+    rig.pump_until("the connected port", |a| {
+        a.ethernet().ports()[0].state == EthernetState::Connected
+    });
+    rig.key(KeyCode::Char('x'));
+    rig.pump_until("the Link to drop", |a| {
+        a.ethernet().ports()[0].state == EthernetState::Disconnected
+            && a.toast().is_some_and(|t| t.undo.is_some())
+    });
+    rig.key(KeyCode::Char('u'));
+    rig.pump_until("the Link back", |a| {
+        a.ethernet().ports()[0].state == EthernetState::Connected
+    });
+}
+
 // ---- Profile settings -----------------------------------------------------------
 
 #[test]

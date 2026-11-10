@@ -26,7 +26,6 @@ use super::tether_ui;
 use super::theme::Look;
 use super::vpn_ui;
 use super::wifi_ui;
-use super::words;
 
 /// The symbols for one glyph set.
 pub(super) struct Sym {
@@ -243,7 +242,7 @@ fn header(f: &mut Frame, app: &App, a: &Areas, look: &Look, sym: &Sym) {
     let right = match (app.conn(), app.status()) {
         (Conn::Up, Some(s)) => Line::from(vec![
             Span::styled(sym.dot(), state_style(look, s)),
-            Span::styled(format!(" {} ", words::headline(s)), look.text()),
+            Span::styled(format!(" {} ", crate::text::tui::headline(s)), look.text()),
         ]),
         _ if a.mode.split() => Line::from(Span::styled("? help ", look.dim())),
         _ => Line::default(),
@@ -430,4 +429,13 @@ fn daemon_lines(app: &App, look: &Look) -> Vec<Line<'static>> {
             look.muted(),
         )],
     }
+}
+
+/// The note a list shows when its `/` filter hides every row.
+pub(super) fn empty_filter(f: &mut Frame, area: Rect, look: &super::theme::Look, text: String) {
+    let lines: Vec<Line> = text
+        .lines()
+        .map(|l| Line::styled(l.to_owned(), look.dim()))
+        .collect();
+    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
 }

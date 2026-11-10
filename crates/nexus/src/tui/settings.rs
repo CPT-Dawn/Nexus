@@ -134,6 +134,16 @@ impl SettingsTab {
         self.config.is_some()
     }
 
+    /// What the config holds at the dotted `key`; `Null` when it is absent
+    /// (the default applies).
+    pub fn raw(&self, key: &str) -> Value {
+        let mut at = self.config.as_ref();
+        for part in key.split('.') {
+            at = at.and_then(|v| v.get(part));
+        }
+        at.cloned().unwrap_or(Value::Null)
+    }
+
     pub fn config(&self) -> Option<&Value> {
         self.config.as_ref()
     }

@@ -3,7 +3,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{App, Layer, Tab};
+use super::{App, Layer};
 use crate::tui::verbs::{self, Found, Run, Verb};
 
 /// The palette while it is open.
@@ -27,6 +27,7 @@ impl App {
 
     pub(super) fn open_palette(&mut self) -> bool {
         self.toast = None;
+        self.filtering = false;
         self.palette = Some(Palette::default());
         true
     }
@@ -84,16 +85,6 @@ impl App {
             None => {
                 self.run_verb(found.verb);
             }
-        }
-    }
-
-    /// Undoes the toast's action: the lists share one toast.
-    pub(in crate::tui) fn undo(&mut self) -> bool {
-        let key = plain(KeyCode::Char('u'));
-        if self.tab == Tab::Hotspot {
-            self.hotspot_tab_key(key)
-        } else {
-            self.wifi_key(key)
         }
     }
 

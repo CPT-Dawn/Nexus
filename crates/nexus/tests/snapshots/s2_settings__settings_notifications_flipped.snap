@@ -25,8 +25,8 @@ expression: rig.text(STANDARD)
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
-│                            ││                                                                    │
+│                            ││                           ╭ Done ────────────────────────────────╮ │
+│                            ││                           │ Notify: VPN drop turned off.  u undo │ │
+│                            ││                           ╰──────────────────────────────────────╯ │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
- j/k move  enter change  r reset  h/l tab  : palette  ? help  q quit
+ j/k move  enter change  r reset  u undo  h/l tab  : palette  ? help  q quit
