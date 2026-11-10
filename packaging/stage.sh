@@ -11,6 +11,10 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 install -Dm755 "$bin" "$dest/usr/bin/nexus"
 install -Dm644 "$here/systemd/nexus.service" "$dest/usr/lib/systemd/user/nexus.service"
 install -Dm644 "$here/systemd/nexus.socket" "$dest/usr/lib/systemd/user/nexus.socket"
+# Start the Daemon's socket at login without the user running `systemctl enable`
+# (the preset alone only applies to `systemctl preset`, which pacman does not run).
+install -dm755 "$dest/usr/lib/systemd/user/sockets.target.wants"
+ln -sf ../nexus.socket "$dest/usr/lib/systemd/user/sockets.target.wants/nexus.socket"
 install -Dm644 "$here/systemd/90-nexus.preset" "$dest/usr/lib/systemd/user-preset/90-nexus.preset"
 install -Dm644 "$here/polkit/50-nexus-wheel.rules.example" \
   "$dest/usr/share/doc/nexus/examples/50-nexus-wheel.rules.example"

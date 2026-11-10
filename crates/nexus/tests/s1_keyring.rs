@@ -3,16 +3,12 @@
 //! Profile kept in the keyring is agent-owned: NetworkManager never stores its
 //! password and asks the Daemon, which answers from the keyring.
 
-use nexus_testkit::{Ap, World};
+use nexus_testkit::{Ap, World, network_id as id};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
 const UUID: &str = "11111111-2222-4333-8444-555555555555";
 const PASSWORD: &str = "hunter2-hunter2";
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 /// A saved Profile for Home with a stored password, in a world with or
 /// without a keyring.

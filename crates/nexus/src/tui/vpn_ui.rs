@@ -21,14 +21,15 @@ fn state_word(state: VpnState) -> &'static str {
         VpnState::Up => "up",
         VpnState::Activating => "starting",
         VpnState::Down => "down",
+        _ => "changing",
     }
 }
 
 fn marker<'a>(vpn: &Vpn, busy: bool, look: &Look, sym: &Sym) -> Span<'a> {
     match (vpn.state, busy) {
         (VpnState::Up, _) => Span::styled(sym.dot(), look.ok()),
-        (VpnState::Activating, _) | (VpnState::Down, true) => Span::styled("~", look.warn()),
         (VpnState::Down, false) => Span::styled(sym.hollow(), look.dim()),
+        _ => Span::styled("~", look.warn()),
     }
 }
 
@@ -129,15 +130,14 @@ pub(super) fn detail(f: &mut Frame, app: &App, area: Rect, look: &Look, sym: &Sy
     let busy = vpn.busy.as_deref() == Some(v.id.as_str());
     let (state, style) = match (v.state, busy) {
         (VpnState::Up, _) => (format!("{} Up", sym.dot()), look.ok().bold()),
-        (VpnState::Activating, _) | (VpnState::Down, true) => {
-            ("~ Starting...".to_owned(), look.warn().bold())
-        }
         (VpnState::Down, false) => (format!("{} Down", sym.hollow()), look.muted().bold()),
+        _ => ("~ Starting...".to_owned(), look.warn().bold()),
     };
     let mut lines = vec![Line::styled(state, style), Line::default()];
     let kind = match v.kind {
         VpnKind::Wireguard => "WireGuard",
         VpnKind::Plugin => "Plugin VPN",
+        _ => "Other",
     };
     lines.push(row("Kind", kind.into()));
     if !v.addresses.is_empty() {

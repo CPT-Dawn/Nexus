@@ -31,21 +31,6 @@ const SECURITY: &str = "802-11-wireless-security";
 const AGENT_OWNED: u32 = 0x1;
 
 #[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Settings.Connection",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-trait Versioned {
-    #[zbus(property)]
-    fn version_id(&self) -> zbus::Result<u64>;
-    fn update2(
-        &self,
-        settings: Settings,
-        flags: u32,
-        args: HashMap<String, OwnedVariant>,
-    ) -> zbus::Result<HashMap<String, OwnedVariant>>;
-}
-
-#[zbus::proxy(
     interface = "org.freedesktop.NetworkManager",
     default_service = "org.freedesktop.NetworkManager",
     default_path = "/org/freedesktop/NetworkManager"
@@ -327,8 +312,11 @@ async fn carrying(conn: &Connection, ssid: &[u8]) -> zbus::Result<Vec<OwnedObjec
     Ok(out)
 }
 
-async fn versioned<'a>(conn: &Connection, path: &'a str) -> zbus::Result<VersionedProxy<'a>> {
-    VersionedProxy::builder(conn)
+async fn versioned<'a>(
+    conn: &Connection,
+    path: &'a str,
+) -> zbus::Result<SettingsConnectionProxy<'a>> {
+    SettingsConnectionProxy::builder(conn)
         .path(path)
         .cache_properties(CacheProperties::No)
         .build()

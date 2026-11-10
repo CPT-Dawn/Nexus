@@ -26,12 +26,46 @@ use crate::backend::nm::NetworkManager;
 use crate::config::{self, Settings};
 use crate::secrets::Broker;
 
-/// `nexus daemon`.
-pub fn run() -> ExitCode {
+/// A log file grows to this size before it is set aside (once).
+const LOG_LIMIT: u64 = 1024 * 1024;
+
+/// Under systemd, stderr is the journal. Anywhere else the log goes to
+/// `$XDG_STATE_HOME/nexus/daemon.log` (the last run's file is kept as
+/// `daemon.log.1`), and to stderr when that file cannot be opened.
+fn init_logging() {
+    let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    let under_systemd = std::env::var_os("JOURNAL_STREAM").is_some();
+    if !under_systemd && let Some(file) = open_log_file() {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter())
+            .with_ansi(false)
+            .with_writer(std::sync::Mutex::new(file))
+            .init();
+        return;
+    }
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with_env_filter(filter())
         .with_writer(std::io::stderr)
         .init();
+}
+
+fn open_log_file() -> Option<std::fs::File> {
+    let dir = trust::state_dir()?;
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join("daemon.log");
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() > LOG_LIMIT) {
+        let _ = std::fs::rename(&path, dir.join("daemon.log.1"));
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .ok()
+}
+
+/// `nexus daemon`.
+pub fn run() -> ExitCode {
+    init_logging();
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -85,6 +119,11 @@ async fn serve() -> std::io::Result<()> {
         Arc::new(notify::SystemTerminal),
         opener,
     );
+    tokio::spawn(keep_connectivity_check(
+        backend.clone(),
+        settings.clone(),
+        events.subscribe(),
+    ));
     tokio::spawn(watch_backend(
         backend.clone(),
         events.clone(),
@@ -125,6 +164,36 @@ async fn serve() -> std::io::Result<()> {
     }
     tracing::info!("shutting down");
     Ok(())
+}
+
+/// Applies `connectivity.enabled` to the Backend's own check: at start only
+/// when it is off (a check the user switched off in NetworkManager is not
+/// switched on behind their back), then on every change of the setting.
+async fn keep_connectivity_check<B: Backend>(
+    backend: Arc<B>,
+    settings: Arc<Settings>,
+    mut events: broadcast::Receiver<Event>,
+) {
+    let mut applied = true;
+    loop {
+        let wanted = settings.connectivity().enabled;
+        if wanted != applied {
+            match backend.set_connectivity_check(wanted).await {
+                Ok(()) => {}
+                Err(e) => tracing::warn!("cannot change NetworkManager's connectivity check: {e}"),
+            }
+            applied = wanted;
+        }
+        loop {
+            match events.recv().await {
+                Ok(Event::ConfigReloaded { .. }) | Err(broadcast::error::RecvError::Lagged(_)) => {
+                    break;
+                }
+                Ok(_) => {}
+                Err(broadcast::error::RecvError::Closed) => return,
+            }
+        }
+    }
 }
 
 /// What subscribers were last told.
@@ -462,50 +531,34 @@ async fn answer<B: Backend>(
 ) -> Response {
     match req.op {
         Op::Status => match backend.status().await {
-            Ok(status) => Response::ok(
-                req.id,
-                serde_json::to_value(status).expect("status serializes"),
-            ),
+            Ok(status) => ok_value(req.id, status),
             Err(e) => backend_reply::<()>(req.id, Err(e)),
         },
         Op::Traffic => match backend.counters().await {
-            Ok(counters) => Response::ok(
-                req.id,
-                serde_json::to_value(live.traffic.rates(counters).await)
-                    .expect("wire types serialize"),
-            ),
+            Ok(counters) => ok_value(req.id, live.traffic.rates(counters).await),
             Err(e) => backend_reply::<()>(req.id, Err(e)),
         },
-        Op::Activity => Response::ok(
+        Op::Activity => ok_value(
             req.id,
-            serde_json::to_value(nexus_ipc::ActivityLog {
+            nexus_ipc::ActivityLog {
                 entries: live.activity.entries(),
-            })
-            .expect("wire types serialize"),
+            },
         ),
         Op::Portal => {
             let portal = match backend.status().await {
                 Ok(status) => portal::of_status(&status, settings),
                 Err(e) => return backend_reply::<()>(req.id, Err(e)),
             };
-            Response::ok(
-                req.id,
-                serde_json::to_value(nexus_ipc::PortalState { portal })
-                    .expect("wire types serialize"),
-            )
+            ok_value(req.id, nexus_ipc::PortalState { portal })
         }
         Op::PortalOpen => open_portal(backend, settings, live, req.id).await,
-        Op::Doctor => Response::ok(
+        Op::Doctor => ok_value(
             req.id,
-            serde_json::to_value(crate::doctor::run(backend, settings, &live.doctor).await)
-                .expect("wire types serialize"),
+            crate::doctor::run(backend, settings, &live.doctor).await,
         ),
         Op::DoctorFix { finding, confirm } => {
             match crate::doctor::run_fix(backend, settings, &finding, confirm).await {
-                Ok(done) => Response::ok(
-                    req.id,
-                    serde_json::to_value(done).expect("wire types serialize"),
-                ),
+                Ok(done) => ok_value(req.id, done),
                 Err(f) => Response::err(Some(req.id), f.code, f.message),
             }
         }
@@ -562,6 +615,12 @@ async fn answer<B: Backend>(
             backend_reply(req.id, result)
         }
         Op::EthernetList => backend_reply(req.id, backend.ethernet_list().await),
+        Op::ProfileList => {
+            backend_reply(req.id, inventory(backend, nexus_ipc::ProfileList::of).await)
+        }
+        Op::DeviceList => {
+            backend_reply(req.id, inventory(backend, nexus_ipc::DeviceList::of).await)
+        }
         Op::EthernetConnect { port } => backend_reply(req.id, backend.ethernet_connect(port).await),
         Op::EthernetJoinEap { port, eap } => {
             backend_reply(req.id, backend.ethernet_join_eap(port, eap).await)
@@ -596,7 +655,14 @@ async fn answer<B: Backend>(
             req.id,
             broker.cancel(prompt).map(|()| serde_json::json!({})),
         ),
-        Op::ConfigGet { key } => reply(req.id, settings.get(key.as_deref())),
+        Op::ConfigGet { key } => {
+            let mut got = settings.get(key.as_deref());
+            // What the Backend itself probes: read-only, set in its own config.
+            if let (Ok(v), Ok(Some(uri))) = (&mut got, backend.connectivity_uri().await) {
+                v["connectivity_uri"] = serde_json::Value::String(uri);
+            }
+            reply(req.id, got)
+        }
         Op::ConfigSet { key, value } => reply(req.id, settings.set(&key, &value)),
         // `Subscribe` is handled by the connection itself.
         // `Op` is non_exhaustive: a newer client op this build cannot serve.
@@ -634,10 +700,7 @@ async fn set_trust<B: Backend>(
     }
     live.trust.apply(&mut list);
     let _ = live.events.send(Event::NetworksChanged { wifi: list });
-    Response::ok(
-        id,
-        serde_json::to_value(nexus_ipc::TrustSet { ssid, trust }).expect("wire types serialize"),
-    )
+    ok_value(id, nexus_ipc::TrustSet { ssid, trust })
 }
 
 fn network_name(id: &str) -> String {
@@ -708,9 +771,19 @@ async fn open_portal<B: Backend>(
     }
 }
 
+/// An answer made from the Wi-Fi and Ethernet lists (`profile_list`, `device_list`).
+async fn inventory<B: Backend, T>(
+    backend: &B,
+    build: fn(&nexus_ipc::WifiList, &nexus_ipc::EthernetList) -> T,
+) -> Result<T, BackendError> {
+    let wifi = backend.wifi_list().await?;
+    let ethernet = backend.ethernet_list().await?;
+    Ok(build(&wifi, &ethernet))
+}
+
 fn backend_reply<T: serde::Serialize>(id: u64, result: Result<T, BackendError>) -> Response {
     match result {
-        Ok(v) => Response::ok(id, serde_json::to_value(v).expect("wire types serialize")),
+        Ok(v) => ok_value(id, v),
         Err(BackendError::Unavailable) => Response::err(
             Some(id),
             ErrorCode::BackendUnavailable,
@@ -721,6 +794,14 @@ fn backend_reply<T: serde::Serialize>(id: u64, result: Result<T, BackendError>) 
             Response::err(Some(id), ErrorCode::Internal, e.to_string())
         }
     }
+}
+
+/// A success response carrying a wire type.
+fn ok_value<T: serde::Serialize>(id: u64, value: T) -> Response {
+    Response::ok(
+        id,
+        serde_json::to_value(value).expect("wire types serialize"),
+    )
 }
 
 fn reply(id: u64, result: Result<serde_json::Value, nexus_ipc::Failure>) -> Response {

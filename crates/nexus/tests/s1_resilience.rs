@@ -1,16 +1,12 @@
 //! Seam S1 for resilience and radio control: a real Daemon over `nexus-ipc`,
 //! a fake NetworkManager (and fake logind) on a private bus.
 
-use std::time::{Duration, Instant};
-
-use nexus_testkit::{ActiveConnection, Ap, DeviceId, NmState, Wire, World};
+use nexus_testkit::{
+    ActiveConnection, Ap, DeviceId, NmState, Wire, World, eventually, network_id as id,
+};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 fn front_end(world: &World) -> Wire {
     let mut wire = world.wire();
@@ -55,17 +51,6 @@ fn wait_for_all(fe: &mut Wire, wants: &[(&str, &dyn Test)]) {
                 done[n] = true;
             }
         }
-    }
-}
-
-fn eventually(what: &str, cond: impl Fn() -> bool) {
-    let start = Instant::now();
-    while !cond() {
-        assert!(
-            start.elapsed() < Duration::from_secs(10),
-            "never happened: {what}"
-        );
-        std::thread::sleep(Duration::from_millis(20));
     }
 }
 
@@ -221,6 +206,27 @@ fn airplane_mode_switches_every_radio_and_back() {
     assert_eq!(off["ok"]["airplane"], false, "{off}");
     assert!(world.nm.wifi_enabled());
     assert!(world.nm.wwan_enabled());
+}
+
+#[test]
+fn airplane_mode_turns_bluetooth_off_and_back_to_what_it_was() {
+    let mut world = World::builder(NEXUS).bluez(true).start();
+    world.nm.add_wifi_device("wlan0");
+    let mut wire = world.wire();
+    assert!(world.bluez().powered());
+    wire.call(json!({"op": "airplane", "on": true}));
+    assert!(!world.bluez().powered(), "Bluetooth stayed on");
+    wire.call(json!({"op": "airplane", "on": false}));
+    assert!(world.bluez().powered(), "Bluetooth was not restored");
+
+    // Off before airplane mode: stays off after it.
+    world.bluez().set_powered(false);
+    wire.call(json!({"op": "airplane", "on": true}));
+    wire.call(json!({"op": "airplane", "on": false}));
+    assert!(
+        !world.bluez().powered(),
+        "airplane mode switched Bluetooth on"
+    );
 }
 
 #[test]

@@ -5,16 +5,13 @@
 
 use std::path::PathBuf;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
 
-use nexus_testkit::{ActiveConnection, Ap, NmConnectivity, NmState, Wire, World};
+use nexus_testkit::{
+    ActiveConnection, Ap, NmConnectivity, NmState, Wire, World, eventually, network_id as id,
+};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 fn world_with(config: Option<&str>) -> World {
     let mut world = World::builder(NEXUS)
@@ -57,17 +54,6 @@ fn front_end(world: &World) -> Wire {
     let mut wire = world.wire();
     wire.subscribe();
     wire
-}
-
-fn eventually(what: &str, cond: impl Fn() -> bool) {
-    let start = Instant::now();
-    while !cond() {
-        assert!(
-            start.elapsed() < Duration::from_secs(10),
-            "never happened: {what}"
-        );
-        std::thread::sleep(Duration::from_millis(20));
-    }
 }
 
 /// A stand-in terminal launcher that records its arguments, one per line.

@@ -3,8 +3,8 @@ name: Benchmark
 # Seam S3: the Performance budgets, measured on real release processes against
 # the fake NetworkManager (crates/nexus/tests/s3_budgets.rs). The job fails when
 # a budget is exceeded and the log and job summary carry the measured values.
-# Budgets: Daemon resident memory < 15 MB, TUI first frame < 50 ms, 0% idle CPU
-# for Daemon and TUI. See docs/testing.md.
+# Budgets: Daemon resident memory < 15 MB, TUI first frame < 50 ms, idle CPU
+# < 0.1% (Daemon) and < 0.2% (TUI; 0.000% on a graph-free tab). See docs/testing.md.
 
 on:
   push:

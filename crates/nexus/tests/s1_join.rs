@@ -4,7 +4,7 @@
 use std::io::Write as _;
 use std::process::Stdio;
 
-use nexus_testkit::{Ap, DeviceId, World};
+use nexus_testkit::{Ap, DeviceId, World, network_id as id};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
@@ -16,10 +16,6 @@ const IP_CONFIG: u32 = 70;
 // NMDeviceStateReason
 const SSID_NOT_FOUND: u32 = 53;
 const IP_CONFIG_UNAVAILABLE: u32 = 5;
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 fn world() -> (World, DeviceId) {
     let world = World::start(NEXUS);

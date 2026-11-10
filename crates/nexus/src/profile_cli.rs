@@ -6,6 +6,8 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use clap::ValueEnum;
+
+use crate::cli::refused;
 use nexus_ipc::{
     Connection, ErrorCode, Event, Ipv4Method, Ipv6Method, MacMode, Op, PendingChange,
     ProfileApplied, ProfileSettings, ProfileView, Settled, profile,
@@ -95,11 +97,6 @@ fn network(ssid: &str) -> String {
     nexus_ipc::network_id(ssid.as_bytes())
 }
 
-fn refused(f: &nexus_ipc::Failure) -> ExitCode {
-    eprintln!("nexus: {}", f.message);
-    ExitCode::from(exit_code(f.code))
-}
-
 fn bad(message: &str) -> ExitCode {
     eprintln!("nexus: {message}");
     ExitCode::from(exit_code(ErrorCode::InvalidSettings))
@@ -117,6 +114,37 @@ fn read(conn: &mut Connection, ssid: &str) -> Result<ProfileView, ExitCode> {
     serde_json::from_value(value).map_err(|e| {
         eprintln!("nexus: the daemon sent a Profile this nexus cannot read: {e}");
         ExitCode::from(crate::cli::EXIT_DAEMON_ERROR)
+    })
+}
+
+/// `nexus profile list [--json]`.
+pub fn list(json: bool) -> ExitCode {
+    crate::cli::wifi_call(Op::ProfileList, |value| {
+        if json {
+            println!("{value}");
+            return;
+        }
+        match serde_json::from_value::<nexus_ipc::ProfileList>(value) {
+            Ok(list) if list.profiles.is_empty() => println!("No saved Profiles."),
+            Ok(list) => {
+                for p in list.profiles {
+                    let kind = match p.kind {
+                        nexus_ipc::ProfileKind::Wifi => "wifi",
+                        nexus_ipc::ProfileKind::Ethernet => "ethernet",
+                        _ => "other",
+                    };
+                    let auto = match p.autoconnect {
+                        Some(true) => "  autoconnect",
+                        _ => "",
+                    };
+                    println!(
+                        "{kind:<9} {}{auto}",
+                        nexus_ipc::display_ssid(p.name.as_bytes())
+                    );
+                }
+            }
+            Err(e) => eprintln!("nexus: undecodable answer: {e}"),
+        }
     })
 }
 

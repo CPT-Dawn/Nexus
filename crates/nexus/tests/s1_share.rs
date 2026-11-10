@@ -2,14 +2,10 @@
 //! share`): a real `nexus daemon` against a fake NetworkManager. Reading a
 //! stored secret needs the Backend's authorization, which the fake can refuse.
 
-use nexus_testkit::{Ap, World};
+use nexus_testkit::{Ap, World, network_id as id};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 fn world() -> World {
     let world = World::start(NEXUS);
@@ -72,6 +68,8 @@ fn wpa3_networks_say_sae() {
     assert_eq!(resp["ok"]["auth"], "sae", "{resp}");
 }
 
+/// The fake refuses with `org.freedesktop.NetworkManager.Settings.PermissionDenied`,
+/// the name NetworkManager really uses, not a bus-level AccessDenied.
 #[test]
 fn denied_authorization_is_a_clear_refusal_and_no_secret_leaks() {
     let world = world();

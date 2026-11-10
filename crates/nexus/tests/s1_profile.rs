@@ -2,15 +2,11 @@
 //! NetworkManager. Edits to the Profile carrying the current Link are wrapped
 //! in a NetworkManager checkpoint and roll back unless confirmed.
 
-use nexus_testkit::{Ap, World};
+use nexus_testkit::{Ap, World, network_id as id};
 use serde_json::{Value, json};
 
 const NEXUS: &str = env!("CARGO_BIN_EXE_nexus");
 const UUID: &str = "11111111-2222-4333-8444-555555555555";
-
-fn id(ssid: &str) -> String {
-    nexus_ipc::network_id(ssid.as_bytes())
-}
 
 /// A saved Profile for Home (not joined) and one for Cafe.
 fn world() -> World {

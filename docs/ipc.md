@@ -52,6 +52,8 @@ One JSON object per `\n`-terminated line, UTF-8, no pretty-printing on the wire.
 
 Overall state, and the primary Link's traffic.
 
+`nexus status --waybar [--follow]` prints this state as Waybar custom-module JSON (`text`, `tooltip`, `class`, `alt`). `alt` is the one state word (`online`, `vpn`, `limited`, `portal`, `offline`, ...) for Waybar's `format-icons`. With `waybar.icons = true` in `config.toml` (`nexus config set waybar.icons true`; off by default) `text` also starts with a plain Unicode glyph for that state, for bars that have no `format-icons` set up.
+
 #### `status`
 
 Overall network state and the primary Link.
@@ -105,6 +107,37 @@ echo '{"v":1,"id":1,"op":"traffic"}' | socat -t1 - UNIX-CONNECT:"$SOCK" | jq .
   "ok": {
     "rx_bps": 0,
     "tx_bps": 0
+  }
+}
+```
+
+#### `device_list`
+
+Every Device: the Wi-Fi cards first, then the Ethernet ports. `id` is what the other ops take (`device`, `port`). Additive, like `profile_list`. Result: `DeviceList`.
+
+Command line: none: Front ends read `devices` from `wifi_list` and `ports` from `ethernet_list`; this is the one-call version for scripts.
+
+```sh
+echo '{"v":1,"id":1,"op":"device_list"}' | socat -t1 - UNIX-CONNECT:"$SOCK" | jq .
+```
+
+```json
+{
+  "v": 1,
+  "id": 1,
+  "ok": {
+    "devices": [
+      {
+        "kind": "wifi",
+        "id": "/org/freedesktop/NetworkManager/Devices/1",
+        "name": "wlan0"
+      },
+      {
+        "kind": "ethernet",
+        "id": "enp3s0",
+        "name": "enp3s0"
+      }
+    ]
   }
 }
 ```
@@ -386,7 +419,7 @@ echo '{"v":1,"id":1,"on":true,"op":"wifi_power"}' | socat -t1 - UNIX-CONNECT:"$S
 
 #### `airplane`
 
-Airplane mode: every radio the Backend controls off (`on`) or back on. Result: `Radios`. `hard_blocked` when a hardware switch prevents it.
+Airplane mode: every radio the Backend controls off (`on`) or back on: Wi-Fi, mobile broadband and Bluetooth. Bluetooth is powered off through BlueZ and, on leaving, back to what it was before. Result: `Radios`. `hard_blocked` when a hardware switch prevents it.
 
 Command line: `nexus airplane on|off`.
 
@@ -411,6 +444,34 @@ echo '{"v":1,"id":1,"on":false,"op":"airplane"}' | socat -t1 - UNIX-CONNECT:"$SO
 ### Profile settings
 
 IP, DNS, MAC, metered and priority settings of a saved Network. A change to the Profile that carries the current Link is checkpointed: it rolls back on its own unless `profile_confirm` arrives in time.
+
+#### `profile_list`
+
+Every saved Profile, Wi-Fi (nearby or not) and Ethernet, in one list. `uuid` is what `profile_get` takes as `profile`; a Wi-Fi entry also has `network` (its `WifiNetwork.id`) for the `network` argument. Additive: v1 stays v1. Result: `ProfileList`.
+
+Command line: `nexus profile list [--json]`.
+
+```sh
+echo '{"v":1,"id":1,"op":"profile_list"}' | socat -t1 - UNIX-CONNECT:"$SOCK" | jq .
+```
+
+```json
+{
+  "v": 1,
+  "id": 1,
+  "ok": {
+    "profiles": [
+      {
+        "kind": "wifi",
+        "uuid": "4e086de9-1f3a-439a-9335-5a16b596902f",
+        "name": "eduroam",
+        "network": "656475726f616d",
+        "autoconnect": true
+      }
+    ]
+  }
+}
+```
 
 #### `profile_get`
 
@@ -1125,7 +1186,7 @@ echo '{"v":1,"id":1,"confirm":true,"finding":"no-such-finding","op":"doctor_fix"
   "id": 1,
   "err": {
     "code": "unknown_finding",
-    "message": "nothing to fix for `no-such-finding` right now"
+    "message": "There is nothing to fix for `no-such-finding` right now."
   }
 }
 ```
@@ -1136,7 +1197,7 @@ The effective config, and the event stream.
 
 #### `config_get`
 
-Read the effective config, or one value by dotted key (`theme`, `connectivity.url`). The result is `{"value": ..., "warning"?: ...}`; `warning` is present while the file on disk is being ignored.
+Read the effective config, or one value by dotted key (`theme`, `connectivity.url`). The result is `{"value": ..., "warning"?: ...}`; `warning` is present while the file on disk is being ignored. While the Backend reports the address it probes for connectivity (NetworkManager's `ConnectivityCheckUri`), the result also carries `connectivity_uri`: read-only, set in `NetworkManager.conf`, not by Nexus. `connectivity.enabled` switches the Backend's own check (NetworkManager's `ConnectivityCheckEnabled`, which NetworkManager remembers) on or off when it changes; `connectivity.url` is only what the Doctor looks up and the Portal login opens.
 
 Command line: `nexus config get [key] [--json]`.
 
@@ -1195,6 +1256,8 @@ Command line: `nexus status --waybar --follow (and the TUI)`.
 ## Events
 
 After `subscribe` the connection also receives event lines, interleaved with the responses to later requests. An event carries `v`, `event` and its payload. Events are pushed after a change settles (a burst of Backend changes yields one event per Daemon tick), so a Front end can keep its picture current without polling.
+
+A subscriber that stops reading is not buffered forever: the Daemon queues up to 1024 lines per connection, and a connection that falls further behind is closed. A Front end that sees the stream end re-connects, re-subscribes and re-reads what it shows.
 
 ### `status_changed`
 
@@ -1326,6 +1389,9 @@ Something worth a line in the activity strip just happened.
     "ui": {
       "nerd_font": false,
       "reduce_motion": false
+    },
+    "waybar": {
+      "icons": false
     }
   },
   "event": "config_reloaded"
@@ -1533,7 +1599,7 @@ A failed request answers `{"v":1,"id":N,"err":{"code":"...","message":"..."}}`. 
 | `join_failed` | 8 | The join failed for another reason; the message says which. |
 | `password_required` | 10 | The Network needs a password and none was given. |
 | `unknown_network` | 9 | No Network by that name is saved or nearby. |
-| `not_connected` | 11 | There is no Wi-Fi Link to disconnect. |
+| `not_connected` | 11 | There is nothing to disconnect or stop: no such Link (Wi-Fi, Ethernet or tethering), no running Hotspot, or a VPN that is not up. |
 | `hard_blocked` | 12 | A hardware switch (not software) holds the radio off. |
 | `unknown_prompt` | 4 | No Secret prompt with that id is open (it was answered, cancelled or expired). |
 | `not_confirmed` | 4 | A fix needs `confirm: true` and did not get it. |

@@ -6,13 +6,16 @@ use std::process::ExitCode;
 use nexus_ipc::{Connection, NewTunnel, Op, Secret, Vpn, VpnKind, VpnList, VpnState};
 use serde_json::Value;
 
-use crate::cli::{EXIT_DAEMON_ERROR, answering_prompts, exit_code, report, unreachable, wifi_call};
+use crate::cli::{
+    EXIT_DAEMON_ERROR, answering_prompts, decode_call, exit_code, report, unreachable, wifi_call,
+};
 
 fn state_word(state: VpnState) -> &'static str {
     match state {
         VpnState::Up => "up",
         VpnState::Activating => "starting",
         VpnState::Down => "down",
+        _ => "?",
     }
 }
 
@@ -46,6 +49,7 @@ pub fn table(list: &VpnList) -> String {
         let kind = match v.kind {
             VpnKind::Wireguard => "WireGuard",
             VpnKind::Plugin => "plugin",
+            _ => "other",
         };
         let _ = writeln!(
             out,
@@ -63,22 +67,18 @@ pub fn list(json: bool) -> ExitCode {
     wifi_call(Op::VpnList, |value| {
         if json {
             println!("{value}");
-        } else if let Ok(list) = serde_json::from_value::<VpnList>(value) {
-            print!("{}", table(&list));
+        } else {
+            match serde_json::from_value::<VpnList>(value) {
+                Ok(list) => print!("{}", table(&list)),
+                Err(e) => eprintln!("nexus: undecodable answer: {e}"),
+            }
         }
     })
 }
 
 /// Finds a VPN by name or id. `Err` is the exit code, already reported.
 fn resolve(conn: &mut Connection, name: &str) -> Result<Vpn, ExitCode> {
-    let list = match conn.call(Op::VpnList) {
-        Err(e) => return Err(unreachable(&e)),
-        Ok(Err(f)) => {
-            eprintln!("nexus: {}", f.message);
-            return Err(ExitCode::from(exit_code(f.code)));
-        }
-        Ok(Ok(v)) => serde_json::from_value::<VpnList>(v).unwrap_or_default(),
-    };
+    let list: VpnList = decode_call(conn, Op::VpnList)?;
     let lower = name.to_lowercase();
     let mut hits: Vec<Vpn> = list
         .vpns

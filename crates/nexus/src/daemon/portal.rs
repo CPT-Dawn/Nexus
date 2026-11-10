@@ -27,15 +27,8 @@ pub struct SystemOpener;
 
 impl Opener for SystemOpener {
     fn open(&self, url: &str) -> Result<(), String> {
-        let mut child = std::process::Command::new("xdg-open")
-            .arg(url)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
+        crate::sysutil::spawn_detached(std::process::Command::new("xdg-open").arg(url))
             .map_err(|e| format!("Could not start xdg-open ({e}). Open {url} in a browser."))?;
-        // Reaped on a thread, so it leaves no zombie.
-        std::thread::spawn(move || child.wait());
         Ok(())
     }
 }

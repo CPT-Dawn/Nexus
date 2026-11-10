@@ -75,9 +75,12 @@ fn traffic_rates_follow_the_primary_links_counters() {
 fn the_daemon_asks_networkmanager_for_counters_only_when_asked() {
     let world = World::start(NEXUS);
     world.nm.add_wifi_device("wlan0");
+    let mut events = world.wire();
+    events.subscribe();
     go_online(&world, ActiveConnection::wifi("Home"));
+    // The Daemon has seen the Link (its re-read pushed this) and not read counters.
+    events.next_event("activity");
     let reads = world.nm.statistics_reads();
-    std::thread::sleep(Duration::from_millis(1500)); // proving a negative
     assert_eq!(world.nm.statistics_reads(), reads);
     traffic(&mut world.wire());
     assert!(world.nm.statistics_reads() > reads);

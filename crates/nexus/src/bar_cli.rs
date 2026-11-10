@@ -20,11 +20,13 @@ struct Picture {
     vpns: Option<VpnList>,
     hotspot: Option<Hotspot>,
     ethernet: Option<EthernetList>,
+    /// `waybar.icons`: a glyph in front of the text.
+    icons: bool,
 }
 
 impl Picture {
     fn output(&self) -> Output {
-        match &self.status {
+        let out = match &self.status {
             Some(status) => waybar::render(
                 status,
                 self.vpns.as_ref(),
@@ -32,6 +34,11 @@ impl Picture {
                 self.ethernet.as_ref(),
             ),
             None => waybar::unavailable(),
+        };
+        if self.icons {
+            waybar::with_glyph(out)
+        } else {
+            out
         }
     }
 
@@ -54,11 +61,18 @@ impl Picture {
             .call(Op::EthernetList)?
             .ok()
             .and_then(|v| serde_json::from_value(v).ok());
+        let icons = conn
+            .call(Op::ConfigGet {
+                key: Some("waybar.icons".into()),
+            })?
+            .ok()
+            .is_some_and(|v| v["value"].as_bool() == Some(true));
         Ok(Ok(Self {
             status: Some(status),
             vpns,
             hotspot,
             ethernet,
+            icons,
         }))
     }
 
@@ -69,6 +83,9 @@ impl Picture {
             Event::VpnsChanged { vpns } => self.vpns = Some(vpns),
             Event::HotspotChanged { hotspot } => self.hotspot = Some(hotspot),
             Event::EthernetChanged { ethernet } => self.ethernet = Some(ethernet),
+            Event::ConfigReloaded { config, .. } => {
+                self.icons = config["waybar"]["icons"].as_bool() == Some(true);
+            }
             _ => return false,
         }
         true

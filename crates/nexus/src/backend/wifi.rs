@@ -15,6 +15,7 @@ use nexus_ipc::{
 };
 
 use super::JoinTarget;
+use super::proxies::{DeviceProxy, SettingsConnectionProxy, StateChangedStream, variant};
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
@@ -37,23 +38,6 @@ const KEY_SAE: u32 = 0x400;
 const KEY_OWE: u32 = 0x800;
 const KEY_OWE_TM: u32 = 0x1000;
 const KEY_EAP_SUITE_B_192: u32 = 0x2000;
-
-#[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Device",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-trait Device {
-    #[zbus(property)]
-    fn interface(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn device_type(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn state(&self) -> zbus::Result<u32>;
-    fn disconnect(&self) -> zbus::Result<()>;
-    #[zbus(signal, name = "StateChanged")]
-    fn device_state_changed(&self, new_state: u32, old_state: u32, reason: u32)
-    -> zbus::Result<()>;
-}
 
 #[zbus::proxy(
     interface = "org.freedesktop.NetworkManager.Device.Wireless",
@@ -102,18 +86,6 @@ pub(super) trait Settings {
     fn list_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 }
 
-#[zbus::proxy(
-    interface = "org.freedesktop.NetworkManager.Settings.Connection",
-    default_service = "org.freedesktop.NetworkManager"
-)]
-pub(super) trait SettingsConnection {
-    fn get_settings(&self) -> zbus::Result<HashMap<String, HashMap<String, OwnedVariant>>>;
-    fn get_secrets(&self, setting: &str) -> zbus::Result<Settings>;
-    fn update(&self, settings: Settings) -> zbus::Result<()>;
-    fn save(&self) -> zbus::Result<()>;
-    fn delete(&self) -> zbus::Result<()>;
-}
-
 /// One access point, as read.
 #[derive(Debug, Clone)]
 struct Ap {
@@ -142,16 +114,6 @@ struct Profile {
 struct Radio {
     path: OwnedObjectPath,
     name: String,
-}
-
-macro_rules! no_cache {
-    ($proxy:ident, $conn:expr, $path:expr) => {
-        $proxy::builder($conn)
-            .path($path)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?
-    };
 }
 
 pub(super) mod profile;
@@ -538,10 +500,6 @@ const REASON_NEW_ACTIVATION: u32 = 60;
 
 pub(super) type Settings = HashMap<String, HashMap<String, OwnedVariant>>;
 
-pub(super) fn variant<'a>(v: impl Into<zbus::Variant<'a>>) -> OwnedVariant {
-    OwnedVariant::try_from(v.into()).expect("plain values have no file descriptors")
-}
-
 /// A random (version 4) UUID for a new Profile.
 pub(super) fn new_uuid() -> String {
     let mut b = [0u8; 16];
@@ -751,7 +709,10 @@ async fn join_once(
         .receive_name_owner_changed_with_args(&[(0, "org.freedesktop.NetworkManager")])
         .await?;
     let none = OwnedObjectPath::try_from("/").expect("root path");
-    let device_obj = OwnedObjectPath::try_from(device_path.as_str()).expect("device path");
+    let Ok(device_obj) = OwnedObjectPath::try_from(device_path.as_str()) else {
+        // Not a D-Bus path: a Device that cannot be asked, so nothing to hear.
+        return Ok(Err(text::out_of_range(&name)));
+    };
 
     let mut inline = None;
     let (profile_path, uuid, created) = match saved {

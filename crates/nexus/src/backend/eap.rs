@@ -7,9 +7,7 @@ use std::collections::HashMap;
 use nexus_ipc::{Eap, EapMethod, Phase2};
 use zbus::OwnedVariant;
 
-fn variant<'a>(v: impl Into<zbus::Variant<'a>>) -> OwnedVariant {
-    OwnedVariant::try_from(v.into()).expect("plain values have no file descriptors")
-}
+use super::proxies::variant;
 
 fn phase2(p: Phase2) -> &'static str {
     match p {
@@ -19,6 +17,8 @@ fn phase2(p: Phase2) -> &'static str {
         Phase2::Chap => "chap",
         Phase2::Gtc => "gtc",
         Phase2::Md5 => "md5",
+        // `Eap::validate` refuses it first; NetworkManager would too.
+        _ => "unknown",
     }
 }
 
@@ -37,6 +37,7 @@ pub fn setting(eap: &Eap) -> HashMap<String, OwnedVariant> {
         EapMethod::Peap => "peap",
         EapMethod::Ttls => "ttls",
         EapMethod::Tls => "tls",
+        _ => "unknown",
     };
     let mut s = HashMap::from([
         ("eap".to_owned(), variant(vec![method.to_owned()])),
