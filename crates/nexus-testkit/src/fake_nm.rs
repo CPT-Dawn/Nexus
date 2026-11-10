@@ -352,6 +352,12 @@ struct Model {
     deny_secret_reads: bool,
     /// The software Wi-Fi switch (`WirelessEnabled` as set by clients).
     wifi_soft: bool,
+    /// Access points out of reach while the Wi-Fi radio is off, by Device.
+    radio_aps: HashMap<usize, Vec<u32>>,
+    /// One radio change at a time, in the order the switches were flipped.
+    radio_lock: Arc<tokio::sync::Mutex<()>>,
+    /// The network each Device was joined to when the radio went off.
+    radio_rejoin: HashMap<usize, Vec<u8>>,
     /// A hardware switch holds the Wi-Fi radio off.
     wifi_hard_blocked: bool,
     wwan_soft: bool,
@@ -459,8 +465,16 @@ impl Manager {
     }
 
     #[zbus(property)]
-    fn set_wireless_enabled(&mut self, on: bool) {
+    async fn set_wireless_enabled(
+        &mut self,
+        on: bool,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) {
         self.0.lock().unwrap().wifi_soft = on;
+        // After this setter returns: it holds the Manager, which the
+        // property signals at the end of `radio_changed` need.
+        let (conn, model) = (emitter.connection().clone(), self.0.clone());
+        tokio::spawn(async move { radio_changed(&conn, &model).await });
     }
 
     #[zbus(property)]
@@ -1053,7 +1067,7 @@ async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u3
             w.reason = reason;
         }
         let dropped =
-            (new == 30 || new == 120) && !m.ap_lag && m.devices[dev].active_ap.take().is_some();
+            matches!(new, 20 | 30 | 120) && !m.ap_lag && m.devices[dev].active_ap.take().is_some();
         (old, dropped)
     };
     let os = conn.object_server();
@@ -1068,8 +1082,176 @@ async fn set_device_state(conn: &Connection, model: &Shared, dev: usize, new: u3
         let _ = i.get().await.state_changed(i.signal_emitter()).await;
         let _ = Device::device_state_changed(i.signal_emitter(), new, old, reason).await;
     }
-    if new == 30 || new == 120 {
+    if matches!(new, 20 | 30 | 120) {
         hotspot::device_dropped(conn, model, dev).await;
+    }
+}
+
+/// What the Wi-Fi radio switches do, like NetworkManager: with the radio off
+/// (software or hardware) every Wi-Fi Device drops its connection, goes to
+/// `unavailable` (reason `none`: NetworkManager has no rfkill reason) and
+/// forgets its access points and `LastScan`; State, Connectivity and
+/// PrimaryConnection follow. With it on the Devices return to `disconnected`
+/// and an autoconnect Profile in range rejoins.
+async fn radio_changed(conn: &Connection, model: &Shared) {
+    let lock = model.lock().unwrap().radio_lock.clone();
+    let _one_at_a_time = lock.lock().await;
+    let on = {
+        let m = model.lock().unwrap();
+        m.wifi_soft && !m.wifi_hard_blocked
+    };
+    let wifi: Vec<usize> = {
+        let m = model.lock().unwrap();
+        (0..m.devices.len())
+            .filter(|n| m.devices[*n].wired.is_none() && m.devices[*n].bt.is_none())
+            .collect()
+    };
+    let os = conn.object_server();
+    for dev in wifi {
+        let state = model.lock().unwrap().devices[dev].state;
+        if !on && state != 20 {
+            let gone = {
+                let mut m = model.lock().unwrap();
+                let ssid = m.devices[dev]
+                    .active_ap
+                    .and_then(|id| m.aps.get(&id))
+                    .map(|ap| ap.ssid.clone());
+                let gone = std::mem::take(&mut m.devices[dev].aps);
+                m.devices[dev].last_scan = -1;
+                m.radio_aps.insert(dev, gone.clone());
+                if let Some(ssid) = ssid {
+                    m.radio_rejoin.insert(dev, ssid);
+                }
+                gone
+            };
+            if state > 30 {
+                set_device_state(conn, model, dev, 30, 39).await; // USER_REQUESTED
+            }
+            set_device_state(conn, model, dev, 20, 0).await;
+            if let Ok(i) = os.interface::<_, Wireless>(device_path(dev)).await {
+                for id in gone {
+                    let _ = Wireless::access_point_removed(i.signal_emitter(), opath(&ap_path(id)))
+                        .await;
+                }
+                let _ = i.get().await.last_scan_changed(i.signal_emitter()).await;
+            }
+        } else if on && state == 20 {
+            let (back, rejoin) = {
+                let mut m = model.lock().unwrap();
+                let back = m.radio_aps.remove(&dev).unwrap_or_default();
+                m.devices[dev].aps.extend(back.iter().copied());
+                (back, m.radio_rejoin.remove(&dev))
+            };
+            if let Ok(i) = os.interface::<_, Wireless>(device_path(dev)).await {
+                for id in back {
+                    let _ =
+                        Wireless::access_point_added(i.signal_emitter(), opath(&ap_path(id))).await;
+                }
+            }
+            set_device_state(conn, model, dev, 30, 0).await;
+            if let Some((ssid, name)) = autoconnect_choice(model, dev, rejoin) {
+                let task = tokio::spawn(rejoin_after_radio(
+                    conn.clone(),
+                    model.clone(),
+                    dev,
+                    ssid,
+                    name,
+                ));
+                model.lock().unwrap().tasks.push(task.abort_handle());
+            }
+        }
+    }
+    if !on {
+        {
+            let mut m = model.lock().unwrap();
+            let wifi_primary = m
+                .primary
+                .as_ref()
+                .is_some_and(|p| p.kind == "802-11-wireless");
+            if wifi_primary {
+                let wired = (0..m.devices.len()).find_map(|n| {
+                    let d = &m.devices[n];
+                    let slot = d.wired.as_ref()?.active?;
+                    (d.state == 100).then_some(slot)
+                });
+                let id = wired.and_then(|slot| m.profiles[slot].as_ref().map(|p| p.id.clone()));
+                match id {
+                    Some(id) => m.primary = Some(ActiveConnection::ethernet(&id)),
+                    None => {
+                        m.primary = None;
+                        m.state = NmState::Disconnected;
+                        m.connectivity = NmConnectivity::None;
+                    }
+                }
+            } else if m.primary.is_none() && m.state != NmState::Disconnected {
+                m.state = NmState::Disconnected;
+                m.connectivity = NmConnectivity::None;
+            }
+        }
+        manager_changed_all(conn).await;
+    }
+}
+
+/// The saved Wi-Fi Profile that autoconnect picks on a Device in range: the
+/// network it was on before, else the first one that autoconnects.
+fn autoconnect_choice(
+    model: &Shared,
+    dev: usize,
+    before: Option<Vec<u8>>,
+) -> Option<(Vec<u8>, String)> {
+    let m = model.lock().unwrap();
+    let in_range = |ssid: &[u8]| m.devices[dev].aps.iter().any(|id| m.aps[id].ssid == ssid);
+    let candidates = || {
+        m.profiles.iter().flatten().filter(|p| {
+            p.autoconnect
+                && p.vpn.is_none()
+                && !p.wired
+                && p.bdaddr.is_none()
+                && p.hotspot.is_none()
+                && !agent_owned(p)
+                && in_range(&p.ssid)
+        })
+    };
+    let pick = before
+        .and_then(|b| candidates().find(|p| p.ssid == b))
+        .or_else(|| candidates().next())?;
+    Some((pick.ssid.clone(), pick.id.clone()))
+}
+
+/// Autoconnect after the radio came back: join, and if nothing else carries
+/// the machine online, make it the primary connection.
+async fn rejoin_after_radio(
+    conn: Connection,
+    model: Shared,
+    dev: usize,
+    ssid: Vec<u8>,
+    name: String,
+) {
+    activate(conn.clone(), model.clone(), dev, ssid, None, None, None).await;
+    {
+        let mut m = model.lock().unwrap();
+        if m.devices[dev].state != 100 || m.primary.is_some() {
+            return;
+        }
+        m.primary = Some(ActiveConnection::wifi(&name));
+        m.state = NmState::ConnectedGlobal;
+        m.connectivity = NmConnectivity::Full;
+    }
+    manager_changed_all(&conn).await;
+}
+
+/// `PropertiesChanged` for State, Connectivity and PrimaryConnection.
+async fn manager_changed_all(conn: &Connection) {
+    if let Ok(iface) = conn
+        .object_server()
+        .interface::<_, Manager>(MANAGER_PATH)
+        .await
+    {
+        let guard = iface.get().await;
+        let e = iface.signal_emitter();
+        let _ = guard.primary_connection_changed(e).await;
+        let _ = guard.connectivity_changed(e).await;
+        let _ = guard.state_changed(e).await;
     }
 }
 
@@ -1281,6 +1463,9 @@ async fn activate(
     let mut agent_secrets = None;
     for s in [40, 50, 60, 70] {
         tokio::time::sleep(step).await;
+        if model.lock().unwrap().devices[dev].state == 20 {
+            return; // the radio went off under the join
+        }
         let asks = failure.is_none() && ask.is_some();
         if s == 60 && failure.map(|f| f.0) != Some(60) && !asks {
             continue; // only a failed password visits NEED_AUTH
@@ -1461,6 +1646,9 @@ impl FakeNm {
             ap_lag: false,
             pending_secrets: None,
             wifi_soft: true,
+            radio_aps: HashMap::new(),
+            radio_lock: Arc::default(),
+            radio_rejoin: HashMap::new(),
             wifi_hard_blocked: false,
             wwan_soft: true,
             tasks: Vec::new(),
@@ -1547,6 +1735,8 @@ impl FakeNm {
         self.model.lock().unwrap().wifi_hard_blocked = blocked;
         self.notify(|m, e| Box::pin(async move { m.wireless_enabled_changed(e).await }));
         self.notify(|m, e| Box::pin(async move { m.wireless_hardware_enabled_changed(e).await }));
+        let model = self.model.clone();
+        self.with_conn(move |c| async move { radio_changed(&c, &model).await });
     }
 
     /// Whether the fake currently owns the NetworkManager name.
@@ -2241,6 +2431,11 @@ impl FakeNm {
     }
 
     /// The SSID `device` is associated with, if any.
+    /// The `NMDeviceState` of a Wi-Fi Device.
+    pub fn device_state(&self, device: DeviceId) -> u32 {
+        self.model.lock().unwrap().devices[device.0].state
+    }
+
     pub fn joined_ssid(&self, device: DeviceId) -> Option<String> {
         let m = self.model.lock().unwrap();
         let id = m.devices[device.0].active_ap?;

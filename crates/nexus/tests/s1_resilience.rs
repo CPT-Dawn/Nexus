@@ -231,7 +231,9 @@ fn airplane_mode_turns_bluetooth_off_and_back_to_what_it_was() {
 
 #[test]
 fn a_hardware_block_is_told_apart_from_a_software_one() {
-    let (world, _) = online_world();
+    // The Daemon has told its Front end the world is online before any switch
+    // moves, so what follows is a change from a known picture.
+    let (world, _watcher) = watched_world();
     let mut wire = world.wire();
 
     // Soft: Wi-Fi is off, but we may turn it on.
@@ -320,4 +322,60 @@ fn sleep_and_resume_leave_the_state_correct_without_a_restart() {
     });
     let status = world.wire().call(json!({"op": "status"}));
     assert_eq!(status["ok"]["state"], "online", "{status}");
+}
+
+/// Joins Home for real, so a Profile that autoconnects exists.
+fn joined_home(world: &World, wlan0: DeviceId) {
+    let joined = world.wire().call(json!({
+        "op": "wifi_join", "network": id("Home"), "password": "right-password",
+    }));
+    assert!(joined.get("ok").is_some(), "{joined}");
+    eventually("Home is joined", || {
+        world.nm.joined_ssid(wlan0).as_deref() == Some("Home")
+    });
+}
+
+fn offline_without_a_link(ev: &Value) -> bool {
+    ev["status"]["state"] == "offline" && ev["status"]["link"].is_null()
+}
+
+fn online_on_home(ev: &Value) -> bool {
+    ev["status"]["state"] == "online" && ev["status"]["link"]["name"] == "Home"
+}
+
+#[test]
+fn turning_wifi_off_drops_the_link_and_turning_it_on_brings_it_back() {
+    let (world, wlan0) = online_world();
+    joined_home(&world, wlan0);
+    let mut fe = front_end(&world);
+
+    let off = world.wire().call(json!({"op": "wifi_power", "on": false}));
+    assert_eq!(off["ok"]["wifi"]["enabled"], false, "{off}");
+    event_where(&mut fe, "status_changed", offline_without_a_link);
+    eventually("the Device is unavailable", || {
+        world.nm.device_state(wlan0) == 20
+    });
+    assert_eq!(world.nm.joined_ssid(wlan0), None);
+    let status = world.wire().call(json!({"op": "status"}));
+    assert!(status["ok"]["link"].is_null(), "{status}");
+
+    world.wire().call(json!({"op": "wifi_power", "on": true}));
+    event_where(&mut fe, "status_changed", online_on_home);
+    assert_eq!(world.nm.device_state(wlan0), 100);
+    assert_eq!(world.nm.joined_ssid(wlan0).as_deref(), Some("Home"));
+}
+
+#[test]
+fn a_hardware_switch_drops_the_link_like_the_software_one() {
+    let (world, wlan0) = online_world();
+    joined_home(&world, wlan0);
+    let mut fe = front_end(&world);
+
+    world.nm.set_wifi_hardware_blocked(true);
+    event_where(&mut fe, "status_changed", offline_without_a_link);
+    assert_eq!(world.nm.device_state(wlan0), 20);
+
+    world.nm.set_wifi_hardware_blocked(false);
+    event_where(&mut fe, "status_changed", online_on_home);
+    assert_eq!(world.nm.joined_ssid(wlan0).as_deref(), Some("Home"));
 }

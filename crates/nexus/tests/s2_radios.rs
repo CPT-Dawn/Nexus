@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nexus_testkit::scenarios::wifi_busy;
-use nexus_testkit::{PATIENCE, World};
+use nexus_testkit::{ActiveConnection, NmConnectivity, NmState, PATIENCE, World};
 use nexus_tui::tui::{self, App, Caps, Client, ColorTier, Glyphs, Msg};
 use ratatui::buffer::Buffer;
 
@@ -44,6 +44,37 @@ impl Rig {
             a.wifi().len() == 8 && a.status().is_some()
         });
         rig.key(KeyCode::Char('2'));
+        rig
+    }
+
+    /// `busy`, but with Home-5G carrying the machine online.
+    fn online() -> Rig {
+        let world = World::start(NEXUS);
+        wifi_busy(&world);
+        world
+            .nm
+            .set_primary(Some(ActiveConnection::wifi("Home-5G")));
+        world.nm.set_connectivity(NmConnectivity::Full);
+        world.nm.set_state(NmState::ConnectedGlobal);
+        let (tx, rx) = mpsc::channel();
+        let mut app = App::new(Caps {
+            color: ColorTier::TrueColor,
+            glyphs: Glyphs::Unicode,
+        });
+        app.attach(world.socket(), tx.clone());
+        let client = Client::spawn(world.socket(), tx);
+        app.update(Msg::Resize(STANDARD.0, STANDARD.1));
+        let mut rig = Rig {
+            world,
+            app,
+            rx,
+            _client: client,
+        };
+        rig.pump_until("online with a Link", |a| {
+            a.wifi().len() == 8
+                && a.status()
+                    .is_some_and(|s| s.state == nexus_ipc::State::Online && s.link.is_some())
+        });
         rig
     }
 
@@ -223,4 +254,28 @@ fn the_help_lists_the_radio_keys() {
     }
     assert!(seen.contains("Wi-Fi off or on"), "{seen}");
     assert!(seen.contains("airplane mode"), "{seen}");
+}
+
+#[test]
+fn airplane_mode_takes_the_overview_offline_and_u_brings_the_link_back() {
+    let mut rig = Rig::online();
+    let before = rig.text();
+    assert!(before.contains("Everything looks healthy"), "{before}");
+
+    rig.key(KeyCode::Char('A'));
+    rig.radio_ready("airplane mode", |r| r.airplane);
+    rig.pump_until("the Link to drop", |a| {
+        a.status()
+            .is_some_and(|s| s.link.is_none() && s.state != nexus_ipc::State::Online)
+    });
+    rig.settle();
+    let overview = rig.text();
+    assert!(!overview.contains("ONLINE"), "{overview}");
+    assert!(!overview.contains("Everything looks healthy"), "{overview}");
+
+    rig.key(KeyCode::Char('u'));
+    rig.pump_until("the Link to return", |a| {
+        a.status()
+            .is_some_and(|s| s.link.is_some() && s.state == nexus_ipc::State::Online)
+    });
 }
