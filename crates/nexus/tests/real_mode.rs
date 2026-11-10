@@ -439,6 +439,8 @@ fn turning_wifi_off_drops_the_link_and_on_brings_it_back() {
     let on = world.wire().call(json!({"op": "wifi_power", "on": true}));
     assert_eq!(on["ok"]["wifi"]["enabled"], true, "{on}");
     eventually("the saved Profile rejoins on its own", || {
+        // A radio that just came back has an empty scan list: ask for one.
+        let _ = world.wire().call(json!({"op": "wifi_scan"}));
         (link_name(&world).as_deref() == Some(WPA2)).then_some(())
     });
 
