@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in Nexus does not work as it should
+labels: ["needs-triage"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Nexus version
+      description: The output of `nexus --version`
+      placeholder: nexus 2.0.0
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Distribution, compositor or desktop, NetworkManager version (`nmcli --version`), and how you installed Nexus
+      placeholder: Arch Linux, Hyprland, NetworkManager 1.54, nexus-nm-bin
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Wi-Fi tab
+        2. Press Enter on …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: nexus doctor
+      description: The output of `nexus doctor`, if the bug is about connecting
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Daemon log
+      description: "`journalctl --user -u nexus.service -b`. Check it for network names or addresses you'd rather not share."
+      render: text

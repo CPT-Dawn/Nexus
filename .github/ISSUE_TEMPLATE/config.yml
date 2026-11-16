@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/CPT-Dawn/Nexus/blob/main/docs/troubleshooting.md
+    about: The errors people hit most, each with its fix.
+  - name: Security vulnerability
+    url: https://github.com/CPT-Dawn/Nexus/blob/main/SECURITY.md
+    about: Please report security problems privately, as described here.

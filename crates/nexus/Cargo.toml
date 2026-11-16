@@ -1,6 +1,10 @@
 [package]
 name = "nexus"
-description = "A network manager for Wayland desktops."
+description = "Keyboard-first TUI and CLI for NetworkManager on Wayland: Wi-Fi, Ethernet, VPN, hotspot and tethering, never as root."
+homepage = "https://aur.archlinux.org/packages/nexus-nm-bin"
+readme = "../../README.md"
+keywords = ["networkmanager", "wifi", "tui", "wireguard", "wayland"]
+categories = ["command-line-utilities", "network-programming"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
