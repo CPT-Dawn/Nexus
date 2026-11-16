@@ -2,7 +2,7 @@
 pkgname=nexus-nm-bin
 pkgver=@PKGVER@
 pkgrel=1
-pkgdesc='A network manager for Wayland desktops: a user daemon and a TUI over NetworkManager (prebuilt)'
+pkgdesc='Keyboard-first TUI and CLI for NetworkManager on Wayland: Wi-Fi, Ethernet, VPN, hotspot and tethering, never as root (prebuilt)'
 arch=('x86_64' 'aarch64')
 url='https://github.com/CPT-Dawn/Nexus'
 license=('MIT')

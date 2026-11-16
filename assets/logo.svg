@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Nexus logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16292a"/>
+      <stop offset="1" stop-color="#0b1214"/>
+    </linearGradient>
+    <linearGradient id="glyph" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8de3dc"/>
+      <stop offset="1" stop-color="#9ece6a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8de3dc" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#8de3dc" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="30" fill="url(#bg)"/>
+  <rect x="4.5" y="4.5" width="119" height="119" rx="29.5" fill="none" stroke="url(#glyph)" stroke-opacity="0.55"/>
+  <circle cx="64" cy="64" r="46" fill="url(#glow)"/>
+  <!-- The glyph: one original mark, 8px round strokes, inside the 28..100 box. -->
+  <path d="M54 64a10 10 0 1 0 20 0a10 10 0 1 0 -20 0 M57 32a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M29 80a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M85 80a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M64 54V39 M55.3 69L42.1 76.5 M72.7 69L85.9 76.5" fill="none" stroke="url(#glyph)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
